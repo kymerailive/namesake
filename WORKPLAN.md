@@ -63,6 +63,12 @@ schema version, load the old save, and *watch the datafixer run*.
 `authorize(ServerPlayer sender, Target target)`. Reach, session-token and rate checks in the base.
 One trivial packet end to end.
 
+**Session token, ruled 2026-08-13: a per-interaction nonce issued by the server.** When the server
+opens an interaction for a player — a Notice Board, a dialogue screen — it issues a short-lived
+token, and packets about that interaction must present a live one. This closes the hole MCA actually
+has: a modified client forging packets for a screen it never opened. It is not the vanilla login
+session, and not a per-packet replay nonce.
+
 **Also — the rule 5 enforcement test, carried from session 01.** DESIGN §1 says a social value with
 no non-display consumer is caught by *a failing test, not by intention*, and session 01 shipped
 `Persona.traits` with a ledger risk instead. Write the test: each social field names the non-display
@@ -272,6 +278,17 @@ generations and keeps latency out of the interaction path entirely.
    the personality weight table in session 05. Session 02 makes this self-enforcing: the rule 5 test
    grants `traits` an exemption that **expires at session 05**, so the build goes red on its own
    rather than relying on anyone remembering. Until that test exists this risk is live.
+
+## How a session is verified — ruled 2026-08-13
+
+Two instruments, and the line between them is fixed. **Anything a unit test can prove belongs in a
+unit test.** The in-game harness is for what only a running game can show: lifecycle, persistence,
+and real engine behaviour. Bond arithmetic, decay curves, gossip confidence and cap logic are unit
+tests, not harness legs — never spend six minutes of CI on what a 10 ms test proves.
+
+The harness grows **one leg per session that has one**, and no more. Sessions whose exit criterion
+is about how something *feels* (03's foreign-sounding names, 10's audible reaction) are not
+machine-checkable at all and stay with the owner.
 
 ## Never cut — load-bearing walls, not tuning knobs
 
