@@ -65,8 +65,12 @@ public final class GreetVerb extends ServerboundVerb<GreetPayload, NpcTarget> {
         // Placeholder until session 09 owns what a villager says. It says something rather than
         // nothing on purpose: an accepted verb with no visible effect is indistinguishable from a
         // refused one during a playtest.
-        sender.displayClientMessage(
-                Component.literal("The villager turns to listen. (" + target.describe() + ")"),
-                true);
+        //
+        // Short on purpose. The action bar does not wrap and clips at both ends, so the full
+        // persona id — never mind the entity id in target.describe() — is unreadable there. Eight
+        // hex characters are enough to tell two villagers apart in a crowd, which is the only job
+        // this line has; /namesake debug persona prints the rest.
+        String label = target.personaId().toString().substring(0, 8);
+        sender.displayClientMessage(Component.literal("Villager " + label + " is listening."), true);
     }
 }

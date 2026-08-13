@@ -596,10 +596,12 @@ of the patched sources before writing a line, exactly as session 01's `SavedData
 to. The greet packet still overtakes the vanilla one on Fabric and trails it on NeoForge; that is
 harmless only because opening an interaction refreshes rather than re-mints.
 
-**What is still owed to a human.** Nothing machine-checkable, but the gesture itself has not been
-felt by a person: sneak-right-click a villager with an empty hand, then do it again, and the
-villager should turn and acknowledge you. Worth ten seconds of playtest, because the two-click
-rhythm is a *feel* question and this project's working agreement says those are the owner's.
+**Playtested at close, and it found one.** The gesture works — sneak, empty hand, right-click, and
+the villager turns. The placeholder line did not: it put the persona *and* entity UUIDs into the
+action bar, which does not wrap, so it clipped at both ends and was unreadable. Now eight hex
+characters, which is all it takes to tell two villagers apart in a crowd. Trivial, and worth
+recording because it is the working agreement doing its job — a defect no test could have had an
+opinion about, found in ten seconds of looking at it.
 
 **Ledger change.** Session 02 → done, session 03 → NEXT. Risk 4 stays listed — `traits` is still
 unconsumed — but it is no longer carried by memory. A third verification instrument recorded: the
