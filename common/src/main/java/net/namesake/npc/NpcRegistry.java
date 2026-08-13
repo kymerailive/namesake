@@ -11,6 +11,8 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.datafix.DataFixTypes;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.namesake.Namesake;
+import net.namesake.settlement.Settlement;
+import net.namesake.settlement.Settlements;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -23,7 +25,12 @@ import java.util.function.Predicate;
 
 /**
  * Every persona in the world, keyed by persona id, plus the binding from a persona to the entity
- * currently carrying it.
+ * currently carrying it, plus the settlements those personas belong to.
+ *
+ * <p><b>Settlements live here rather than in a file of their own.</b> A persona references its
+ * settlement by id, so two files could be torn apart by a crash between two writes and leave every
+ * villager in a village pointing at a settlement that no longer exists. One file means one schema
+ * version that cannot disagree with itself and one load path to get right.
  *
  * <p>Stored once on the overworld's data storage rather than per-dimension: a persona is a person,
  * not a thing in a place, and it has to be findable from any dimension.
@@ -44,6 +51,7 @@ public final class NpcRegistry extends SavedData {
     private final Map<UUID, UUID> personaToEntity = new HashMap<>();
     /** Rebuilt from {@link #personaToEntity} on load; never persisted. */
     private final Map<UUID, UUID> entityToPersona = new HashMap<>();
+    private final Settlements settlements = new Settlements();
 
     private int loadedSchemaVersion = NpcSchema.CURRENT;
     private boolean readOnly;
@@ -91,6 +99,15 @@ public final class NpcRegistry extends SavedData {
         return List.copyOf(personas.values());
     }
 
+    /**
+     * The settlement table. Read freely; write through {@link #putSettlement} so the file is
+     * actually marked dirty — a settlement registered into a registry that never goes dirty is a
+     * settlement that is re-detected on every single load.
+     */
+    public Settlements settlements() {
+        return settlements;
+    }
+
     public int size() {
         return personas.size();
     }
@@ -121,6 +138,11 @@ public final class NpcRegistry extends SavedData {
 
     public void put(Persona persona) {
         personas.put(persona.id(), persona);
+        setDirty();
+    }
+
+    public void putSettlement(Settlement settlement) {
+        settlements.put(settlement);
         setDirty();
     }
 
@@ -222,6 +244,7 @@ public final class NpcRegistry extends SavedData {
             list.add(entry);
         }
         tag.put(NpcSchema.KEY_NPCS, list);
+        settlements.save(tag);
         return tag;
     }
 
@@ -256,12 +279,17 @@ public final class NpcRegistry extends SavedData {
             }
         }
 
+        // Settlements are read after personas and counted into the same damage figure: a file
+        // that lost a settlement is exactly as unsafe to write back as one that lost a person,
+        // because every persona in that village is now pointing at an id nothing answers to.
+        unreadable += registry.settlements.readFrom(tag);
+
         if (unreadable > 0) {
             // Saving now would drop those records for good. Better a world that loses nothing and
             // refuses to persist than one that quietly forgets people.
             registry.readOnly = true;
             Namesake.LOGGER.error(
-                    "{} persona record(s) could not be read. The registry is now read-only for this "
+                    "{} record(s) could not be read. The registry is now read-only for this "
                             + "session so the damaged file is not overwritten. Back up <world>/data/{}.dat.",
                     unreadable, FILE_ID);
         }
@@ -279,8 +307,9 @@ public final class NpcRegistry extends SavedData {
             registry.setDirty();
         }
 
-        Namesake.LOGGER.info("Loaded {} persona(s), {} bound to an entity (schema {})",
-                registry.personas.size(), registry.personaToEntity.size(), result.resultVersion());
+        Namesake.LOGGER.info("Loaded {} persona(s), {} bound to an entity, {} settlement(s) (schema {})",
+                registry.personas.size(), registry.personaToEntity.size(),
+                registry.settlements.size(), result.resultVersion());
         return registry;
     }
 }

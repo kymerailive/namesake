@@ -1,8 +1,14 @@
 package net.namesake.npc;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.resources.ResourceLocation;
+import net.namesake.settlement.Need;
+import net.namesake.settlement.Settlement;
+import net.namesake.settlement.Settlements;
+import net.namesake.settlement.Specialty;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -239,7 +245,99 @@ class NpcRegistryTest {
         for (int i = 0; i < npcs.size(); i++) {
             npcs.getCompound(i).putInt("settlement", 0);
             npcs.getCompound(i).putInt("household", 0);
+            npcs.getCompound(i).putByte("culture", (byte) 0);
         }
+        tag.remove("settlements");
         return tag;
+    }
+
+    // --- settlements, new in session 03 -----------------------------------------------------------
+
+    private static Settlement settlement(int id, int x, int z) {
+        return new Settlement(id, ResourceLocation.withDefaultNamespace("overworld"),
+                new BlockPos(x, 64, z), Specialty.FARMING.id(), (byte) 71,
+                new byte[]{10, 40, 0, 25});
+    }
+
+    @Test
+    @DisplayName("round trip preserves every settlement field, and the id counter with them")
+    void roundTripPreservesSettlements() {
+        NpcRegistry original = new NpcRegistry();
+        Settlement first = settlement(0, 100, -200);
+        Settlement second = settlement(1, 900, 400);
+        original.putSettlement(first);
+        original.putSettlement(second);
+        assertEquals(2, original.settlements().claimId(), "ids continue past the highest stored");
+
+        NpcRegistry reloaded = reload(original.save(new CompoundTag(), null));
+
+        assertEquals(2, reloaded.settlements().size());
+        assertEquals(Optional.of(first), reloaded.settlements().byId(0));
+        assertEquals(Optional.of(second), reloaded.settlements().byId(1));
+        assertEquals(40, reloaded.settlements().byId(0).orElseThrow().need(Need.TOOLS));
+        // A counter that reset to zero would hand the next settlement an id somebody already has.
+        assertEquals(3, reloaded.settlements().claimId(),
+                "the id counter must survive the reload, including the ids already handed out");
+    }
+
+    @Test
+    @DisplayName("registering a settlement marks the registry for saving")
+    void registeringASettlementMarksTheRegistryDirty() {
+        NpcRegistry registry = new NpcRegistry();
+        assertFalse(registry.isDirty());
+
+        registry.putSettlement(settlement(0, 0, 0));
+
+        // Minecraft only writes a SavedData that is dirty. A settlement registered into a clean
+        // registry would be re-detected, and re-surveyed, on every single world load.
+        assertTrue(registry.isDirty());
+    }
+
+    @Test
+    @DisplayName("an unreadable settlement makes the whole registry read-only, like an unreadable persona")
+    void oneCorruptSettlementProtectsTheFile() {
+        NpcRegistry good = new NpcRegistry();
+        good.putSettlement(settlement(0, 0, 0));
+        CompoundTag tag = good.save(new CompoundTag(), null);
+
+        CompoundTag broken = new CompoundTag();
+        broken.putString("dimension", "not a resource location at all");
+        tag.getList("settlements", Tag.TAG_COMPOUND).add(broken);
+
+        NpcRegistry reloaded = reload(tag);
+
+        assertEquals(1, reloaded.settlements().size(), "the readable settlement still loads");
+        assertTrue(reloaded.isReadOnly(),
+                "every persona in the lost settlement now points at an id nothing answers to, so "
+                        + "the file must not be written back");
+    }
+
+    @Test
+    @DisplayName("residency is decided by distance from the bell and by dimension")
+    void residencyIsBoundedAndPerDimension() {
+        Settlements settlements = new Settlements();
+        settlements.put(settlement(0, 0, 0));
+        ResourceLocation overworld = ResourceLocation.withDefaultNamespace("overworld");
+        ResourceLocation nether = ResourceLocation.withDefaultNamespace("the_nether");
+
+        assertTrue(settlements.containing(overworld, new BlockPos(40, 64, 40)).isPresent());
+        assertTrue(settlements.containing(overworld, new BlockPos(0, -400, 0)).isPresent(),
+                "residency is horizontal: a mine under the village is still the village");
+        assertTrue(settlements.containing(overworld,
+                new BlockPos(Settlements.MEMBERSHIP_RADIUS + 1, 64, 0)).isEmpty());
+        assertTrue(settlements.containing(nether, new BlockPos(0, 64, 0)).isEmpty(),
+                "a bell at the same coordinates in another dimension is somebody else's bell");
+    }
+
+    @Test
+    @DisplayName("the nearest settlement wins when two are in range")
+    void residencyPicksTheNearestBell() {
+        Settlements settlements = new Settlements();
+        settlements.put(settlement(0, 0, 0));
+        settlements.put(settlement(1, 150, 0));
+        ResourceLocation overworld = ResourceLocation.withDefaultNamespace("overworld");
+
+        assertEquals(0, settlements.containing(overworld, new BlockPos(60, 64, 0)).orElseThrow().id());
+        assertEquals(1, settlements.containing(overworld, new BlockPos(90, 64, 0)).orElseThrow().id());
     }
 }

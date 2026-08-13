@@ -4,6 +4,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
+import net.namesake.settlement.Settlements;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -79,8 +80,11 @@ class NpcSchemaTest {
         NpcSchema.Result result = NpcSchema.migrate(tag);
 
         assertEquals(1, result.foundVersion());
-        assertEquals(2, result.resultVersion());
-        assertEquals(3, result.recordsRewritten(), "all three fixture records should be rewritten");
+        assertEquals(NpcSchema.CURRENT, result.resultVersion(),
+                "a schema 1 save must walk the whole ladder, not stop at 2");
+        // Three records through two fixes: the 1 -> 2 sentinel rewrite and the 2 -> 3 culture one.
+        assertEquals(6, result.recordsRewritten(),
+                "three records rewritten by each of the two fixes on the way to current");
 
         ListTag after = tag.getList(NpcSchema.KEY_NPCS, Tag.TAG_COMPOUND);
         for (int i = 0; i < after.size(); i++) {
@@ -101,6 +105,68 @@ class NpcSchemaTest {
         assertEquals(12, tag.getList(NpcSchema.KEY_NPCS, Tag.TAG_COMPOUND).getCompound(0).getInt("settlement"));
     }
 
+    /**
+     * The schema 2 -> 3 fix, and the reason hard rule 1 exists.
+     *
+     * <p>Schema 2 wrote {@code culture = 0} meaning "none". Session 03 gives culture 0 to Vale. So
+     * without this fix an existing world loads perfectly, throws nothing, and every villager on
+     * the map is quietly Vale — same names, same palette, same disposition, in every settlement.
+     * That is the shape of failure this project is built around: not a crash, a save that looks
+     * like it worked.
+     */
+    @Test
+    @DisplayName("schema 2 records come out of the fixer with no culture rather than the first one")
+    void schemaTwoCultureSentinelIsMigrated() {
+        CompoundTag tag = registryTagAtVersion(2);
+        ListTag before = tag.getList(NpcSchema.KEY_NPCS, Tag.TAG_COMPOUND);
+        assertEquals(0, before.getCompound(0).getByte("culture"), "fixture must start at the old value");
+
+        NpcSchema.Result result = NpcSchema.migrate(tag);
+
+        assertEquals(2, result.foundVersion());
+        assertEquals(3, result.resultVersion());
+        assertEquals(3, result.recordsRewritten());
+
+        ListTag after = tag.getList(NpcSchema.KEY_NPCS, Tag.TAG_COMPOUND);
+        for (int i = 0; i < after.size(); i++) {
+            assertEquals(Persona.UNASSIGNED_CULTURE, after.getCompound(i).getByte("culture"));
+            Persona migrated = Persona.CODEC.parse(NbtOps.INSTANCE, after.getCompound(i)).getOrThrow();
+            assertFalse(migrated.isGenerated(),
+                    "a migrated record must read as needing generation, not as a Vale villager");
+        }
+    }
+
+    /** A real culture id must survive the fixer untouched — the fix only rewrites the sentinel. */
+    @Test
+    @DisplayName("the schema 2 fix leaves a real culture alone")
+    void schemaTwoFixDoesNotTouchRealCultures() {
+        CompoundTag tag = registryTagAtVersion(2);
+        tag.getList(NpcSchema.KEY_NPCS, Tag.TAG_COMPOUND).getCompound(0).putByte("culture", (byte) 4);
+
+        NpcSchema.migrate(tag);
+
+        assertEquals(4, tag.getList(NpcSchema.KEY_NPCS, Tag.TAG_COMPOUND).getCompound(0).getByte("culture"));
+    }
+
+    /**
+     * The other half of schema 3 is the settlement table, and it needs no rewrite at all: an older
+     * tag simply has no {@code settlements} key. That absence has to read as "none detected yet"
+     * rather than as damage, which is what makes the migration free.
+     */
+    @Test
+    @DisplayName("a pre-schema-3 tag has no settlement table, and that loads as an empty one")
+    void theSettlementTableIsAbsentBeforeSchemaThree() {
+        CompoundTag tag = registryTagAtVersion(2);
+        assertFalse(tag.contains("settlements"), "the fixture must not already have one");
+
+        NpcSchema.migrate(tag);
+
+        Settlements settlements = new Settlements();
+        assertEquals(0, settlements.readFrom(tag), "an absent table is not an unreadable one");
+        assertEquals(0, settlements.size());
+        assertEquals(0, settlements.claimId(), "ids still start at zero in a migrated world");
+    }
+
     @Test
     @DisplayName("a registry from a newer build is refused, not downgraded")
     void newerSchemaIsRefused() {
@@ -116,9 +182,11 @@ class NpcSchemaTest {
     /**
      * A registry tag as some earlier build would have written it.
      *
-     * <p>Schema 1 differs from later shapes only in the meaning of {@code settlement} and
-     * {@code household}, which it wrote as {@code 0} for "none" — so a schema-1 fixture is the
-     * current encoding with those two fields forced to zero.
+     * <p>Every shape so far differs from the current one only in which sentinel a field held.
+     * Schema 1 wrote {@code 0} into {@code settlement} and {@code household} for "none"; schema 1
+     * and 2 both wrote {@code 0} into {@code culture} for the same reason. So an old fixture is
+     * the current encoding with those fields forced back to zero — which is exactly what makes the
+     * fixes testable, and exactly why each of them is a rewrite of zeros and nothing else.
      */
     private static CompoundTag registryTagAtVersion(int version) {
         CompoundTag root = new CompoundTag();
@@ -129,9 +197,12 @@ class NpcSchemaTest {
             Persona persona = Persona.create(new UUID(i, i), 100L + i);
             CompoundTag entry = (CompoundTag) Persona.CODEC
                     .encodeStart(NbtOps.INSTANCE, persona).getOrThrow();
-            if (version == 1) {
+            if (version <= 1) {
                 entry.putInt("settlement", 0);
                 entry.putInt("household", 0);
+            }
+            if (version <= 2) {
+                entry.putByte("culture", (byte) 0);
             }
             npcs.add(entry);
         }

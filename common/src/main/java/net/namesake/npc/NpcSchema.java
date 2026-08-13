@@ -26,7 +26,7 @@ import java.util.function.ToIntFunction;
 public final class NpcSchema {
 
     /** Bump this and add a {@link Fix} in the same commit. Never one without the other. */
-    public static final int CURRENT = 2;
+    public static final int CURRENT = 3;
 
     /**
      * A registry written before {@link #KEY_VERSION} existed cannot occur — the key has been
@@ -50,7 +50,8 @@ public final class NpcSchema {
     }
 
     private static final List<Fix> FIXES = List.of(
-            new Fix(1, "settlement/household 0 now means unassigned (-1)", NpcSchema::fixUnassignedSentinel)
+            new Fix(1, "settlement/household 0 now means unassigned (-1)", NpcSchema::fixUnassignedSentinel),
+            new Fix(2, "culture 0 now means unassigned (-1); settlements added", NpcSchema::fixUnassignedCulture)
     );
 
     private NpcSchema() {
@@ -142,6 +143,38 @@ public final class NpcSchema {
                 changed = true;
             }
             if (changed) {
+                touched++;
+            }
+        }
+        return touched;
+    }
+
+    /**
+     * Schema 2 wrote {@code culture} as {@code 0}, meaning "none" — there was no culture table to
+     * point at. Session 03 adds one, and culture ids start at zero, so from schema 3 on a stored
+     * {@code 0} means <i>the first culture</i>.
+     *
+     * <p><b>This is the migration that matters, and it is the quiet kind.</b> Without it a world
+     * from the previous build loads without a single error and every villager in it silently
+     * becomes Vale — same names, same palette, same disposition, in every settlement on the map.
+     * It would look like the culture system working, which is precisely why hard rule 1 exists:
+     * the failure MCA shipped was not a crash either.
+     *
+     * <p>Rewriting every zero is safe for the same reason it was at schema 1 → 2: nothing before
+     * this version could assign a culture, so a record holding zero holds it because it means
+     * "none". This is the last version where that is true.
+     *
+     * <p>The other half of schema 3 — the settlement table — needs no rewrite at all. An older tag
+     * simply has no {@code settlements} key, which reads as "no settlements have been detected
+     * yet", which is exactly what was true.
+     */
+    private static int fixUnassignedCulture(CompoundTag root) {
+        ListTag npcs = root.getList(KEY_NPCS, Tag.TAG_COMPOUND);
+        int touched = 0;
+        for (int i = 0; i < npcs.size(); i++) {
+            CompoundTag entry = npcs.getCompound(i);
+            if (entry.getByte("culture") == 0) {
+                entry.putByte("culture", Persona.UNASSIGNED_CULTURE);
                 touched++;
             }
         }

@@ -7,6 +7,7 @@ import net.namesake.command.NamesakeCommands;
 import net.namesake.harness.AttachBetHarness;
 import net.namesake.npc.PersonaService;
 import net.namesake.platform.VerbTransport;
+import net.namesake.settlement.SettlementRegistrar;
 import net.namesake.verb.Interactions;
 import net.namesake.verb.VerbNetwork;
 import net.neoforged.bus.api.IEventBus;
@@ -45,15 +46,12 @@ public final class NamesakeNeoForge {
         NeoForge.EVENT_BUS.addListener(NamesakeNeoForge::onRegisterCommands);
         NeoForge.EVENT_BUS.addListener(NamesakeNeoForge::onEntityInteract);
         NeoForge.EVENT_BUS.addListener(NamesakeNeoForge::onServerStopping);
+        NeoForge.EVENT_BUS.addListener(ServerTickEvent.Post.class, NamesakeNeoForge::onServerTick);
 
         if (FMLEnvironment.dist.isClient()) {
             // The class is only touched inside this branch, so a dedicated server never loads it
             // and never has to resolve net.minecraft.client.Minecraft.
             NamesakeNeoForgeClient.register();
-        }
-
-        if (AttachBetHarness.enabled()) {
-            NeoForge.EVENT_BUS.addListener(ServerTickEvent.Post.class, NamesakeNeoForge::onServerTick);
         }
     }
 
@@ -107,9 +105,15 @@ public final class NamesakeNeoForge {
 
     private static void onServerStopping(ServerStoppingEvent event) {
         VerbNetwork.onServerStopping();
+        SettlementRegistrar.onServerStopping();
     }
 
+    /**
+     * Spends whatever settlement survey a villager's arrival asked for, a few chunks at a time.
+     * Both callees return on their first line when there is nothing to do, which is the usual case.
+     */
     private static void onServerTick(ServerTickEvent.Post event) {
+        SettlementRegistrar.onServerTick(event.getServer());
         AttachBetHarness.onServerTick(event.getServer());
     }
 }

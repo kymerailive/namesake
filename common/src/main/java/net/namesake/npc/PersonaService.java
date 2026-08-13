@@ -65,6 +65,7 @@ public final class PersonaService {
             PersonaLink.get().setPersonaId(entity, minted.id());
             registry.bind(minted.id(), entity.getUUID());
             Namesake.LOGGER.debug("Minted persona {} for villager {}", minted.id(), entity.getUUID());
+            generate(level, registry, entity, minted);
             return;
         }
 
@@ -77,6 +78,26 @@ public final class PersonaService {
                     entity.getUUID(), personaId);
         }
         registry.bind(personaId, entity.getUUID());
+        registry.persona(personaId).ifPresent(persona -> generate(level, registry, entity, persona));
+    }
+
+    /**
+     * Gives a minted persona a culture, a household and traits — or starts the survey that will.
+     *
+     * <p>Only villagers. A zombie villager has no household and belongs to nowhere; if it is cured
+     * it becomes a villager, this runs then, and it is generated on the spot. Which is right: a
+     * cured villager joins the village that cured it.
+     *
+     * <p>Runs on every entity load rather than only on mint, because the answer may not have been
+     * available the first time — a persona minted in an unsurveyed area stays ungenerated, saves,
+     * and finishes generating on a later load. {@code Personas.onPersonaLoaded} returns on its
+     * first line for anyone already generated and settled, which is everybody, almost always.
+     */
+    private static void generate(ServerLevel level, NpcRegistry registry, Entity entity,
+                                 Persona persona) {
+        if (entity instanceof Villager) {
+            Personas.onPersonaLoaded(level, registry, persona, entity.blockPosition());
+        }
     }
 
     /**

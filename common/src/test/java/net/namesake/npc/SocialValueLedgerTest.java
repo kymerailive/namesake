@@ -1,6 +1,8 @@
 package net.namesake.npc;
 
 import com.mojang.serialization.Codec;
+import net.namesake.settlement.Settlement;
+import net.namesake.settlement.Settlements;
 import net.namesake.testing.MethodBody;
 import net.namesake.testing.ModClasses;
 import net.namesake.testing.SessionLedger;
@@ -45,6 +47,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>{@code Persona.traits} carries the exemption ruled in the session 01 log: it expires after
  * session 05, so if 05 closes without the personality weight table this build goes red on its own.
  * That is standing risk 4, paid off.
+ *
+ * <p><b>Session 03 is the first time the mechanism fired at anyone.</b> Three exemptions —
+ * {@code settlementId}, {@code householdId} and {@code cultureId} — expired at the close of that
+ * session, and all three now name {@code TraitRoll}. One of them did not land where its own
+ * exemption predicted: the note against {@code cultureId} said the syllable grammar would consume
+ * it, and the grammar turns out to be a display. Moving the date would have been the one thing
+ * this file exists to stop, so the honest answer was a different consumer.
  */
 class SocialValueLedgerTest {
 
@@ -107,14 +116,21 @@ class SocialValueLedgerTest {
                     "The persona's identity. The registry is keyed by it and every binding points "
                             + "at it; it describes nobody."),
 
-            Entry.exemptUntilAfter(Persona.class, "settlementId", List.of("settlementId"), 3,
-                    "Session 03: the three-layer trait roll starts from the settlement mean, so "
-                            + "generation branches on this. Also feeds the per-settlement gossip "
-                            + "deque in session 08."),
+            // Paid off in session 03. The exemption said the three-layer roll would branch on it,
+            // and it does: this id chooses which settlement's mean the roll starts from, and a
+            // persona with no settlement starts from its culture alone.
+            Entry.consumedBy(Persona.class, "settlementId", List.of("settlementId"),
+                    TraitRoll.class, "roll",
+                    "TraitRoll.roll looks the settlement up by this id to find the mean it rolls "
+                            + "about. Change it and different numbers come out."),
 
-            Entry.exemptUntilAfter(Persona.class, "householdId", List.of("householdId"), 3,
-                    "Session 03: the household layer of the trait roll (±20 about the settlement "
-                            + "mean) branches on this."),
+            // Paid off in session 03, and this is the one that carries the exit criterion: every
+            // member of a household draws the same middle layer, which is what makes a family
+            // resemble each other rather than resembling the village average.
+            Entry.consumedBy(Persona.class, "householdId", List.of("householdId"),
+                    TraitRoll.class, "roll",
+                    "TraitRoll.roll seeds the household layer (±20 about the settlement mean) "
+                            + "from this and nothing else, so households cluster."),
 
             // Ruled in the session 01 log, and the reason this test exists at all.
             Entry.exemptUntilAfter(Persona.class, "traits",
@@ -123,9 +139,19 @@ class SocialValueLedgerTest {
                             + "delta by the subject's traits. Written, persisted and displayed "
                             + "since session 01 with nothing branching on it — standing risk 4."),
 
-            Entry.exemptUntilAfter(Persona.class, "cultureId", List.of("cultureId"), 3,
-                    "Session 03: the per-culture phonotactic syllable grammar selects on this, and "
-                            + "session 09's dialogue tics select on it again."),
+            // Paid off in session 03 — but NOT by the thing the exemption predicted. The exemption
+            // named the syllable grammar, and the grammar turns a culture id into a string that is
+            // shown to a person, which is a display however non-display the package it lives in
+            // happens to be. Naming it here would have been the technicality this whole file
+            // exists to refuse. The real consumer is the roll: a culture supplies the baseline
+            // eight axes start from, and its conformity decides how far individuals are allowed to
+            // stray from their household. Session 09's pool and register selection is the second.
+            Entry.consumedBy(Persona.class, "cultureId", List.of("cultureId"),
+                    TraitRoll.class, "roll",
+                    "TraitRoll.roll reads it twice: Culture.traitBase is where the settlement mean "
+                            + "starts, and Culture.conformity narrows the ±25 individual layer. A "
+                            + "Tal-Qir household produces people who resemble each other; a "
+                            + "Meridian one does not."),
 
             Entry.exemptUntilAfter(Persona.class, "professionId", List.of("professionId"), 12,
                     "Session 12: whether one recipe is taught. The longest exemption here, and the "
@@ -148,7 +174,49 @@ class SocialValueLedgerTest {
                     "Sessions 24-27, the era ladder: offices and charters gate on the era an NPC "
                             + "came of age in. Outside the 16-session slice, so this exemption is "
                             + "long by design — but it still expires, and it moves with the era "
-                            + "ladder rather than with anyone's memory.")
+                            + "ladder rather than with anyone's memory."),
+
+            // --- Settlement, new in session 03 -------------------------------------------------
+            //
+            // Six fields and six consumers, with no exemptions at all. That is not restraint, it
+            // is what happens when the rule is applied while the record is being written rather
+            // than afterwards: a seventh field held the settlement's culture, and deleting it was
+            // easier than justifying it, because culture is a pure function of the world seed and
+            // the biome at the bell. See the note on Settlement itself.
+
+            Entry.identity(Settlement.class, "id",
+                    "The settlement's identity. Personas reference it and the table is keyed by "
+                            + "it; it describes nothing about the place."),
+
+            Entry.consumedBy(Settlement.class, "dimension", List.of("dimension"),
+                    Settlements.class, "containing",
+                    "Settlements.containing refuses a settlement in another dimension before it "
+                            + "measures anything. A bell in the Nether is not this village's bell."),
+
+            Entry.consumedBy(Settlement.class, "centre", List.of("centre"),
+                    Settlements.class, "containing",
+                    "Settlements.containing decides residency by distance from the centre, which "
+                            + "is what makes a villager a resident of one settlement rather than "
+                            + "another. TraitRoll.settlementMean reads it again, to give each "
+                            + "settlement a character that belongs to the place rather than to "
+                            + "the order it was discovered in."),
+
+            Entry.consumedBy(Settlement.class, "specialty", List.of("specialty", "specialtyValue"),
+                    TraitRoll.class, "settlementMean",
+                    "The trade a settlement lives by shifts eight axes before household and "
+                            + "individual variation: a smithing town raises quicker tempers than a "
+                            + "farming town of the same culture."),
+
+            Entry.consumedBy(Settlement.class, "defensibility", List.of("defensibility"),
+                    TraitRoll.class, "settlementMean",
+                    "Exposure — a hundred minus this — lowers boldness and sociability and raises "
+                            + "temper. A settlement nobody can defend raises warier people."),
+
+            Entry.consumedBy(Settlement.class, "needs", List.of("needs", "need"),
+                    TraitRoll.class, "settlementMean",
+                    "Each of the four needs moves an axis: hunger raises acquisitiveness and "
+                            + "lowers warmth, missing tools raise industry, crowding raises "
+                            + "temper. This is the whole reason the survey is worth running.")
     );
 
     /**
