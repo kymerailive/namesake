@@ -3,8 +3,9 @@
 **The ledger.** What happens next, in order, with exit criteria. Read first, update last.
 Where any other document disagrees on sequence, this wins.
 
-- **Status:** session 01 complete. **The attach bet holds** — a persona rides a vanilla `Villager`
-  through save, chunk unload and zombification on both loaders. Repo live at
+- **Status:** session 02 complete. **The attach bet holds** and **the authorization gate is real** —
+  a persona rides a vanilla `Villager` through save, chunk unload and zombification on both loaders,
+  and an unguarded serverbound handler cannot reach a green build. Repo live at
   https://github.com/kymerailive/namesake
 - **Target:** 16 sessions to the ship-or-kill test (session 10), playable slice at 15.
 - **Companion:** `DESIGN.md` owns *what* we build. This owns *what happens next*.
@@ -17,8 +18,8 @@ Where any other document disagrees on sequence, this wins.
 |---|---|---|
 | 00 | Repo and skeleton | **done** — 2026-08-13 |
 | 01 | Persona, persistence, attach bet | **done** — 2026-08-13 |
-| 02 | Authorization layer | **NEXT** |
-| 03 | Traits, cultures, settlement detection | pending |
+| 02 | Authorization layer | **done** — 2026-08-13 |
+| 03 | Traits, cultures, settlement detection | **NEXT** |
 | 04 | Profiler spike | pending |
 | 05 | Bonds and deeds | pending |
 | 06 | Episodic memory | pending |
@@ -275,9 +276,12 @@ generations and keeps latency out of the interaction path entirely.
    playtest specifically for this before building era 4–5.
 4. **Traits have no consumer yet.** `Persona.traits` is written, persisted and displayed, and
    nothing branches on it — precisely the failure `DESIGN.md` §1 forbids. The first real consumer is
-   the personality weight table in session 05. Session 02 makes this self-enforcing: the rule 5 test
-   grants `traits` an exemption that **expires at session 05**, so the build goes red on its own
-   rather than relying on anyone remembering. Until that test exists this risk is live.
+   the personality weight table in session 05. **No longer carried by memory as of 2026-08-13:**
+   `SocialValueLedgerTest` grants `traits` an exemption that expires after session 05 and compares
+   it against this ledger's own status board, so the build goes red at the close of session 05 if
+   the weight table is not there. The risk stays listed because the field is still unconsumed — but
+   it now fails loudly rather than quietly. Every other `Persona` field is classified the same way;
+   the expiry sessions are in the session 02 log and can be ruled differently.
 
 ## How a session is verified — ruled 2026-08-13
 
@@ -289,6 +293,14 @@ tests, not harness legs — never spend six minutes of CI on what a 10 ms test p
 The harness grows **one leg per session that has one**, and no more. Sessions whose exit criterion
 is about how something *feels* (03's foreign-sounding names, 10's audible reaction) are not
 machine-checkable at all and stay with the owner.
+
+**A third instrument, added 2026-08-13: the build itself.** Some invariants are neither unit-testable
+behaviour nor observable in a running game — they are properties of the *source tree*, and the only
+place to enforce them is where the code is compiled. Two exist so far, both for hard rule 6: a
+Gradle task per loader module that refuses to compile if anything but the transport seam registers a
+payload, and the abstract `authorize` that makes an unguarded verb a compile error. Prefer this over
+a test where it applies; a check that runs before compilation cannot be forgotten by a test runner
+that was never invoked.
 
 ## Never cut — load-bearing walls, not tuning knobs
 
@@ -461,3 +473,135 @@ but it costs ~6 minutes per loader, so expect CI to take longer than session 00'
 `Persona.traits`, which is persisted and displayed with no consumer branching on it — the exact
 failure `DESIGN.md` §1 forbids, due to be paid off by the personality weight table in session 05.
 No changes to the 16-session shape.
+
+### Session 02 — 2026-08-13 — the authorization layer
+
+**Shipped.** `0af54f6..6695c7b` plus this ledger commit, pushed to `origin/main`.
+
+**Both gates are real, and both have been watched to reject something.** An unguarded serverbound
+handler cannot reach a green build, and a persisted social value cannot reach one either without a
+named non-display consumer or an exemption that expires by itself.
+
+**What shipped.**
+
+- **`ServerboundVerb`** — the base every packet from a client must extend. `authorize` is abstract
+  and `receive` is final, so a verb chooses what it *does* and never what it *permits*. The gate
+  runs rate → resolve → validity → dimension → reach → interaction token → `authorize`, in that
+  order, and nothing in it is overridable.
+- **`VerbRegistry`** — the only door in. Refuses, by reflection at registration time, any verb whose
+  own class does not declare `authorize`. That is the half a compiler cannot do: a subclass
+  inheriting somebody else's permissive answer compiles perfectly, and it is exactly the shape a
+  third-party addon verb would take.
+- **`InteractionTokens`** — the session token as ruled above. One live interaction per player, bound
+  to the target as well as the player, 1200-tick TTL refreshed on use.
+- **`RateLimiter`** — a continuously-refilling token bucket per (sender, verb), checked first
+  because every check downstream of it costs the server something.
+- **`namesake:greet`**, end to end, with the conversation gesture: sneak, empty main hand,
+  right-click a villager. First click opens the conversation, the next greets.
+- **`VerbTransport`** — the loader seam, plus a Gradle guard per loader module that fails the build
+  if anything else registers a payload.
+- **`SocialValueLedgerTest`** — rule 5, enforced. Nine entries, one per `Persona` field.
+- **`/namesake debug settrait`** and `prune` are now development-only, hidden from the command tree
+  and refusing if reached. `settrait` rewrites persisted personality and permission level 2 was not
+  a meaningful gate on that.
+
+**Three decisions worth recording.**
+
+1. **Every serverbound packet requires a token — no policy flag, no exemption.** The token lives on
+   the `ServerboundPayload` interface, so a serverbound payload cannot be *declared* without one.
+   That is only possible because of decision 2.
+2. **Only the server opens an interaction.** It does so from the vanilla interact hook, which it has
+   already reach-checked; the client can never ask for one. So there is no bootstrap packet needing
+   an exemption, and the strictness in decision 1 costs nothing. **This is a design decision, not
+   just an implementation one — promote it into `DESIGN.md` if it reads right.**
+3. **`authorize` keeps the `ServerPlayer` signature the ledger specified**, and the gate around it
+   runs on a small `VerbSender` view instead. A `ServerPlayer` cannot be built without a running
+   server, and a gate whose ordering has only ever been exercised through a live game is a gate
+   whose ordering nobody has checked. The fake sender returns null for `player()` precisely so that
+   the gate touching it would fail loudly.
+
+**What the exit criteria actually showed.** Five deliberate breakages, each watched to fail and then
+removed:
+
+| Breakage | Result |
+|---|---|
+| A verb with no `authorize` | **Does not compile.** `UnguardedVerb is not abstract and does not override abstract method authorize(ServerPlayer,NpcTarget)` |
+| A verb inheriting `GreetVerb`'s `authorize`, put in the catalog | **3 tests red.** `Verb namesake:greet cannot be registered: … does not declare its own authorize … See CLAUDE.md hard rule 6` |
+| A serverbound payload with no verb | **Red.** *"These serverbound payloads have no verb, so nothing gates them"* |
+| A payload declaring neither direction | **Red.** *"net.namesake.verb.UnguardedVerb (neither direction)"* |
+| A direct `registerGlobalReceiver` / `playToServer` in a loader module | **Red on both loaders, before compilation**, naming the file |
+
+And four for rule 5:
+
+| Breakage | Result |
+|---|---|
+| A new persisted record with no ledger entry | **Red.** *"These records are persisted and have no entry in the social value ledger: net.namesake.npc.Rumour"* |
+| A field with no ledger entry | **Red.** *"Persona has fields with no entry in the social value ledger: [cultureId]"* |
+| `birthTick`'s consumer pointed at an accessor it never calls | **Red.** *"PersonaService.reapStrayMint never reads it. It calls none of [settlementId]"* |
+| `traits`' exemption set to a session already past | **Red.** *"WORKPLAN.md says session 02 is next, so these exemptions have expired: Persona.traits"* |
+
+54 unit tests, real JUnit XML, `failures=0 errors=0 skipped=0`.
+
+**The forcing function has no constant to forget.** An exemption's expiry is compared against *this
+document's own status board*, parsed at test time. `CLAUDE.md` already makes updating the ledger the
+last act of a session and hard rule 2 makes the push mandatory, so the status board is the one thing
+that provably moves every session. Comparison is `currentSession > expiresAfterSession`, so the
+build goes red at the **close** of the owing session rather than its start — `main` stays green
+while the work is being done. `theExpiryComparisonWorks` guards the comparison itself, because an
+inverted one would be green forever and nobody would find out until session 05 shipped without the
+weight table.
+
+**Exemption sessions, for the owner to rule differently if they disagree.** Only `traits` → 05 was
+ruled in the session 01 log; the rest are read off this ledger's own sequence. `settlementId`,
+`householdId`, `cultureId` → **03** (the three-layer trait roll and the syllable grammar branch on
+all three). `professionId` → **12** (whether one recipe is taught). This is the longest and weakest
+exemption: the field duplicates what vanilla already stores on the villager, and if session 12 does
+not read it, the honest move is to delete it rather than move the number. `eraOfMajority` → **24**,
+which is outside the slice; it moves with the era ladder rather than with anyone's memory.
+
+**One harness step, and why it is not a new leg.** The ledger said session 02 should need no harness
+work. It needed one step inside the existing setup phase, for one reason: *everything else in this
+session is a pure function and is unit tested* — check order, reach arithmetic, token lifetime, rate
+buckets, registration. The single claim no unit test in `common` can make is that Fabric's
+`PayloadTypeRegistry` and NeoForge's deferred `RegisterPayloadHandlersEvent` flush actually produce
+a payload that survives a round trip, and sessions 00 and 01 both lost time to precisely that gap
+between "compiles" and "works in a game". No new CI job, no extra launch, five extra assertions.
+
+**It anchors its negative to a positive**, which is session 01's lesson applied. A refused packet
+leaves no mark, so "nothing happened after N ticks" would pass just as well if the packet were still
+in flight. Instead: every packet that reaches the handler spends a rate token whether it is accepted
+or refused, so the harness polls until the rate bucket appears — that proves arrival — and *then*
+checks that the interaction's expiry has not moved, which proves refusal. The accepted packet is the
+mirror image.
+
+Both loaders, all legs green. The line that matters:
+
+```
+Verb namesake:greet refused for Player370: NO_LIVE_INTERACTION      (Fabric)
+Verb namesake:greet refused for Dev: NO_LIVE_INTERACTION            (NeoForge)
+PASS  GATE the forged token was refused (interaction expiry unmoved at 9944)
+PASS  GATE the real token was accepted (interaction expiry moved 9944 -> 9950)
+```
+
+That is a forged packet — right villager, right player, in reach, correct entity id, token the
+server never issued — being refused over a real socket in a running game, on both loaders. It is
+the hole MCA has 29 of.
+
+**Session 01's asymmetry lesson repeated, and it changed the design.** Fabric fires its client-side
+interact callback from `Minecraft.startUseItem`, *before* the vanilla interact packet is sent;
+NeoForge fires its equivalent from `MultiPlayerGameMode.interact`, *after* the send. So cancelling
+the vanilla trade on the client works on Fabric and cannot work on NeoForge. The cancel therefore
+lives on the **server**, where both loaders fire at the same point (`Player#interactOn`). Read out
+of the patched sources before writing a line, exactly as session 01's `SavedData.Factory` note says
+to. The greet packet still overtakes the vanilla one on Fabric and trails it on NeoForge; that is
+harmless only because opening an interaction refreshes rather than re-mints.
+
+**What is still owed to a human.** Nothing machine-checkable, but the gesture itself has not been
+felt by a person: sneak-right-click a villager with an empty hand, then do it again, and the
+villager should turn and acknowledge you. Worth ten seconds of playtest, because the two-click
+rhythm is a *feel* question and this project's working agreement says those are the owner's.
+
+**Ledger change.** Session 02 → done, session 03 → NEXT. Risk 4 stays listed — `traits` is still
+unconsumed — but it is no longer carried by memory. A third verification instrument recorded: the
+build itself, for invariants that are properties of the source tree rather than of behaviour. No
+changes to the 16-session shape.
