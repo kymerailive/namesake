@@ -10,10 +10,14 @@ import net.namesake.settlement.Settlement;
 import net.namesake.settlement.Settlements;
 import net.namesake.settlement.Specialty;
 import net.namesake.social.Bond;
+import net.namesake.social.Deed;
+import net.namesake.social.DeedType;
+import net.namesake.social.Memories;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -394,6 +398,142 @@ class NpcRegistryTest {
         assertTrue(reloaded.isReadOnly(),
                 "a villager who has quietly forgotten somebody is exactly as unsafe to write back "
                         + "as a village that has lost its bell");
+    }
+
+    // --- deed rings, new in session 06 ------------------------------------------------------------
+
+    @Test
+    @DisplayName("a ring is stored, marks the registry dirty, and survives a reload in order")
+    void memoriesRoundTripAndMarkTheRegistryDirty() {
+        NpcRegistry registry = new NpcRegistry();
+        UUID personaId = UUID.randomUUID();
+        registry.put(stamped(personaId, 3, 1L, (byte) 0));
+        registry.setDirty(false);
+
+        for (int day = 0; day < 40; day++) {
+            registry.remember(personaId, Deed.of(DeedType.FED_HUNGRY, A_PLAYER, personaId, 3, day));
+        }
+
+        // The same rule bonds carry: a SavedData is only written when it is dirty, so a deed
+        // appended to a clean registry is a memory that exists until the world reloads.
+        assertTrue(registry.isDirty(), "a ring written into a clean registry never reaches the file");
+
+        NpcRegistry reloaded = reload(registry.save(new CompoundTag(), null));
+        List<Deed> ring = reloaded.memories().of(personaId);
+        assertEquals(Memories.RING_CAPACITY, ring.size(), "the newest 32 of 40");
+        assertEquals(8, ring.get(0).gameDay());
+        assertEquals(39, ring.get(ring.size() - 1).gameDay());
+        assertEquals(registry.memories().of(personaId), ring, "every field, in the same order");
+    }
+
+    /**
+     * The dirty flag is the difference between a memory and a rewrite of the whole world.
+     *
+     * <p>Every emit tries to append to up to thirteen rings. If a duplicate marked the registry
+     * dirty, a player handing the same villager the same loaf twice would have Minecraft rewrite
+     * every persona, settlement, bond and ring in the save on the next autosave. This is
+     * {@code bind}'s rule, applied to the thing that is written far more often than a binding.
+     */
+    @Test
+    @DisplayName("a duplicate deed changes nothing and does not mark the registry dirty")
+    void aDuplicateDeedDoesNotDirtyTheRegistry() {
+        NpcRegistry registry = new NpcRegistry();
+        UUID personaId = UUID.randomUUID();
+        Deed deed = Deed.of(DeedType.GIFT_WANTED, A_PLAYER, personaId, 3, 5);
+
+        assertTrue(registry.remember(personaId, deed));
+        registry.setDirty(false);
+
+        assertFalse(registry.remember(personaId, deed));
+        assertFalse(registry.isDirty());
+        assertEquals(1, registry.memories().size());
+    }
+
+    /**
+     * The asymmetry with {@code putBond}, asserted so it is a decision rather than an omission.
+     *
+     * <p>A bond about another NPC is refused because that table grows toward n². A ring is capped
+     * per holder whoever the actor was, so the same restriction would buy nothing and would have to
+     * be undone at session 16. {@code DeedBus} is where an NPC-actor deed is currently declined, one
+     * level up and for the bond's reason.
+     */
+    @Test
+    @DisplayName("a deed by another NPC is stored if it reaches this door, unlike a bond")
+    void theRingHasNoPopulationGuard() {
+        NpcRegistry registry = new NpcRegistry();
+        UUID anna = UUID.randomUUID();
+        UUID bram = UUID.randomUUID();
+        registry.put(stamped(anna, 3, 1L, (byte) 0));
+        registry.put(stamped(bram, 3, 1L, (byte) 0));
+
+        assertTrue(registry.remember(anna, Deed.of(DeedType.STRUCK_RESIDENT, bram, anna, 3, 1)));
+        assertEquals(1, registry.memories().size());
+    }
+
+    @Test
+    @DisplayName("removing a persona takes its ring with it")
+    void removingAPersonaDropsItsMemories() {
+        NpcRegistry registry = new NpcRegistry();
+        UUID personaId = UUID.randomUUID();
+        registry.put(stamped(personaId, 3, 1L, (byte) 0));
+        registry.remember(personaId, Deed.of(DeedType.FED_HUNGRY, A_PLAYER, personaId, 3, 1));
+        registry.setDirty(false);
+
+        assertTrue(registry.remove(personaId));
+        assertEquals(0, registry.memories().size());
+        assertTrue(registry.isDirty());
+    }
+
+    @Test
+    @DisplayName("an unreadable deed makes the whole registry read-only, like an unreadable bond")
+    void oneCorruptDeedProtectsTheFile() {
+        NpcRegistry good = new NpcRegistry();
+        UUID personaId = UUID.randomUUID();
+        good.put(stamped(personaId, 3, 1L, (byte) 0));
+        good.remember(personaId, Deed.of(DeedType.FED_HUNGRY, A_PLAYER, personaId, 3, 1));
+        CompoundTag tag = good.save(new CompoundTag(), null);
+
+        tag.getList("memories", Tag.TAG_COMPOUND).getCompound(0)
+                .getList("ring", Tag.TAG_COMPOUND).add(new CompoundTag());
+
+        NpcRegistry reloaded = reload(tag);
+
+        assertEquals(1, reloaded.memories().size(), "the readable deed still loads");
+        assertTrue(reloaded.isReadOnly(),
+                "a villager who has quietly lost a memory is exactly as unsafe to write back as a "
+                        + "village that has lost its bell");
+    }
+
+    /**
+     * The schema 4 → 5 migration through the real load path, and the only way it can go wrong.
+     *
+     * <p>Read as damage rather than as absence, the registry goes read-only — and because
+     * settlements, bonds and rings share one file, a world that has been played for a week stops
+     * saving all three. {@code NpcSchemaTest} pins the same claim at the table level.
+     */
+    @Test
+    @DisplayName("a world with no memory table loads writable, with its bonds and settlements intact")
+    void aWorldWithNoMemoryTableStaysWritable() {
+        NpcRegistry schemaFour = new NpcRegistry();
+        UUID personaId = UUID.randomUUID();
+        schemaFour.put(stamped(personaId, 0, 1L, (byte) 9));
+        schemaFour.putSettlement(settlement(0, 100, -200));
+        schemaFour.putBond(personaId, A_PLAYER,
+                Bond.fresh(2).apply(new int[]{3, 3, 0, 0}, 2, Bond.DAILY_CAP));
+        CompoundTag tag = schemaFour.save(new CompoundTag(), null);
+        tag.putInt(NpcSchema.KEY_VERSION, 4);
+        tag.remove("memories");
+
+        NpcRegistry reloaded = reload(tag);
+
+        assertFalse(reloaded.isReadOnly(), "an absent ring table is not damage");
+        assertTrue(reloaded.isDirty(), "and the migrated file must be written back at schema "
+                + NpcSchema.CURRENT + " rather than migrating again on every load");
+        assertEquals(0, reloaded.memories().size());
+        assertEquals(1, reloaded.bonds().size(), "the bond table came through the migration");
+        assertEquals(1, reloaded.settlements().size(), "and so did the settlement table");
+        assertEquals(9, reloaded.persona(personaId).orElseThrow().trait(Persona.WARMTH),
+                "this migration adds a table and must rewrite nothing in a persona");
     }
 
     @Test

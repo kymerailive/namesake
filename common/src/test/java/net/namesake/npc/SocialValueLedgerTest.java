@@ -233,13 +233,31 @@ class SocialValueLedgerTest {
                             + "lowers warmth, missing tools raise industry, crowding raises "
                             + "temper. This is the whole reason the survey is worth running."),
 
-            // --- Deed, new in session 05 -------------------------------------------------------
+            // --- Deed, new in session 05, persisted from session 06 ----------------------------
             //
-            // Seven fields, seven consumers, no exemptions. Deed is ledgered by name rather than by
-            // declaring a codec: it is not persisted yet — its store is session 06's ring — and the
-            // scan that finds persisted records would therefore not find it. A record that carries
-            // social meaning through the pipeline is held to rule 5 whether or not it has reached a
-            // save file, or the rule would be about serialisation rather than about consequence.
+            // Seven fields, seven consumers, no exemptions — and no eighth field, which is the
+            // session 06 decision worth recording here rather than only in the ledger.
+            //
+            // Session 06 dedupes a ring on (npcUuid, deedId), and the obvious way to get a deedId is
+            // to add one: a counter or a random UUID, persisted, whose named consumer would be the
+            // dedupe. That is a legitimate shape — Bond.gainedToday is exactly it, bookkeeping
+            // consumed by the rule it implements. It was not taken. Deed.id() is *derived* from the
+            // six fields above, so there is no new persisted value at all and nothing for this
+            // ledger to classify; see Deed.id() for why content addressing rather than assignment,
+            // and what it costs at session 08.
+            //
+            // The trap that shape would have walked into is worth naming even though it was avoided,
+            // because the next session to write a record will meet it: this test proves a consumer
+            // by reading its bytecode for a *call*, and a record touching its own field compiles to
+            // a getfield no such check can see. Bond's three bookkeeping fields read themselves
+            // through their accessors for precisely that reason. An invariant enforced by bytecode
+            // has a shape, and code has to be written to fit it.
+            //
+            // Deed was ledgered by name from session 05, before it declared a codec, because a
+            // record carrying social meaning through the pipeline is held to rule 5 whether or not
+            // it has reached a save file — or the rule would be about serialisation rather than
+            // about consequence. It now declares one, so everyPersistedRecordIsLedgered finds it on
+            // its own and the entries below are load-bearing twice over.
 
             Entry.consumedBy(Deed.class, "typeId", List.of("typeId", "type"),
                     Deeds.class, "deltaFor",
@@ -370,7 +388,7 @@ class SocialValueLedgerTest {
      *
      * <p>"Persisted" is discriminated by declaring a {@link Codec}, which is what makes a record
      * something that reaches a save file. {@code Bond}, {@code Deed} and {@code Grievance} join
-     * this set at sessions 05, 05 and 16 by doing nothing but existing.
+     * this set at sessions 05, 06 and 16 by doing nothing but existing.
      */
     @Test
     @DisplayName("every persisted record in the mod appears in the ledger")

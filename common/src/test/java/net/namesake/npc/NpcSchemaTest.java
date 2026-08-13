@@ -6,6 +6,7 @@ import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 import net.namesake.settlement.Settlements;
 import net.namesake.social.Bonds;
+import net.namesake.social.Memories;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -193,7 +194,8 @@ class NpcSchemaTest {
         NpcSchema.Result result = NpcSchema.migrate(tag);
 
         assertEquals(3, result.foundVersion());
-        assertEquals(4, result.resultVersion());
+        assertEquals(NpcSchema.CURRENT, result.resultVersion(),
+                "a schema 3 save must walk the whole ladder, not stop at 4");
         assertEquals(0, result.recordsRewritten(), "there is nothing in a persona for bonds to fix");
         assertTrue(result.migrated(), "the version still moved, so the file must be marked dirty "
                 + "and rewritten — otherwise every future load migrates again");
@@ -204,6 +206,52 @@ class NpcSchemaTest {
 
         // And the personas came through untouched. A migration that quietly rewrote a culture or a
         // settlement here would be the schema 2 -> 3 failure happening in the other direction.
+        ListTag npcs = tag.getList(NpcSchema.KEY_NPCS, Tag.TAG_COMPOUND);
+        assertEquals(3, npcs.size());
+        for (int i = 0; i < npcs.size(); i++) {
+            Persona survivor = Persona.CODEC.parse(NbtOps.INSTANCE, npcs.getCompound(i)).getOrThrow();
+            assertEquals(new UUID(i, i), survivor.id());
+            assertEquals(100L + i, survivor.birthTick());
+        }
+    }
+
+    /**
+     * Schema 4 → 5, the deed rings, and the second additive migration in a row.
+     *
+     * <p>Additive is a claim, so it is checked rather than announced. The check that matters is not
+     * the rewrite count — zero is also what a fixer that does nothing at all returns, which session
+     * 03 broke the 2 → 3 fix into on purpose and watched turn the build red. It is that an absent
+     * {@code memories} key reads as an empty table and leaves the registry <b>writable</b>. Read as
+     * damage instead, {@code NpcRegistry} goes read-only, and because there is one file that stops
+     * the world saving its bonds and its settlements too.
+     *
+     * <p>One thing here is stronger than it was at schema 4, and it is worth stating. {@code Deed}
+     * did not arrive with session 06 — the record and all seven of its fields shipped in session 05,
+     * and what 06 added is a codec and a store. So there is no older shape of a deed anywhere on disk
+     * to reconcile: a schema-4 save cannot contain one in any shape, because nothing could write one.
+     */
+    @Test
+    @DisplayName("a pre-schema-5 tag has no deed rings, and that loads as an empty table on a writable registry")
+    void theMemoryTableIsAbsentBeforeSchemaFive() {
+        CompoundTag tag = registryTagAtVersion(4);
+        assertFalse(tag.contains("memories"), "the fixture must not already have one");
+
+        NpcSchema.Result result = NpcSchema.migrate(tag);
+
+        assertEquals(4, result.foundVersion());
+        assertEquals(NpcSchema.CURRENT, result.resultVersion());
+        assertEquals(0, result.recordsRewritten(), "there is nothing in a persona for a ring to fix");
+        assertTrue(result.migrated(), "the version still moved, so the file must be marked dirty "
+                + "and rewritten — otherwise every future load migrates again");
+
+        Memories memories = new Memories();
+        assertEquals(0, memories.readFrom(tag), "an absent table is not an unreadable one");
+        assertEquals(0, memories.size());
+        assertEquals(0, memories.holders());
+
+        // The whole hazard, spelled out: zero unreadable records is what keeps the registry
+        // writable. NpcRegistryTest.aWorldWithNoMemoryTableStaysWritable runs the same claim through
+        // the real load path.
         ListTag npcs = tag.getList(NpcSchema.KEY_NPCS, Tag.TAG_COMPOUND);
         assertEquals(3, npcs.size());
         for (int i = 0; i < npcs.size(); i++) {

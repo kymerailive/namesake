@@ -140,6 +140,9 @@ public final class AttachBetHarness {
     private static UUID witnessOutOfRange;
     private static final List<BondRow> BONDS = new ArrayList<>();
 
+    /** Session 06: the deed rings the same leg produced. */
+    private static final List<MemoryRow> MEMORIES = new ArrayList<>();
+
     /**
      * One bond as the setup phase left it, so {@code verify} compares against what was actually
      * written rather than against a constant.
@@ -151,6 +154,18 @@ public final class AttachBetHarness {
      */
     private record BondRow(UUID personaId, UUID about, byte trust, byte warmth, byte respect,
                            byte fear) {
+    }
+
+    /**
+     * One NPC's ring as the setup phase left it: {@code deedId:confidence} per slot, in order.
+     *
+     * <p>All seven fields of every deed are covered by those two tokens and nothing is restated.
+     * {@code Deed.id()} is derived from six of them — type, actor, subject, settlement, day and
+     * severity — so an id that comes back the same is six fields that came back the same, and
+     * confidence is the seventh, carried beside it because it is deliberately outside the
+     * derivation. Order is the list's own.
+     */
+    private record MemoryRow(UUID personaId, List<String> ring) {
     }
 
     /**
@@ -537,12 +552,53 @@ public final class AttachBetHarness {
                 record(Deed.dayOf(level) == day,
                         "CAP all nine landed on the same in-game day (" + day + ")");
 
-                // The instrument the owner reads the criterion with, run where there is something in
-                // it, and through the real dispatcher so the whole command is exercised.
+                // Session 06, and it needs no new fixture because the nine feedings above already
+                // are one. Same type, same actor, same subject, same settlement, same day, same
+                // severity — so they are nine emits of ONE deed, and a content-addressed ring holds
+                // one of them. That is the dedupe running through the real emit path in a real game.
+                record(registry.memories().of(deedSubject).size() == 1,
+                        "RING nine identical feedings left "
+                                + registry.memories().of(deedSubject).size()
+                                + " memory rather than nine — the ring is content-addressed");
+
+                // A genuinely different deed on the same day, so the ring has an order to lose
+                // across the reload rather than a single entry that cannot be got wrong.
+                DeedBus.Result gift = DeedBus.emit(level, DeedType.GIFT_WANTED, player, subject);
+                List<Deed> ring = registry.memories().of(deedSubject);
+                record(ring.size() == 2, "RING a different kind of deed on the same day is a second "
+                        + "memory (" + ring.size() + ")");
+                record(ring.size() == 2 && ring.get(0).type() == DeedType.FED_HUNGRY
+                                && ring.get(1).type() == DeedType.GIFT_WANTED,
+                        "RING the ring is ordered oldest first " + ring.stream()
+                                .map(entry -> entry.type().name()).toList());
+                record(gift.remembered() == gift.witnesses() + 1,
+                        "RING the subject and all " + gift.witnesses() + " witnesses recorded it ("
+                                + gift.remembered() + ")");
+
+                // The one claim in this session that no unit test in :common can make, because it is
+                // about DeedBus rather than about Memories: step 3 does not depend on step 4. Every
+                // one of these five has spent their whole daily allowance on the nine feedings, so
+                // this gift moves nothing at all — and is remembered by all five anyway. Move the
+                // ring append below the bond guard in DeedBus.emit and this line goes red on its own.
+                record(gift.bondsMoved() == 0 && gift.remembered() == gift.witnesses() + 1,
+                        "RING the gift moved " + gift.bondsMoved() + " bonds — every allowance was "
+                                + "already spent — and was remembered by " + gift.remembered()
+                                + " people regardless. Seeing something is not the same as it "
+                                + "changing your mind about somebody");
+                record(registry.memories().of(witnessBehindAWall).isEmpty(),
+                        "RING the villager behind the wall remembers nothing either — no bond and "
+                                + "no memory");
+
+                // The instruments the owner reads the criteria with, run where there is something in
+                // them, and through the real dispatcher so the whole command is exercised.
                 server.getCommands().performPrefixedCommand(
                         player.createCommandSourceStack(), "namesake debug bonds");
+                server.getCommands().performPrefixedCommand(
+                        player.createCommandSourceStack(), "namesake debug deeds "
+                                + subject.getUUID());
 
                 recordBonds(registry, actor);
+                recordMemories(registry);
                 writeSubjects(level);
                 advance(server, 5);
             }
@@ -589,6 +645,26 @@ public final class AttachBetHarness {
                             bond.respect(), bond.fear())));
         }
         Namesake.LOGGER.info("[harness] recorded {} bond(s) for the verify phase", BONDS.size());
+    }
+
+    /** Snapshots every ring the leg produced, for {@code verify} to look for after a reload. */
+    private static void recordMemories(NpcRegistry registry) {
+        MEMORIES.clear();
+        int deeds = 0;
+        for (Resident resident : RESIDENTS) {
+            List<Deed> ring = registry.memories().of(resident.personaId());
+            if (ring.isEmpty()) {
+                continue;
+            }
+            MEMORIES.add(new MemoryRow(resident.personaId(), slotsOf(ring)));
+            deeds += ring.size();
+        }
+        Namesake.LOGGER.info("[harness] recorded {} ring(s) holding {} deed(s) for the verify phase",
+                MEMORIES.size(), deeds);
+    }
+
+    private static List<String> slotsOf(List<Deed> ring) {
+        return ring.stream().map(deed -> deed.id() + ":" + deed.confidence()).toList();
     }
 
     // --- session 03: a settlement detected from real POI blocks ------------------------------------
@@ -1039,6 +1115,7 @@ public final class AttachBetHarness {
                 }
                 checkSettlementSurvivedReload(registry);
                 checkBondsSurvivedReload(registry);
+                checkMemoriesSurvivedReload(registry);
                 // The exit criterion's instrument, run where there is something to read: through
                 // the real dispatcher, so argument parsing and the permission gate are covered too,
                 // and into the log so a run leaves behind what a player would have seen.
@@ -1154,6 +1231,53 @@ public final class AttachBetHarness {
     }
 
     /**
+     * The deed rings the setup phase wrote, after a save and a full reload.
+     *
+     * <p><b>Session 06's one harness change, and it is deliberately not a new leg.</b>
+     * {@code WORKPLAN.md} grows the harness by one leg per session <i>that has one</i>, and a ring is
+     * arithmetic: overflow, dedupe and ordering are all pure and all proven in
+     * {@code MemoriesTest} in ten milliseconds rather than six minutes of CI. What a unit test
+     * cannot claim is that the ring reached the file — {@code Memories} in a test is saved by the
+     * test itself, and the failure this catches is that nothing marked the registry dirty, so
+     * Minecraft never asked it to save at all. That is precisely the instrument that already exists
+     * one method up, so the rings ride it.
+     *
+     * <p>The player's UUID does not appear here, unlike the bond check, and that is worth noticing
+     * rather than explaining away: a ring is keyed on the holder alone, so nothing about it depends
+     * on the dev client picking a new offline UUID on every launch. The deed ids inside it do
+     * contain the actor, which is why they are compared as recorded rather than recomputed.
+     */
+    private static void checkMemoriesSurvivedReload(NpcRegistry registry) {
+        if (MEMORIES.isEmpty()) {
+            // A world written before session 06 has no rings in it. Skipping is right; asserting
+            // would fail the cross-build migration run for a reason that is not about migration.
+            Namesake.LOGGER.info("[harness] no deed rings recorded in this save; skipping the memory legs");
+            return;
+        }
+        int intact = 0;
+        int deeds = 0;
+        for (MemoryRow row : MEMORIES) {
+            List<String> came = slotsOf(registry.memories().of(row.personaId()));
+            if (came.isEmpty()) {
+                record(false, "MEMORY RELOAD " + row.personaId() + " has forgotten everything it "
+                        + "saw — a ring appended without setDirty is a ring that never reached the "
+                        + "file");
+                continue;
+            }
+            if (!came.equals(row.ring())) {
+                record(false, "MEMORY RELOAD " + row.personaId() + " came back holding " + came
+                        + ", expected " + row.ring());
+                continue;
+            }
+            intact++;
+            deeds += came.size();
+        }
+        record(intact == MEMORIES.size(), "MEMORY RELOAD " + intact + "/" + MEMORIES.size()
+                + " deed rings survived save -> quit -> reload holding " + deeds
+                + " deed(s), in order, every field intact");
+    }
+
+    /**
      * If the world on disk predates the current schema, prove the fixer ran <i>and</i> that the
      * data it touched actually changed. "It loaded without crashing" is not evidence of a
      * migration; a fixer that silently does nothing loads without crashing too.
@@ -1175,7 +1299,7 @@ public final class AttachBetHarness {
                 + ", this build understands " + NpcSchema.CURRENT);
 
         if (onDisk >= 3) {
-            checkSchemaThreeToFour(registry);
+            checkAdditiveMigration(registry, onDisk);
             return;
         }
 
@@ -1206,16 +1330,26 @@ public final class AttachBetHarness {
     }
 
     /**
-     * The schema 3 → 4 migration, read out of a world that was genuinely written at schema 3.
+     * The additive migrations — 3 → 4 and 4 → 5 — read out of a world genuinely written at that
+     * version.
      *
-     * <p>Everything asserted here is a negative, which is unusual and is the point. This migration
-     * adds a table rather than rewriting a value, so the ways it can be wrong are: it rewrote
-     * something it should not have; the absent bond table was read as damage and the registry is
-     * now refusing to save; or the version was not stamped, in which case the world migrates again
-     * on every load for ever — session 01's defect 1, which was found only by loading one world
-     * twice.
+     * <p>Everything asserted here is a negative, which is unusual and is the point. Both of these
+     * migrations add a table rather than rewriting a value, so the ways they can be wrong are: they
+     * rewrote something they should not have; the absent table was read as damage and the registry
+     * is now refusing to save; or the version was not stamped, in which case the world migrates
+     * again on every load for ever — session 01's defect 1, found only by loading one world twice.
+     *
+     * <p><b>The bond table is the assertion that changes with the version on disk, and it is the one
+     * that matters at 4 → 5.</b> A schema-3 world has no bonds and must load as having none; a
+     * schema-4 world has the four the previous build's setup phase wrote, and they must all still be
+     * there. Which means the failure this catches is not abstract: read the absent {@code memories}
+     * key as damage and the registry goes read-only, and because settlements, bonds and rings share
+     * one file, a world somebody has played for a week silently stops saving all three. So the
+     * evidence is <i>bonds present and the registry writable</i> rather than a rewrite count —
+     * zero rewrites is also what a fixer that does nothing at all reports.
      */
-    private static void checkSchemaThreeToFour(NpcRegistry registry) {
+    private static void checkAdditiveMigration(NpcRegistry registry, int onDisk) {
+        String step = onDisk + "->" + NpcSchema.CURRENT;
         long untouched = SUBJECTS.stream()
                 .map(subject -> registry.persona(subject.personaId()))
                 .filter(Optional::isPresent)
@@ -1223,19 +1357,30 @@ public final class AttachBetHarness {
                 .filter(Persona::isGenerated)
                 .filter(persona -> persona.settlementId() == Persona.UNASSIGNED)
                 .count();
-        record(untouched == SUBJECTS.size(), "DATAFIXER 3->4 " + untouched + "/" + SUBJECTS.size()
-                + " personas kept the culture and placement schema 3 gave them; this migration adds "
-                + "a table and must rewrite nothing");
+        record(untouched == SUBJECTS.size(), "DATAFIXER " + step + " " + untouched + "/"
+                + SUBJECTS.size() + " personas kept the culture and placement the old build gave "
+                + "them; these migrations add a table and must rewrite nothing");
 
         record(registry.settlements().size() == 1,
-                "DATAFIXER 3->4 the settlement table came through the migration ("
+                "DATAFIXER " + step + " the settlement table came through the migration ("
                         + registry.settlements().size() + ")");
-        record(registry.bonds().size() == 0,
-                "DATAFIXER 3->4 a world with no bond table loads as having no bonds, not as damaged ("
-                        + registry.bonds().size() + ")");
+        record(registry.memories().size() == 0,
+                "DATAFIXER " + step + " a world with no deed rings loads as having none, not as "
+                        + "damaged (" + registry.memories().size() + ")");
+        if (onDisk >= 4) {
+            record(registry.bonds().size() > 0,
+                    "DATAFIXER " + step + " the " + registry.bonds().size() + " bond(s) the "
+                            + "schema-4 build wrote came through intact — which is what an absent "
+                            + "ring table being read as damage would have cost this world");
+        } else {
+            record(registry.bonds().size() == 0,
+                    "DATAFIXER " + step + " a world with no bond table loads as having no bonds, "
+                            + "not as damaged (" + registry.bonds().size() + ")");
+        }
         record(!registry.isReadOnly(),
-                "DATAFIXER 3->4 the registry is writable, so the migrated file will be written back "
-                        + "at schema " + NpcSchema.CURRENT + " rather than migrating again on every load");
+                "DATAFIXER " + step + " the registry is writable, so the migrated file will be "
+                        + "written back at schema " + NpcSchema.CURRENT + " rather than migrating "
+                        + "again on every load");
     }
 
     /**
@@ -1438,6 +1583,9 @@ public final class AttachBetHarness {
             lines.add("bond " + bond.personaId() + " " + bond.about() + " " + bond.trust()
                     + " " + bond.warmth() + " " + bond.respect() + " " + bond.fear());
         }
+        for (MemoryRow memory : MEMORIES) {
+            lines.add("memory " + memory.personaId() + " " + String.join(" ", memory.ring()));
+        }
         for (Resident resident : RESIDENTS) {
             // Name last on the line: it contains a space, and everything before it does not.
             lines.add("resident " + resident.personaId() + " " + resident.name());
@@ -1462,6 +1610,7 @@ public final class AttachBetHarness {
         SUBJECTS.clear();
         RESIDENTS.clear();
         BONDS.clear();
+        MEMORIES.clear();
         villageSite = null;
         registeredSettlement = null;
         for (String line : lines) {
@@ -1488,14 +1637,17 @@ public final class AttachBetHarness {
                 case "bond" -> BONDS.add(new BondRow(UUID.fromString(parts[1]),
                         UUID.fromString(parts[2]), Byte.parseByte(parts[3]),
                         Byte.parseByte(parts[4]), Byte.parseByte(parts[5]), Byte.parseByte(parts[6])));
+                case "memory" -> MEMORIES.add(new MemoryRow(UUID.fromString(parts[1]),
+                        List.of(java.util.Arrays.copyOfRange(parts, 2, parts.length))));
                 case "resident" -> RESIDENTS.add(new Resident(UUID.fromString(parts[1]),
                         String.join(" ", java.util.Arrays.copyOfRange(parts, 2, parts.length))));
                 default -> Namesake.LOGGER.warn("[harness] unrecognised subject line '{}'", line);
             }
         }
-        Namesake.LOGGER.info("[harness] read {} subject(s), {} resident(s) and {} bond(s), "
-                + "site {}, village {}",
-                SUBJECTS.size(), RESIDENTS.size(), BONDS.size(), testSite, villageSite);
+        Namesake.LOGGER.info("[harness] read {} subject(s), {} resident(s), {} bond(s) and "
+                + "{} ring(s), site {}, village {}",
+                SUBJECTS.size(), RESIDENTS.size(), BONDS.size(), MEMORIES.size(),
+                testSite, villageSite);
     }
 
     private static void finish(MinecraftServer server, boolean reachedTheEnd) {

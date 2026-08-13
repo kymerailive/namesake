@@ -32,6 +32,7 @@ import net.namesake.settlement.Settlement;
 import net.namesake.social.Bond;
 import net.namesake.social.Deed;
 import net.namesake.social.DeedType;
+import net.namesake.social.Memories;
 import net.namesake.social.Personality;
 
 import java.util.Collection;
@@ -109,6 +110,13 @@ public final class NamesakeCommands {
                                 .executes(context -> dumpBond(context, nearestCarrier(context.getSource())))
                                 .then(Commands.argument("target", EntityArgument.entity())
                                         .executes(context -> dumpBond(context,
+                                                EntityArgument.getEntity(context, "target")))))
+                        // The instrument session 06's exit criterion is read with: what one villager
+                        // actually remembers, in order, with the day it happened on. Read-only.
+                        .then(Commands.literal("deeds")
+                                .executes(context -> dumpDeeds(context, nearestCarrier(context.getSource())))
+                                .then(Commands.argument("target", EntityArgument.entity())
+                                        .executes(context -> dumpDeeds(context,
                                                 EntityArgument.getEntity(context, "target")))))
                         // settrait and prune both write. An op on a live server could rewrite any
                         // villager's personality, or delete personas whose entities are merely
@@ -391,13 +399,15 @@ public final class NamesakeCommands {
 
         StringBuilder out = new StringBuilder("day ").append(day).append(" — ")
                 .append(nearest.size()).append(" loaded NPC(s), nearest first; ")
-                .append(registry.bonds().size()).append(" bond(s) in the world");
+                .append(registry.bonds().size()).append(" bond(s) and ")
+                .append(registry.memories().size()).append(" deed(s) across ")
+                .append(registry.memories().holders()).append(" ring(s) in the world");
         if (viewer == null) {
             // Every section prints its own absence. Run from the console there is no "you".
             out.append("\n  (no viewer — run this as a player to see what they feel about you)");
         } else {
             out.append("\n  ").append(pad("who", 28)).append("trust warmth respect fear   cap")
-                    .append("   gift×");
+                    .append("   gift×  mem");
             for (Persona persona : nearest) {
                 Bond bond = registry.bonds().at(persona.id(), viewer, day);
                 out.append("\n  ").append(pad(nameOf(persona), 28))
@@ -407,7 +417,11 @@ public final class NamesakeCommands {
                                 bond.gainedToday(Bond.TRUST), bond.gainedToday(Bond.WARMTH),
                                 bond.gainedToday(Bond.RESPECT), bond.gainedToday(Bond.FEAR)))
                         .append(String.format(Locale.ROOT, "  %.2f",
-                                Personality.scale(persona, DeedType.GIFT_WANTED)));
+                                Personality.scale(persona, DeedType.GIFT_WANTED)))
+                        // How many of the ring's slots they have filled. The column that makes a
+                        // bond of +8 and a memory of one gift distinguishable from +8 and eight.
+                        .append(String.format(Locale.ROOT, " %3d",
+                                registry.memories().of(persona.id()).size()));
             }
             if (nearest.isEmpty()) {
                 out.append("\n  no NPC is loaded near you.");
@@ -449,6 +463,62 @@ public final class NamesakeCommands {
         source.sendSuccess(() -> Component.literal(report), false);
         Namesake.LOGGER.info("[debug bond] {}", report);
         return held.size();
+    }
+
+    // --- deeds ---------------------------------------------------------------------------------
+
+    /**
+     * One NPC's whole deed ring, <b>newest first</b>. What they actually remember.
+     *
+     * <p><b>This is what session 06's exit criterion is read with</b>, and the criterion that matters
+     * is not the arithmetic — a unit test proves the ring holds thirty-two and drops duplicates. It
+     * is the other one: <i>a villager who watched you do something last week can still tell you what
+     * it was.</i> So the day column is first and it is an absolute in-game day rather than a
+     * "3 days ago", because the question being asked is whether the thing is still there at all.
+     *
+     * <p>The {@code who} column says whether the deed happened <i>to</i> them or in front of them,
+     * and it is derived rather than stored: a deed carries its own subject, so the ring needs no
+     * second copy of it and no flag that could disagree with the struct it sits next to. That is
+     * {@code DESIGN.md} §4 step 3's "the subject records it weighted higher", read the way session 05
+     * already implemented it in {@code Deeds.deltaFor}.
+     */
+    private static int dumpDeeds(CommandContext<CommandSourceStack> context, Entity target)
+            throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        UUID personaId = PersonaLink.get().personaId(target).orElseThrow(NO_PERSONA::create);
+        NpcRegistry registry = NpcRegistry.get(source.getServer());
+        Persona persona = registry.persona(personaId).orElseThrow(NO_PERSONA::create);
+        int today = Deed.dayOf(source.getLevel());
+
+        List<Deed> ring = registry.memories().of(personaId);
+        StringBuilder out = new StringBuilder(nameOf(persona))
+                .append(" — ").append(ring.size()).append(" of ").append(Memories.RING_CAPACITY)
+                .append(" remembered, newest first; today is day ").append(today);
+        if (ring.isEmpty()) {
+            // Every section prints its own absence — DESIGN.md §11. A ring that prints nothing at
+            // all reads as a broken command rather than as a villager who has seen nothing.
+            out.append("\n  they have not seen anything happen. That is a real answer, not an "
+                    + "empty table.");
+        }
+        for (int slot = ring.size() - 1; slot >= 0; slot--) {
+            Deed deed = ring.get(slot);
+            int ago = today - deed.gameDay();
+            out.append(String.format(Locale.ROOT, "%n  day %-6d %-4s %-16s %-10s by %s  "
+                            + "settlement %-4d severity %3d  confidence %3d",
+                    deed.gameDay(),
+                    ago == 0 ? "" : "-" + ago + "d",
+                    deed.type(),
+                    personaId.equals(deed.subject()) ? "to them" : "witnessed",
+                    deed.actor().toString().substring(0, 8),
+                    deed.settlementId(),
+                    deed.severity(),
+                    deed.confidence()));
+        }
+
+        String report = out.toString();
+        source.sendSuccess(() -> Component.literal(report), false);
+        Namesake.LOGGER.info("[debug deeds] {}", report);
+        return ring.size();
     }
 
     private static String nameOf(Persona persona) {

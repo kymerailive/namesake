@@ -24,6 +24,16 @@ import java.util.UUID;
 /**
  * Steps 1 to 4 of {@code DESIGN.md} §4: emit, scan for witnesses, record, move the bonds.
  *
+ * <p><b>Step 3 arrived in session 06 and is the reason an emit now writes to the save file.</b> Each
+ * witness appends the deed to their ring at {@link Deed#FIRST_HAND}, and so does the subject. What
+ * the design calls <i>the subject records it weighted higher</i> needs no extra field and no second
+ * copy: a deed already carries {@link Deed#subject()}, so anyone reading a ring can tell whether it
+ * happened to them by comparing their own persona id against it — which is exactly what
+ * {@link Deeds#deltaFor} does one step later to give the subject the whole share and a bystander a
+ * fraction. Storing the weighting would be storing an answer the struct already contains, and
+ * session 05 already found the version of that mistake worth avoiding: a deed that has to be
+ * <i>told</i> who it happened to is a deed that can be told wrong.
+ *
  * <p><b>Everything here happens on emit, and nothing here is ever polled.</b> That is the single
  * most important property of this class and the reason the whole social system costs zero per tick.
  * MCA's harvest chore scans roughly 72,000 blocks per villager per minute looking for something to
@@ -56,10 +66,17 @@ public final class DeedBus {
     private DeedBus() {
     }
 
-    /** What one emit did, so a caller — or a harness — can assert on it rather than infer it. */
-    public record Result(Deed deed, int witnesses, int bondsMoved) {
+    /**
+     * What one emit did, so a caller — or a harness — can assert on it rather than infer it.
+     *
+     * <p>{@code remembered} and {@code bondsMoved} are separate counts because they are separate
+     * questions, and after session 06 they genuinely diverge: the tenth loaf of the day moves no bond
+     * (the allowance is spent) and adds no memory (it is the same deed as the first), while a deed
+     * whose share rounds to nothing for a distant witness is still remembered by them.
+     */
+    public record Result(Deed deed, int witnesses, int remembered, int bondsMoved) {
 
-        public static final Result NOTHING = new Result(null, 0, 0);
+        public static final Result NOTHING = new Result(null, 0, 0, 0);
 
         public boolean happened() {
             return deed != null;
@@ -112,33 +129,55 @@ public final class DeedBus {
         long begun = Meters.now();
         NpcRegistry registry = NpcRegistry.get(level);
 
-        // The population guard for decision 1, checked once here rather than thirteen times inside
-        // putBond. An NPC-to-NPC bond has no consumer until session 16's grievance engine, and a
-        // persisted social value with no consumer is what DESIGN.md §1 forbids. The deed itself is
-        // perfectly general and is emitted anyway — it is only the bond that is withheld.
+        // The population guard for session 05's decision 1, checked once here rather than thirteen
+        // times inside putBond. An NPC-to-NPC bond has no consumer until session 16's grievance
+        // engine, and a persisted social value with no consumer is what DESIGN.md §1 forbids. The
+        // deed itself is perfectly general and is built anyway — it is the storing that is withheld,
+        // the ring along with the bond, because a ring of deeds nothing reads is the same forbidden
+        // shape as a bond nothing reads. Session 16 deletes this branch and changes no schema.
         if (registry.persona(deed.actor()).isPresent()) {
-            Namesake.LOGGER.debug("Deed {} has an NPC actor; no bond was written. NPC-to-NPC bonds "
-                    + "arrive with session 16's grievance engine.", deed);
-            return new Result(deed, 0, 0);
+            Namesake.LOGGER.debug("Deed {} has an NPC actor; nothing was recorded and no bond was "
+                    + "written. NPC-to-NPC deeds arrive with session 16's grievance engine.", deed);
+            return new Result(deed, 0, 0, 0);
         }
 
         List<Villager> witnesses = witnesses(level, where, actorEntity, subjectEntity);
 
-        int moved = 0;
+        // Everyone this deed reached, subject first. One loop rather than two, because steps 3 and 4
+        // ask the same question of the same people and splitting them would look up every persona
+        // twice.
+        List<Villager> reached = new ArrayList<>(witnesses.size() + 1);
         if (subjectEntity != null) {
-            moved += applyTo(registry, deed, subjectEntity);
+            reached.add(subjectEntity);
         }
-        for (Villager witness : witnesses) {
-            moved += applyTo(registry, deed, witness);
+        reached.addAll(witnesses);
+
+        int remembered = 0;
+        int moved = 0;
+        for (Villager villager : reached) {
+            Persona persona = PersonaService.personaOf(villager).orElse(null);
+            if (persona == null) {
+                continue;
+            }
+            // Step 3 before step 4, and unconditionally. The bond is the tally of how much and the
+            // ring is the record of what, so a witness whose daily allowance is already spent — or
+            // whose share rounds to nothing — has still *seen* it. Coupling the two would mean a
+            // deed type that moves no axis leaves no memory either.
+            if (registry.remember(persona.id(), deed)) {
+                remembered++;
+            }
+            moved += applyTo(registry, deed, persona);
         }
 
         if (Profiling.ENABLED) {
             EMIT.end(begun);
             Meters.count("DeedBus deeds emitted");
             Meters.count("DeedBus witnesses recorded", witnesses.size());
+            Meters.count("DeedBus ring entries written", remembered);
         }
-        Namesake.LOGGER.debug("{} witnessed by {}, {} bond(s) moved", deed, witnesses.size(), moved);
-        return new Result(deed, witnesses.size(), moved);
+        Namesake.LOGGER.debug("{} witnessed by {}, remembered by {}, {} bond(s) moved",
+                deed, witnesses.size(), remembered, moved);
+        return new Result(deed, witnesses.size(), remembered, moved);
     }
 
     /**
@@ -182,19 +221,16 @@ public final class DeedBus {
     }
 
     /**
-     * Steps 3 and 4 for one person: work out what the deed was worth to them, and move the bond.
+     * Step 4 for one person: work out what the deed was worth to them, and move the bond.
      *
      * <p>A row is never created for nothing. A witness three blocks from a gift so small that their
      * share rounds to zero has genuinely had nothing happen to them, and writing a bond of all
      * zeroes for every villager who has ever been in the same square as a player is how a save file
-     * fills up with rows that mean "no".
+     * fills up with rows that mean "no". <b>The ring is deliberately not held to that rule</b> — see
+     * the loop above — because "nothing moved" and "nothing happened" are different claims, and only
+     * one of them is what a memory records.
      */
-    private static int applyTo(NpcRegistry registry, Deed deed, Villager villager) {
-        Optional<Persona> holder = PersonaService.personaOf(villager);
-        if (holder.isEmpty()) {
-            return 0;
-        }
-        Persona persona = holder.get();
+    private static int applyTo(NpcRegistry registry, Deed deed, Persona persona) {
         int[] delta = Deeds.deltaFor(deed, persona);
 
         Optional<Bond> existing = registry.bonds().stored(persona.id(), deed.actor());

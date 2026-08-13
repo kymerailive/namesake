@@ -15,6 +15,8 @@ import net.namesake.settlement.Settlement;
 import net.namesake.settlement.Settlements;
 import net.namesake.social.Bond;
 import net.namesake.social.Bonds;
+import net.namesake.social.Deed;
+import net.namesake.social.Memories;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -29,12 +31,14 @@ import java.util.function.Predicate;
  * Every persona in the world, keyed by persona id, plus the binding from a persona to the entity
  * currently carrying it, plus the settlements those personas belong to.
  *
- * <p><b>Settlements and bonds live here rather than in files of their own.</b> A persona references
- * its settlement by id and a bond references a persona by id, so two files could be torn apart by a
- * crash between two writes and leave every villager in a village pointing at a settlement that no
- * longer exists, or every bond in the world pointing at people who do not. One file means one schema
- * version that cannot disagree with itself and one load path to get right. Ruled for settlements in
- * session 03 and re-ruled, on the same argument, for bonds in session 05 — see {@link Bonds}.
+ * <p><b>Settlements, bonds and memories live here rather than in files of their own.</b> A persona
+ * references its settlement by id, a bond references a persona by id, and a deed references both, so
+ * two files could be torn apart by a crash between two writes and leave every villager in a village
+ * pointing at a settlement that no longer exists, or every bond in the world pointing at people who
+ * do not. One file means one schema version that cannot disagree with itself and one load path to
+ * get right. Ruled for settlements in session 03, re-ruled for bonds in session 05, and re-ruled
+ * again for the deed rings in session 06 — where the size counter-argument was finally big enough to
+ * be worth measuring rather than dismissing. See {@link Bonds} and {@link Memories}.
  *
  * <p>Stored once on the overworld's data storage rather than per-dimension: a persona is a person,
  * not a thing in a place, and it has to be findable from any dimension.
@@ -57,6 +61,7 @@ public final class NpcRegistry extends SavedData {
     private final Map<UUID, UUID> entityToPersona = new HashMap<>();
     private final Settlements settlements = new Settlements();
     private final Bonds bonds = new Bonds();
+    private final Memories memories = new Memories();
 
     private int loadedSchemaVersion = NpcSchema.CURRENT;
     private boolean readOnly;
@@ -120,6 +125,14 @@ public final class NpcRegistry extends SavedData {
      */
     public Bonds bonds() {
         return bonds;
+    }
+
+    /**
+     * The deed rings. Read freely; write through {@link #remember}, which is the only door that
+     * marks the file dirty.
+     */
+    public Memories memories() {
+        return memories;
     }
 
     public int size() {
@@ -203,6 +216,32 @@ public final class NpcRegistry extends SavedData {
     }
 
     /**
+     * Appends a deed to one NPC's ring, and marks the file dirty only if the ring actually changed.
+     *
+     * <p><b>Deliberately without {@link #putBond}'s population guard, and the asymmetry is the
+     * point.</b> That guard exists because a bond table keyed on two personas grows toward n² — twelve
+     * witnesses a deed across four hundred people — so its size is decided by who the subjects are. A
+     * ring is capped at {@link Memories#RING_CAPACITY} per holder whoever the actor was, so the whole
+     * table is bounded by the persona count and cannot be made to grow by emitting a different kind
+     * of deed. Session 16's NPC-to-NPC deeds therefore need nothing here; {@link net.namesake.social.DeedBus}
+     * is where they are currently declined, one level up, and for the bond's reason rather than this
+     * one.
+     *
+     * <p>The dirty flag follows {@link #bind}'s rule. A duplicate deed changes nothing, and marking
+     * the registry dirty for it would have Minecraft rewrite every persona, settlement, bond and ring
+     * in the world on the next autosave because a player gave the same villager the same loaf twice.
+     *
+     * @return true if the ring changed
+     */
+    public boolean remember(UUID holder, Deed deed) {
+        if (!memories.remember(holder, deed)) {
+            return false;
+        }
+        setDirty();
+        return true;
+    }
+
+    /**
      * Points a persona at the entity currently carrying it. Idempotent, and deliberately silent
      * when nothing changes — this runs on every chunk load and must not mark the file dirty for
      * a rebinding that is already true.
@@ -233,12 +272,13 @@ public final class NpcRegistry extends SavedData {
         if (entity != null) {
             entityToPersona.remove(entity);
         }
-        // A persona's bonds go with it. Leaving them behind would accumulate rows keyed on people
-        // the registry can no longer name, and the ones that survive a prune are exactly the ones
-        // nothing will ever look up again.
+        // A persona's bonds and memories go with it. Leaving them behind would accumulate rows keyed
+        // on people the registry can no longer name, and the ones that survive a prune are exactly
+        // the ones nothing will ever look up again.
         boolean hadBonds = !bonds.of(personaId).isEmpty();
         bonds.forget(personaId);
-        if (removed != null || entity != null || hadBonds) {
+        boolean hadMemories = memories.forget(personaId);
+        if (removed != null || entity != null || hadBonds || hadMemories) {
             setDirty();
             return true;
         }
@@ -316,6 +356,7 @@ public final class NpcRegistry extends SavedData {
         tag.put(NpcSchema.KEY_NPCS, list);
         settlements.save(tag);
         bonds.save(tag);
+        memories.save(tag);
         return tag;
     }
 
@@ -350,13 +391,17 @@ public final class NpcRegistry extends SavedData {
             }
         }
 
-        // Settlements and bonds are read after personas and counted into the same damage figure: a
-        // file that lost a settlement is exactly as unsafe to write back as one that lost a person,
-        // because every persona in that village is now pointing at an id nothing answers to. A file
-        // that lost a bond is worse in one way and better in none — nothing about the world looks
-        // wrong, a villager has simply forgotten somebody.
+        // Settlements, bonds and memories are read after personas and counted into the same damage
+        // figure: a file that lost a settlement is exactly as unsafe to write back as one that lost a
+        // person, because every persona in that village is now pointing at an id nothing answers to.
+        // A file that lost a bond is worse in one way and better in none — nothing about the world
+        // looks wrong, a villager has simply forgotten somebody. A lost deed is the same shape again,
+        // and it is the reason the ring is a table of its own: counted here, one bad deed costs one
+        // villager one memory, where the same deed inside a persona record would have cost that
+        // villager their name, their culture and their traits.
         unreadable += registry.settlements.readFrom(tag);
         unreadable += registry.bonds.readFrom(tag);
+        unreadable += registry.memories.readFrom(tag);
 
         if (unreadable > 0) {
             // Saving now would drop those records for good. Better a world that loses nothing and
@@ -382,9 +427,11 @@ public final class NpcRegistry extends SavedData {
         }
 
         Namesake.LOGGER.info(
-                "Loaded {} persona(s), {} bound to an entity, {} settlement(s), {} bond(s) (schema {})",
+                "Loaded {} persona(s), {} bound to an entity, {} settlement(s), {} bond(s), "
+                        + "{} deed(s) across {} ring(s) (schema {})",
                 registry.personas.size(), registry.personaToEntity.size(),
-                registry.settlements.size(), registry.bonds.size(), result.resultVersion());
+                registry.settlements.size(), registry.bonds.size(),
+                registry.memories.size(), registry.memories.holders(), result.resultVersion());
         return registry;
     }
 }

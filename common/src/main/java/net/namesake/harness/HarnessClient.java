@@ -3,6 +3,7 @@ package net.namesake.harness;
 import net.minecraft.client.GraphicsStatus;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.ParticleStatus;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.Difficulty;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.GameType;
@@ -80,6 +81,7 @@ public final class HarnessClient {
             return;
         }
         entered = true;
+        unattended(minecraft);
         if (ProfilerHarness.enabled()) {
             tuneForMeasurement(minecraft);
         }
@@ -108,6 +110,45 @@ public final class HarnessClient {
                     WorldPresets::createNormalWorldDimensions,
                     null);
         }
+    }
+
+    /**
+     * The two things an unattended run needs from a client nobody is sitting in front of.
+     * <b>Every armed run, both harnesses, always.</b>
+     *
+     * <h2>Muted</h2>
+     *
+     * <p>Not politeness. A harness run is a script that opens a real client on somebody's machine
+     * while they are working, and a mod that puts noise in their speakers uninvited is a mod that
+     * gets run less often — which costs far more than the sound is worth. On a CI runner there is no
+     * audio device at all, so it is one more way for a launch to spend time failing at something
+     * nobody asked for.
+     *
+     * <h2>Never paused, and this one is a defect this project has already lost hours to</h2>
+     *
+     * <p>{@code GameRenderer.render} calls {@code Minecraft.pauseGame(false)} when the window has
+     * been inactive for 500 ms and {@code pauseOnLostFocus} is set — and in single player a
+     * {@code PauseScreen} sets {@code Minecraft.pause}, which <b>stops the integrated server
+     * ticking</b>. Every deadline this harness has is counted in server ticks, so the script simply
+     * stops: no error, no timeout, no last line in the log. The process sits at a few seconds of CPU
+     * per minute of wall clock, which is exactly what a wedge looks like.
+     *
+     * <p><b>That is what session 05's undiagnosed mid-run wedge was.</b> Its log entry records the
+     * symptoms — "no further output for four minutes, the process alive at 2.4 seconds of CPU across
+     * ninety seconds of wall clock — idle, not working" — and that a re-run passed first time. Both
+     * follow: a re-run passes because a freshly launched window has focus. It read as a NeoForge
+     * problem because of when the owner happened to click away, and it was never one.
+     *
+     * <p>Both are set through the option objects rather than by writing {@code options.txt}, because
+     * the volume option's own update hook is what reaches {@code SoundManager}. Editing the file
+     * would take effect on the next launch, which is the launch after the one making the noise.
+     */
+    private static void unattended(Minecraft minecraft) {
+        minecraft.options.getSoundSourceOptionInstance(SoundSource.MASTER).set(0.0D);
+        minecraft.options.pauseOnLostFocus = false;
+        minecraft.options.save();
+        Namesake.LOGGER.info("[harness] unattended: muted, and pause-on-lost-focus off so clicking "
+                + "away from the window cannot stop the integrated server ticking");
     }
 
     /**

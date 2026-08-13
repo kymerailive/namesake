@@ -1,5 +1,8 @@
 package net.namesake.social;
 
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
+import net.minecraft.core.UUIDUtil;
 import net.minecraft.world.level.Level;
 
 import java.util.Objects;
@@ -10,15 +13,14 @@ import java.util.UUID;
  *
  * <p>A deed is emitted, witnessed, and turned into bond movement inside the same tick. It is the
  * unit the whole social system is built out of, and the thesis rests on it staying a struct:
- * because a deed is six fields rather than a sentence, session 06 can dedupe a ring on
- * {@code (npc, deed)} exactly, and session 08 can degrade a rumour's {@link #confidence} without
+ * because a deed is seven fields rather than a sentence, {@link Memories} can dedupe a ring on
+ * {@code (npc, deedId)} exactly, and session 08 can degrade a rumour's {@link #confidence} without
  * ever inventing a fact.
  *
- * <p><b>Deliberately not persisted yet, and that is a scope decision rather than an oversight.</b>
- * A deed's store is the 32-entry ring in session 06; giving this record a {@code Codec} now would
- * either mean an unbounded per-NPC list — which is a leak, not a feature — or building the ring
- * early. What session 05 persists is {@link Bond}, which is where a deed's effect lands and where
- * it has to survive a reload. Every field below is still held to rule 5 by
+ * <p><b>Persisted from session 06</b>, inside the 32-entry ring {@link Memories} keeps per NPC.
+ * Session 05 shipped this record without a codec on purpose: its store did not exist yet, and the
+ * alternatives were an unbounded per-NPC list — a leak rather than a feature — or building the ring
+ * against a bond system nobody had watched work. Every field is held to rule 5 by
  * {@code SocialValueLedgerTest}, which ledgers this record by name rather than by whether it
  * happens to declare a codec.
  *
@@ -43,6 +45,25 @@ public record Deed(
     /** The severity of a deed with nothing to scale it — a gift is a gift. */
     public static final byte NOMINAL = 100;
 
+    /**
+     * Field names are the long readable ones the rest of this file uses, and that is a decision with
+     * a number behind it rather than a default. Four hundred personas each holding a full ring is
+     * about 1.5 MB of uncompressed NBT, of which roughly a third is these seven key names repeated
+     * twelve thousand times; short keys would save half a megabyte of a tag tree that is built once
+     * per save and gzipped on the way out. {@code MemoriesTest} measures the real figure and holds it
+     * to a ceiling, so the trade is visible and a future session that widens this record finds out at
+     * build time rather than in somebody's save.
+     */
+    public static final Codec<Deed> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+            Codec.SHORT.fieldOf("type").forGetter(Deed::typeId),
+            UUIDUtil.CODEC.fieldOf("actor").forGetter(Deed::actor),
+            UUIDUtil.CODEC.fieldOf("subject").forGetter(Deed::subject),
+            Codec.INT.fieldOf("settlement").forGetter(Deed::settlementId),
+            Codec.INT.fieldOf("day").forGetter(Deed::gameDay),
+            Codec.BYTE.fieldOf("severity").forGetter(Deed::severity),
+            Codec.BYTE.fieldOf("confidence").forGetter(Deed::confidence)
+    ).apply(instance, Deed::new));
+
     public Deed {
         Objects.requireNonNull(actor, "deed actor");
         Objects.requireNonNull(subject, "deed subject");
@@ -61,6 +82,76 @@ public record Deed(
 
     public DeedType type() {
         return DeedType.byId(typeId);
+    }
+
+    /**
+     * What this deed <i>is</i>, as sixty-four bits. The key {@link Memories} dedupes a ring on.
+     *
+     * <h2>Ruled at the open of session 06: derived, not assigned</h2>
+     *
+     * <p>The question a deed id answers is not "which emit was this" but <b>"are two identical
+     * feedings on the same day one deed or two?"</b> — and the two candidate answers give opposite
+     * ones. A counter or a random UUID keeps both. A hash of the deed's own fields collapses them,
+     * because the ring becomes content-addressed and a deed <i>is</i> its fields.
+     *
+     * <p><b>Collapsing them is what stops the ring being grindable, which is the property the ring
+     * exists to have.</b> The store is a memory, not a log. With assigned ids an afternoon of
+     * standing in the square handing out bread evicts every distinct thing an NPC knows about you and
+     * replaces it with thirty-two copies of one gift — the exact failure {@link Bond#DAILY_CAP}
+     * exists to stop one level down, arriving through a door the cap does not watch. Content
+     * addressing is the ring's version of that cap, and it costs nothing to hold.
+     *
+     * <p><b>Nothing is softened by it.</b> A second identical blow still moves the bond: negatives
+     * bypass the cap entirely and {@code Bond.apply} has already run by the time this is consulted.
+     * The bond is the tally of how much; the ring is the record of what. Collapsing a repeat in one
+     * does not forgive it in the other.
+     *
+     * <p><b>Derived also costs zero bytes.</b> It is a pure function of fields that are already on
+     * disk, so it is never persisted — storing it would be a cache, and session 03 deleted
+     * {@code Settlement.culture} for being exactly that. {@code DESIGN.md} §3's "~24 B, 32-entry ring
+     * ≈ 768 B" stays true rather than becoming 40 B and 1,280.
+     *
+     * <h2>What it costs, plainly — three things</h2>
+     *
+     * <ol>
+     *   <li><b>{@link #confidence} is deliberately not in it, and that is the session 08 decision
+     *       this makes.</b> A rumour retold is the same event known less well, so the same deed
+     *       arriving twice by different routes collapses to one ring entry instead of two rows for
+     *       one murder. Which of the two copies survives is session 08's to rule; {@link Memories}
+     *       keeps the one it already has and does not reorder for a duplicate.</li>
+     *   <li><b>Blurring the actor produces a different id.</b> Session 08 blurs an actor below
+     *       confidence 50, and a blurred deed will not dedupe against the first-hand one — a villager
+     *       could hold both "you killed the smith" and "someone from the north killed the smith".
+     *       Bounded rather than solved: with max two hops from first-hand, confidence floors at 72,
+     *       so within the propagation session 08 ships the blur cannot fire at all. If that changes,
+     *       this is the paragraph to come back to.</li>
+     *   <li><b>The derivation is part of the behaviour, so it must not drift.</b> Changing the mix
+     *       below re-partitions every ring in every existing save: no corruption, but yesterday's
+     *       duplicates become distinct. {@code DeedTest} pins the id of a fixed deed to a literal, so
+     *       that becomes a decision somebody makes rather than a side effect of tidying.</li>
+     * </ol>
+     */
+    public long id() {
+        long hash = ID_SEED;
+        hash = mix(hash, typeId);
+        hash = mix(hash, actor.getMostSignificantBits());
+        hash = mix(hash, actor.getLeastSignificantBits());
+        hash = mix(hash, subject.getMostSignificantBits());
+        hash = mix(hash, subject.getLeastSignificantBits());
+        hash = mix(hash, settlementId);
+        hash = mix(hash, gameDay);
+        return mix(hash, severity);
+    }
+
+    private static final long ID_SEED = 0x9E37_79B9_7F4A_7C15L;
+
+    /** One round of a murmur3-style finalizer. Written out so it cannot change by inheritance. */
+    private static long mix(long hash, long value) {
+        long mixed = hash ^ value;
+        mixed *= 0xFF51_AFD7_ED55_8CCDL;
+        mixed ^= mixed >>> 33;
+        mixed *= 0xC4CE_B9FE_1A85_EC53L;
+        return mixed ^ (mixed >>> 33);
     }
 
     public Deed withSeverity(byte newSeverity) {

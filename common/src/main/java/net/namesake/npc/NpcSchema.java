@@ -26,7 +26,7 @@ import java.util.function.ToIntFunction;
 public final class NpcSchema {
 
     /** Bump this and add a {@link Fix} in the same commit. Never one without the other. */
-    public static final int CURRENT = 4;
+    public static final int CURRENT = 5;
 
     /**
      * A registry written before {@link #KEY_VERSION} existed cannot occur — the key has been
@@ -53,7 +53,9 @@ public final class NpcSchema {
             new Fix(1, "settlement/household 0 now means unassigned (-1)", NpcSchema::fixUnassignedSentinel),
             new Fix(2, "culture 0 now means unassigned (-1); settlements added", NpcSchema::fixUnassignedCulture),
             new Fix(3, "bonds added; nothing to rewrite, an absent table means nobody has met anyone",
-                    NpcSchema::fixBondTableAdded)
+                    NpcSchema::fixBondTableAdded),
+            new Fix(4, "deed rings added; nothing to rewrite, an absent table means nobody has "
+                    + "witnessed anything", NpcSchema::fixMemoryTableAdded)
     );
 
     private NpcSchema() {
@@ -195,6 +197,38 @@ public final class NpcSchema {
      * @return zero, always, and the log line says so
      */
     private static int fixBondTableAdded(CompoundTag root) {
+        return 0;
+    }
+
+    /**
+     * Schema 5 adds the per-NPC deed ring, and — like schema 4 — there is genuinely nothing to
+     * rewrite. <b>Said out loud, because "additive" is a claim and not a default.</b>
+     *
+     * <p>Two of the four fixes before this one were the same collision: a stored {@code 0} that used
+     * to mean "none" and now means a real value, rewritten record by record. The other two, and this
+     * one, add a table that did not exist, and their whole content is an <i>assumption</i> — that an
+     * absent key reads as "nothing has happened yet" rather than as damage.
+     *
+     * <p>What makes this one additive is checkable rather than asserted, and it is worth stating
+     * because {@link net.namesake.social.Deed} did not arrive with session 06. The record and all
+     * seven of its fields shipped in session 05; what session 06 added is a {@code Codec} and a
+     * store. So there is no older shape of a deed on disk anywhere to reconcile — a schema-4 save
+     * cannot contain a deed at all, in any shape, because nothing could write one.
+     *
+     * <p>Which is also where the only real risk sits, so that is where the test is. Read as damage,
+     * {@code NpcRegistry} goes read-only and a world that has memories in it silently stops saving
+     * them — and it stops saving its bonds and its settlements with them, because there is one file.
+     * {@code NpcSchemaTest} pins the absence, and it has been reverted and watched to fail.
+     *
+     * <p><b>The assertion is deliberately not on the rewrite count.</b> Zero is what a fix that does
+     * nothing at all also returns — session 03 broke the 2 → 3 fix to do exactly that and turned the
+     * build red for it. Counting rewrites here would prove nothing either way, so the evidence is on
+     * the thing that would actually break: {@link net.namesake.social.Memories#readFrom} returning an
+     * empty table and a writable registry for a tag with no {@code memories} key.
+     *
+     * @return zero, always, and the log line says so
+     */
+    private static int fixMemoryTableAdded(CompoundTag root) {
         return 0;
     }
 
