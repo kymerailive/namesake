@@ -11,7 +11,13 @@ package net.namesake.settlement;
  * and nothing else — two persisted numbers for one fact, which is the duplication rule 5 exists to
  * catch. Defensibility is its own axis on {@link Settlement} and needs stays four wide.
  *
- * <p>Ordinals index the persisted array, so <b>append only</b>.
+ * <p>Ordinals index the persisted array, so <b>append only</b> — and appending is a schema change,
+ * not a free one. {@link Settlement} refuses a needs vector of the wrong width in its constructor,
+ * which is deliberate: a settlement holding four numbers where five are expected is a settlement
+ * nobody can interpret. But that refusal throws out of {@code Codec.parse} rather than coming back
+ * as an unreadable record, so adding a need without a {@code NpcSchema} fix that widens every
+ * stored vector would fail a world load rather than degrade it. Hard rule 1 applies here as much
+ * as anywhere.
  */
 public enum Need {
 

@@ -60,6 +60,11 @@ public final class Personas {
                                        BlockPos pos) {
         if (persona.isGenerated()) {
             if (persona.settlementId() == Persona.UNASSIGNED) {
+                // Only the settlement changes. Culture, household and traits are who they are, and
+                // an immigrant keeps their birth culture and their family name — which is the whole
+                // reason a persona stores a culture of its own rather than borrowing its
+                // settlement's. Session 28's migration inherits this behaviour rather than
+                // replacing it.
                 settlementAt(registry, level, pos).ifPresent(settlement -> {
                     registry.put(persona.withSettlement(settlement.id()));
                     Namesake.LOGGER.debug("Persona {} moved into settlement {}",
