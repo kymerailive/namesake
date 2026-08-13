@@ -395,19 +395,36 @@ guard removed, because the guard was redundant with the `setDirty` override. **T
 real when the actual original mistake — the call's position — was restored and watched to fail.**
 Reverting the fix you wrote is not the same as reverting the defect you had.
 
-**Two of those red runs were the harness lying, not the mod.** Worth knowing before trusting it
-again: one 7000-tick `/tick sprint` outruns the chunk loader, so the mob never enters the entity
-tick list and simply does not tick — `entityTicks=0` while thousands of server ticks elapsed. It
-sprints in 200-tick bursts now. And a zombie left alive among the spare villagers hunted them out of
-the loaded area during the cure, which read as "the persona was lost". The subjects are `setNoAi`
-fixtures now and the zombie is discarded once it has done its one job.
+**Three of those red runs were the harness lying, not the mod.** Worth knowing before trusting it
+again. A long `/tick sprint` outruns the chunk loader, so the mob never enters the entity tick list
+and simply does not tick — `entityTicks=0` while thousands of server ticks elapsed. A zombie left
+alive among the spare villagers hunted them out of the loaded area during the cure, which read as
+"the persona was lost"; the subjects are `setNoAi` fixtures now and the zombie is discarded once it
+has done its one job. And the same sprint defect surfaced a *third* time, in CI, on the leg that
+waits for chunks to come back — the records were perfect and only the entity check failed.
+
+**So it was fixed as a class, not a third instance.** Every wait is now a poll against the condition
+it actually cares about, with a deadline, and sprinting is a per-wait choice with a stated reason:
+sprint for waits on game time (a chunk ticket expiring, a cure counting down), never for waits on
+chunk IO. **A blind sprint cannot tell "not yet" from "never", so it reports a slow machine as a
+lost persona.** That is the general lesson, and it will apply again to session 07's harness.
+
+**One thing left unexplained.** On the first CI run the integrated server wedged after logging
+vanilla's "Saving worlds", inside `saveAllChunks`, and the process never exited — 28 minutes before
+it was cancelled, against about three seconds locally. Nothing of ours is on that path and it has
+not recurred since. It is *bounded*, not diagnosed: a watchdog hard-exits 45 s after the harness is
+finished and warns when it fires, so if it comes back it will say so instead of hanging a runner.
+Everything under test is saved and the verdict written before the game is asked to stop, and the
+`verify` phase reloads from disk, so a truncated save fails the run rather than hiding in it.
 
 **Ruled at close, by the owner.**
 
-- **The harness stays, and CI runs it on every push** — both loaders, in two launches, reading the
-  verdict file the harness writes rather than the exit code (the game exits 0 either way, so a job
-  watching the exit code would be green forever). Session 01's exit criteria are now re-checked
-  continuously instead of being true only on the day they were first proven.
+- **The harness stays, and CI runs it on every push** — both loaders, in two launches, under `xvfb`
+  with software GL, reading the verdict file the harness writes rather than the exit code (the game
+  exits 0 either way, so a job watching the exit code would be green forever). **Done and green.**
+  Session 01's exit criteria are now re-checked continuously instead of being true only on the day
+  they were first proven, and the cross-loader asymmetry is protected with them: the CI log shows
+  exactly one `Reaped stray persona` on NeoForge and none on Fabric.
 - **Minting on sight stays.** Every `Villager` that loads gets a persona immediately and keeps it.
   Every villager is a person whether or not you have met them, and witnesses in session 05 need
   identity to already exist. Consequence recorded against session 04: the record count tracks world
@@ -419,7 +436,9 @@ fixtures now and the zombie is discarded once it has done its one job.
 between runs — starting the next one too early hits the world's `session.lock` and the crash blames
 the world, not the timing. Fabric and NeoForge disagree about which screen is up when client ticks
 begin (NeoForge showed `AccessibilityOnboardingScreen` on a fresh run directory), so gate on "no
-level, no overlay, some screen" rather than on `TitleScreen`.
+level, no overlay, some screen" rather than on `TitleScreen`. The harness runs in CI now, so a
+change that breaks persona persistence turns the build red without anyone remembering to check —
+but it costs ~6 minutes per loader, so expect CI to take longer than session 00's 90 seconds.
 
 **Ledger change.** Session 01 → done, session 02 → NEXT. Risk 1 retired; a new risk 4 added for
 `Persona.traits`, which is persisted and displayed with no consumer branching on it — the exact
