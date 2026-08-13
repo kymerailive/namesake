@@ -49,7 +49,7 @@ public final class NamesakeCommands {
             Component.literal("That entity has no persona attached."));
 
     private static final SimpleCommandExceptionType DEV_ONLY = new SimpleCommandExceptionType(
-            Component.literal("Refused: this deletes personas whose entities are merely unloaded. "
+            Component.literal("Refused: this rewrites persisted persona state. "
                     + "Development environments only."));
 
     private static final SimpleCommandExceptionType UNKNOWN_AXIS = new SimpleCommandExceptionType(
@@ -71,7 +71,13 @@ public final class NamesakeCommands {
                                                 EntityArgument.getEntity(context, "target")))))
                         .then(Commands.literal("registry")
                                 .executes(NamesakeCommands::dumpRegistry))
+                        // settrait and prune both write. An op on a live server could rewrite any
+                        // villager's personality, or delete personas whose entities are merely
+                        // unloaded — permission level 2 is not a meaningful gate on either. They
+                        // are development instruments, so they are hidden outside a development
+                        // environment and refuse if reached anyway.
                         .then(Commands.literal("settrait")
+                                .requires(NamesakeCommands::isDevelopment)
                                 .then(Commands.argument("axis", StringArgumentType.word())
                                         .suggests((context, builder) ->
                                                 SharedSuggestionProvider.suggest(Persona.TRAIT_NAMES, builder))
@@ -81,7 +87,20 @@ public final class NamesakeCommands {
                                                         .executes(context -> setTrait(context,
                                                                 EntityArgument.getEntity(context, "target")))))))
                         .then(Commands.literal("prune")
+                                .requires(NamesakeCommands::isDevelopment)
                                 .executes(NamesakeCommands::prune))));
+    }
+
+    /**
+     * Hides a writing command outside a development environment.
+     *
+     * <p>{@code requires} keeps it out of the command tree the server sends the client, so it does
+     * not tab-complete and cannot be run. The executors still check as well: {@code requires} is
+     * evaluated when the tree is built, and a gate that exists in exactly one place is a gate that
+     * moves when someone restructures the builder.
+     */
+    private static boolean isDevelopment(CommandSourceStack source) {
+        return Platform.get().isDevelopmentEnvironment();
     }
 
     // --- persona -------------------------------------------------------------------------------
@@ -121,6 +140,9 @@ public final class NamesakeCommands {
     private static int setTrait(CommandContext<CommandSourceStack> context, Entity target)
             throws CommandSyntaxException {
         CommandSourceStack source = context.getSource();
+        if (!Platform.get().isDevelopmentEnvironment()) {
+            throw DEV_ONLY.create();
+        }
         String axisName = StringArgumentType.getString(context, "axis");
         int value = IntegerArgumentType.getInteger(context, "value");
         int axis = axisIndex(axisName);
