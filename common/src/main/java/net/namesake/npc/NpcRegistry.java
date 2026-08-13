@@ -234,11 +234,6 @@ public final class NpcRegistry extends SavedData {
         if (result.migrated()) {
             Namesake.LOGGER.info("NPC registry migrated {} -> {} on load ({} record(s) rewritten)",
                     result.foundVersion(), result.resultVersion(), result.recordsRewritten());
-            // Minecraft only writes a SavedData that is dirty, and a migration on its own does not
-            // make it dirty. Without this the fixed records live in memory and die there: the file
-            // stays on the old schema forever and every future load runs the whole chain again.
-            // Found by loading the same world twice and seeing the migration line a second time.
-            registry.setDirty();
         }
 
         ListTag list = tag.getList(NpcSchema.KEY_NPCS, Tag.TAG_COMPOUND);
@@ -269,6 +264,19 @@ public final class NpcRegistry extends SavedData {
                     "{} persona record(s) could not be read. The registry is now read-only for this "
                             + "session so the damaged file is not overwritten. Back up <world>/data/{}.dat.",
                     unreadable, FILE_ID);
+        }
+
+        // Minecraft only writes a SavedData that is dirty, and migrating does not make it dirty.
+        // Without this the fixed records live in memory and die there: the file stays on the old
+        // schema and every future load runs the whole chain again. Found by loading one world twice
+        // and seeing the migration line the second time.
+        //
+        // Position matters as much as the call. Run before read-only is decided, this hands
+        // Minecraft permission to rewrite a file we could not fully read, dropping the damaged
+        // records for good — the one case the read-only guard exists for. setDirty(boolean) refuses
+        // too, but saying the condition here keeps the reason next to the reader.
+        if (result.migrated() && !registry.readOnly) {
+            registry.setDirty();
         }
 
         Namesake.LOGGER.info("Loaded {} persona(s), {} bound to an entity (schema {})",

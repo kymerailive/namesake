@@ -70,6 +70,7 @@ public final class AttachBetHarness {
     private static int deadline;
     private static int lastReport;
     private static boolean finished;
+    private static int registrySizeBeforeCure;
     private static final List<String> RESULTS = new ArrayList<>();
 
     /** Filled by {@code setup}, reloaded from disk by {@code verify}. */
@@ -289,8 +290,6 @@ public final class AttachBetHarness {
             default -> finish(server, true);
         }
     }
-
-    private static int registrySizeBeforeCure;
 
     // --- phase: verify -------------------------------------------------------------------------
 

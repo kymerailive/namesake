@@ -333,7 +333,7 @@ reload. That is the whole architecture in one line.
 **Schema 1 was genuinely shipped before the bump.** Commit `9736e07` is schema 1; the worlds used
 for the migration test were written by that build, not fabricated. Hard rule 1 followed as written.
 
-**Three defects, all found by running the game rather than building it.**
+**Four defects. Three were found by running the game rather than building it.**
 
 1. **A migration that never reached disk.** The fixer ran, rewrote the records in memory — and
    Minecraft never wrote them back, because a `SavedData` is only saved when dirty and migrating
@@ -350,13 +350,24 @@ for the migration test were written by that build, not fabricated. Hard rule 1 f
    permits null. Passing null compiles on both and throws only on Fabric, only once a save exists —
    session 00's failure mode exactly. Caught by reading the decompiled sources for both before
    writing the call.
+4. **The fix for defect 1 defeated the damaged-file guard.** Marking the registry dirty for a
+   migration ran *before* the unreadable-record check, so a file that both needed migrating and had
+   a record we could not parse would have been rewritten — dropping those records permanently, in
+   the exact case the guard exists for. Caught on review, not by a test, and the test written for it
+   only earns its place because moving the call back to the old position was watched to fail it.
+   Position, not just presence, is the invariant.
 
-**Rule 3 applied four times.** Each of these was reverted and watched to fail before being called
+**Rule 3 applied five times.** Each of these was reverted and watched to fail before being called
 done: the read-only guard, the `Persona.equals` override (without it two personas printing identical
 field values compare unequal, which would have made every "the fields survived" assertion vacuous),
 the fix-ladder test (bumping `CURRENT` with no matching fix turns the build red — hard rule 1 is now
-enforced by CI rather than by intention), and the harness itself, which produced two genuine
-red runs before it produced a green one.
+enforced by CI rather than by intention), the migration/damaged-file ordering, and the harness
+itself, which produced two genuine red runs before it produced a green one.
+
+One of those reverts is worth remembering: the first attempt at the ordering test passed with the
+guard removed, because the guard was redundant with the `setDirty` override. **The test only became
+real when the actual original mistake — the call's position — was restored and watched to fail.**
+Reverting the fix you wrote is not the same as reverting the defect you had.
 
 **Two of those red runs were the harness lying, not the mod.** Worth knowing before trusting it
 again: one 7000-tick `/tick sprint` outruns the chunk loader, so the mob never enters the entity

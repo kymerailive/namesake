@@ -184,6 +184,28 @@ class NpcRegistryTest {
                 "a registry that needed no migration must not be rewritten for no reason");
     }
 
+    /**
+     * The two protections have to compose, and the order they run in decides whether they do. A
+     * file that both needs migrating and holds a record we cannot read is the worst case: marking
+     * it dirty for the migration would hand Minecraft permission to rewrite it, dropping the
+     * unreadable records for good.
+     */
+    @Test
+    @DisplayName("a damaged registry that also needs migrating is still never written back")
+    void migrationDoesNotOverrideTheDamagedFileGuard() {
+        CompoundTag tag = schemaOneTag();
+        CompoundTag broken = new CompoundTag();
+        broken.putString("id", "not a uuid");
+        tag.getList(NpcSchema.KEY_NPCS, Tag.TAG_COMPOUND).add(broken);
+
+        NpcRegistry registry = reload(tag);
+
+        assertTrue(registry.isReadOnly(), "a damaged file must stay read-only");
+        assertFalse(registry.isDirty(),
+                "the migration must not mark a damaged registry for saving; that would overwrite "
+                        + "the records that could not be read");
+    }
+
     @Test
     @DisplayName("an unreadable record makes the whole registry read-only rather than dropping it")
     void oneCorruptRecordProtectsTheFile() {
