@@ -3,10 +3,11 @@
 **The ledger.** What happens next, in order, with exit criteria. Read first, update last.
 Where any other document disagrees on sequence, this wins.
 
-- **Status:** session 02 complete. **The attach bet holds** and **the authorization gate is real** —
-  a persona rides a vanilla `Villager` through save, chunk unload and zombification on both loaders,
-  and an unguarded serverbound handler cannot reach a green build. Repo live at
-  https://github.com/kymerailive/namesake
+- **Status:** session 03 complete. **The attach bet holds**, **the authorization gate is real**, and
+  **a villager is now from somewhere** — a persona rides a vanilla `Villager` through save, chunk
+  unload and zombification on both loaders; an unguarded serverbound handler cannot reach a green
+  build; and a settlement detected from a real bell gives its residents a culture, a household and
+  eight rolled axes that survive a reload. Repo live at https://github.com/kymerailive/namesake
 - **Target:** 16 sessions to the ship-or-kill test (session 10), playable slice at 15.
 - **Companion:** `DESIGN.md` owns *what* we build. This owns *what happens next*.
 
@@ -19,8 +20,8 @@ Where any other document disagrees on sequence, this wins.
 | 00 | Repo and skeleton | **done** — 2026-08-13 |
 | 01 | Persona, persistence, attach bet | **done** — 2026-08-13 |
 | 02 | Authorization layer | **done** — 2026-08-13 |
-| 03 | Traits, cultures, settlement detection | **NEXT** |
-| 04 | Profiler spike | pending |
+| 03 | Traits, cultures, settlement detection | **done** — 2026-08-13 |
+| 04 | Profiler spike | **NEXT** |
 | 05 | Bonds and deeds | pending |
 | 06 | Episodic memory | pending |
 | 07 | Headless simulation harness | pending |
@@ -272,8 +273,14 @@ generations and keeps latency out of the interaction path entirely.
 2. **Session 10 fails ship-or-kill.** If nobody reacts when town B knows their name, the central
    thesis is wrong. Better to learn it at session 10 than 60.
 3. **Cultures don't feel foreign.** If settlement two sounds and behaves like settlement one, the
-   travel loop collapses around hour 45 and no era ladder saves it. Session 03 is the first read;
-   playtest specifically for this before building era 4–5.
+   travel loop collapses around hour 45 and no era ladder saves it. **Session 03 shipped the first
+   read and it is with the owner, unresolved.** Six cultures now differ in phonotactics, baseline
+   disposition and conformity, and three properties are machine-checked: two points a village apart
+   land in different cultures more than 60% of the time, two points inside one village's reach
+   share one more than 75% of the time, and no two cultures draw from substantially the same
+   consonants. **None of that is the question.** The question is whether the second village *sounds*
+   like somewhere else, and only a person can answer it — see the hand-off at the end of the session
+   03 log. Playtest again before building era 4–5.
 4. **Traits have no consumer yet.** `Persona.traits` is written, persisted and displayed, and
    nothing branches on it — precisely the failure `DESIGN.md` §1 forbids. The first real consumer is
    the personality weight table in session 05. **No longer carried by memory as of 2026-08-13:**
@@ -282,6 +289,12 @@ generations and keeps latency out of the interaction path entirely.
    the weight table is not there. The risk stays listed because the field is still unconsumed — but
    it now fails loudly rather than quietly. Every other `Persona` field is classified the same way;
    the expiry sessions are in the session 02 log and can be ruled differently.
+
+   **Session 03 raised the stakes rather than lowering them.** Traits are no longer eight zeroes; a
+   villager now carries eight rolled values that took a settlement survey, a culture table and three
+   layers of arithmetic to produce. Every one of those inputs is now consumed, which means the
+   *only* thing in that chain still terminating in a renderer is the output. If session 05 does not
+   land the weight table, the honest response is to delete more than one field.
 
 ## How a session is verified — ruled 2026-08-13
 
@@ -607,3 +620,228 @@ opinion about, found in ten seconds of looking at it.
 unconsumed — but it is no longer carried by memory. A third verification instrument recorded: the
 build itself, for invariants that are properties of the source tree rather than of behaviour. No
 changes to the 16-session shape.
+
+### Session 03 — 2026-08-13 — traits, cultures, settlement detection
+
+**Shipped.** `6f054f8..27ecdb7` plus this ledger commit, pushed to `origin/main`.
+
+**A villager is now from somewhere, and it shows in their name and in their numbers.** A settlement
+detected from a real bell gives its residents a culture, a household and eight rolled axes, and all
+of it survives a save and a reload on both loaders.
+
+**What shipped.**
+
+- **Six cultures**, each with its own phonotactics, baseline disposition, conformity and palette.
+  Not a record and not persisted: a persona stores a culture *id*, and the table is code, so the
+  palette can never reach a save file and the table can never drift from one.
+- **`Cultures`** — the culture map. Voronoi over jittered 512-block cells, leaned by biome
+  temperature and floored so every culture stays possible in every climate. Region size is chosen
+  against vanilla's village spacing.
+- **`Names`** — a total function from a seed to a name. No used-names set, no redraw loop, so it
+  cannot exhaust. Names are derived, never stored, so a villager's name cannot drift from the
+  fields it comes from.
+- **`Settlement`** and the survey — a bell plus what a one-shot 128-block POI census concluded:
+  trade, defensibility, and a four-wide needs vector. Persisted inside `namesake_npcs.dat`.
+- **`SettlementRegistrar`** — census on the server thread at sixteen chunks a tick, scoring
+  off-thread, commit back on the server thread. One survey per 128-block cell, ever.
+- **`TraitRoll`** — settlement mean → household ±20 → individual ±25, clamped to ±100 and to
+  nothing else.
+- **`Personas`** — minting and generating as two steps, with the gap between them a state a save
+  file can legitimately hold.
+- **Schema 3**, with a fixer that has been watched to run against worlds written by the previous
+  build on both loaders.
+- **`/namesake debug dump`** and **`settlements`**.
+- **A fourth harness leg**: build a village, watch the mod find it.
+
+**Six decisions worth recording.**
+
+1. **Settlements live in the registry's own file, under the same schema version.** A persona
+   references its settlement by id. Two files can be torn apart by a crash between two writes, and
+   the result is every villager in a village pointing at an id nothing answers to. One file, one
+   version number that cannot disagree with itself, one load path to get right.
+2. **The thread split is where safety puts it, not where `DESIGN.md` §8 would prefer.**
+   `PoiManager` is a `SectionStorage` over a plain hash map that reads a whole chunk column off
+   disk on a miss; it is not thread-safe and no amount of wanting the survey off-thread changes
+   that. What it *can* stop being is one blocking lump — a 128-block survey is 289 chunks, and it
+   now spends sixteen a tick. The scoring, which is the part that would actually cost something, is
+   pure arithmetic over immutable values and runs off-thread as written. **The census half is
+   recorded as a cost session 04 should measure rather than as a solved problem.**
+3. **`Settlement` has no culture field.** It had one until rule 5 was applied to it honestly: a
+   settlement's culture is a pure function of the world seed and the biome at its bell, both stable
+   for the life of a world, so storing it is caching — and a cache with no behaviour of its own is
+   a persisted value with no consumer. Deleting it was easier than justifying it. A *persona* still
+   stores its own culture, because a person's culture is where they were born and not where they
+   currently live, and session 28's migration will need that distinction.
+4. **A household is a 16-block cell of the world, measured from the bell.** Derived, not stored:
+   nothing to persist, nothing to migrate, nothing that can drift out of step with the positions it
+   describes. The cost is a grid — two neighbours either side of a boundary are not family — and
+   that is the trade, recorded rather than hidden. The alternative, clustering beds at registration,
+   costs a pass over every bed and a persisted table, to answer a question no mechanic asks yet.
+5. **Per-culture conformity scales the individual layer, and only ever narrows it.** It is what
+   makes `Persona.cultureId` change persisted numbers rather than only a string, and it means a
+   Tal-Qir household produces people who resemble each other while a Meridian one does not. The
+   ruled ±25 remains the bound for every culture. **Ruled by me, not by the ledger — overrule it
+   if it reads as invention.**
+6. **`WORKPLAN.md` asks for 10⁶ names per culture, and that is measured on full names.** A name in
+   this system is what a villager is called — Bram Ashwood, not Bram. Full names clear a million by
+   three orders of magnitude everywhere. Given names alone clear a quarter million everywhere and a
+   million in five of six; Yun is the exception, and it cannot be widened without either lengthening
+   its names or making it sound like Ashani. **Flagged rather than quietly decided.**
+
+**What the exit criteria actually showed.** `/namesake debug dump`, read out of a running game at
+the built village:
+
+```
+ 9 of 9 persona(s) — loaded, nearest first
+  axes: war ind bol cur tra acq tem soc
+settlement 0  Karsk  FARMING  defensibility 82  needs food=0 tools=34 shelter=0 trade_goods=17
+  household 1896895516
+    Kranzhirn Gvirnsk      Karsk  -012 +048 +030 -014 +038 +034 +037 -036
+    Zhorzannak Gvirnsk     Karsk  -020 +043 +011 -015 +033 +031 +041 -042
+    Razovur Gvirnsk        Karsk  -023 +033 +023 -013 +036 +007 +043 -021
+  household 1872263607
+    Zokzhyurk Stuksk       Karsk  -002 +031 +032 -028 +032 -018 +036 -054
+    Tryrgen Stuksk         Karsk  +012 +036 +018 -021 +033 -033 +003 -051
+    Kroztusk Stuksk        Karsk  -002 +020 +026 -018 +051 -027 +010 -048
+unsettled
+    Thulvisdrar Sterbrook  Vale   +011 -004 +001 +010 +005 +020 +007 +036
+    Grolwomteath Sterbrook Vale   +022 -001 +005 -020 +021 -016 -010 +038
+    Tamgeall Sterbrook     Vale   +033 +008 -011 +010 +016 +013 -024 +043
+```
+
+The Gvirnsk household runs acquisitive (+7 to +36); the Stuksk household, twenty blocks away in the
+same village, runs the other way (−18 to −33). Both are unmistakably Karsk against the Vale trio.
+**That is the machine-checkable half. The other half is the owner's and is handed over below.**
+
+Every harness leg green on both loaders, in two launches each:
+
+| Leg | Evidence |
+|---|---|
+| generate | 3/3 villagers 800 blocks from anywhere became people with a culture and no settlement |
+| no invention | no settlement was registered for a place with no bell |
+| detect | exactly one settlement registered, centred on the bell we placed at 800, 63, 300 |
+| survey | census read FARMING from three composters against one each of three other trades |
+| survey | needs food=0 tools=34 — a farming town feeds itself and is short of a smith |
+| survey | defensibility 82 from a compact 6-workstation, 6-bed cluster |
+| residents | 6/6 villagers placed in the settlement the survey registered |
+| households | two cells twenty blocks apart made two households, one family name each, not shared |
+| reload | every settlement field survived, and 6/6 residents came back with the same name |
+| datafixer | `schema 2 -> 3 (culture 0 now means unassigned (-1); settlements added) rewrote 3 record(s)` |
+| backfill | 3/3 migrated personas were given a culture and rolled traits on load |
+
+**Hard rule 1 followed as written.** The migration was run against worlds *written by commit
+`6f054f8`* — the setup phase was run on the pre-change build on both loaders before a line of
+session 03 was written, and those saves were kept. The fix is the quiet kind: schema 2 wrote
+`culture = 0` meaning "none", session 03 gives culture 0 to Vale, so without it an existing world
+loads perfectly, throws nothing, and every villager on the map is silently Vale — same names, same
+palette, same disposition, in every settlement. Not a crash. A save that looks like it worked.
+
+**111 unit tests**, real JUnit XML, `failures=0 errors=0 skipped=0`.
+
+**Five defects. Four of them were found by an instrument rather than by reading the code.**
+
+1. **A name space that counted twelve million and behaved like a hundred and thirty thousand.**
+   Yun's grammar summed to 12,450,816 given names and repeated itself after eight hundred draws.
+   The syllable count is drawn uniformly, so half of all names came out of a 64,512-name
+   two-syllable space that the twelve-million headline had buried. Found by the distinctness test,
+   which measured 84,674 distinct names in 100,000 draws — and the arithmetic of the birthday
+   problem said that was exactly right for a space of 257,000, not of twelve million. The
+   requirement is now measured against the collision-equivalent size, which is dominated by the
+   *shortest* length rather than the longest, and the empirical test checks real draws against
+   that figure rather than against a percentage somebody picked. Three of six grammars were widened
+   as a result. **A requirement checked against the flattering number is a requirement that is not
+   checked.**
+2. **Fifteen- and nineteen-character names.** `Theardraelthild`. `Hseingtsainhianng`. A
+   three-syllable draw could stack three diphthongs between three consonant clusters. Heavy nuclei
+   are word-final now, which is a real phonotactic pattern and caps a name at fourteen characters
+   with a mean of eight. **The fix had to be a rule rather than "redraw if it comes out too long"**
+   — a redraw is a loop, and a loop is the thing the generator is not allowed to have. There is now
+   a layout-budget test, which is session 02's action-bar lesson generalised: a string nobody has
+   measured against the space it must sit in.
+3. **Every unsettled villager in the world was one family.** The household grid is anchored at the
+   settlement's bell; with no settlement the first version anchored it at the villager's own feet,
+   which puts every unsettled villager into cell (0,0). Three wilderness villagers and a villager
+   in a player's base a thousand blocks away would all have been Sterbrooks. **Found by reading the
+   debug dump's output rather than by any test** — the instrument earning its place the first time
+   it was pointed at something.
+4. **A village built at y = −64, inside the deepslate.** `LevelReader#getHeight` returns the world
+   floor for a chunk that is not loaded, and the harness read the heightmap before teleporting
+   anyone there. Three of six villagers suffocated and the leg reported "not placed in the
+   settlement", which is true and useless. Session 01's rule, third application: poll for the world,
+   never assume it. The site now asserts it is on real ground, so the next occurrence says so.
+5. **3/6 residents on NeoForge and 6/6 on Fabric, from pure timing.** Laying the village stalls the
+   server for half a second, it then runs a dozen catch-up ticks, and the three villagers one chunk
+   east are briefly unloaded while the chunk tickets around the player's new position settle. The
+   personas were never lost — they generate when their chunk comes back — but a check that reads
+   *loaded entities* has to wait for them. Session 01's rule, fourth application, and the fourth
+   time this project has been bitten by asserting on a world that had not finished arriving.
+   Diagnosed by logging rather than by theorising, after three wrong hypotheses.
+
+A sixth, minor and in the other direction: a survey test fixture claimed twelve beds for thirteen
+job sites and expected no shelter need. The code was right and the fixture was wrong.
+
+**Rule 3 applied to every new guard.** Six deliberate breakages, each watched to fail and then
+removed. The status board had already been moved to session 04, so the first of these is the
+forcing function firing for real rather than a simulation of it:
+
+| Breakage | Result |
+|---|---|
+| `settlementId`'s exemption restored exactly as session 02 wrote it | **Red.** *"WORKPLAN.md says session 04 is next, so these exemptions have expired: Persona.settlementId"* |
+| `cultureId`'s consumer pointed at `TraitRoll.settlementMean`, which does not read it | **Red.** *"never reads it. It calls none of [cultureId]"* |
+| The schema 2 → 3 fix made to run, log, and change nothing | **Red.** *"expected: &lt;-1&gt; but was: &lt;0&gt;"* — a fixer that does nothing loads without crashing too |
+| A child clamped to its parent's range | **2 red.** *"an individual can never reach +100"*, *"the top of the ±25 range is never reached"* |
+| A `Set<String> ISSUED` added to `Names` | **Red.** *"Names.ISSUED is a static Set. Even final, a collection can be added to"* |
+| `Names.tidy` made to truncate, shrinking the realised space below the counted one | **2 red.** *"expected about 90286 distinct names from YUN in 100000 draws and got 53960"* |
+
+The last one is worth its place: it is the defect that actually happened this session, reintroduced
+deliberately, and the test that found it the first time found it again with a number rather than a
+shrug.
+
+**The forcing function fired, and one exemption did not land where it predicted.** `settlementId`,
+`householdId` and `cultureId` all expired at the close of this session and all three now name
+`TraitRoll`. But the note against `cultureId` said the *syllable grammar* would consume it, and a
+grammar turns a culture id into a string shown to a person — a display, however non-display the
+package it happens to live in. Naming it would have been exactly the technicality
+`SocialValueLedgerTest` exists to refuse, and moving the date is the one thing it exists to stop.
+So the answer had to be a real consumer: the roll reads a culture's baseline for the settlement
+mean and its conformity for the individual layer. **The mechanism worked, and it worked by being
+wrong in an interesting way — it caught a consumer that was named in good faith and was not one.**
+
+`Settlement`'s six fields each name a consumer, with **no new exemptions at all**. That is not
+restraint; it is what happens when the rule is applied while the record is being written rather
+than afterwards.
+
+**Carried into session 04.**
+
+- `$env:JAVA_HOME` still must be pinned to JDK 21. Kill the dev client between runs.
+- **Two numbers to measure, both created this session.** The census is 289 chunk POI reads per
+  settlement, spread at sixteen a tick — bounded and one-shot, but unmeasured. And
+  `PersonaService.onEntityLoad` now runs `Personas.onPersonaLoaded` for every villager on every
+  chunk load; it returns on its first line for anyone already generated and settled, which is
+  everybody almost always, but "almost always" is the kind of claim session 04 exists to check.
+- The population figure the profiler needs is now easier to get honestly: `/namesake debug
+  settlements` reports residents per settlement in a real generated world.
+- Minting on sight still stands, so the record count tracks world population.
+
+**Ledger change.** Session 03 → done, session 04 → NEXT. Risk 3 rewritten: the machine-checkable
+half of "cultures feel foreign" is done and green, the half that matters is with the owner. Risk 4
+raised rather than retired — `traits` is still the only thing in the generation chain terminating in
+a renderer, and everything feeding it is now consumed, so if session 05 does not land the weight
+table the honest response is to delete more than one field. No changes to the 16-session shape.
+
+---
+
+**For the owner, before session 04.** Two things to look at, in a world with `-Pharness` unset:
+
+1. **Stand in a village and run `/namesake debug dump`.** You are looking at whether the households
+   read as families — do the three people with one surname look like each other's relatives next to
+   the three with another? If they read as noise, the household layer is too wide; if they read as
+   clones, too narrow. Those are ±20 and ±25 and I would rather move them on your ear than on mine.
+2. **Walk to a second village and run it again.** This is standing risk 3 and it is the one that
+   decides whether the travel loop works. Do not read the culture name — read the *names*. Does
+   settlement two sound like somewhere else, before you are told it is? If it takes a moment's
+   study to notice, that is a fail, not a pass. If it does read as foreign, say which culture pair
+   landed hardest and which barely registered, and I will widen the ones that did not.
+
+The decision parked in the session 02 log — "only the server opens an interaction", proposed for
+promotion into `DESIGN.md` — is still parked and was deliberately not actioned.
