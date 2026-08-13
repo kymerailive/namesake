@@ -25,6 +25,11 @@ import net.namesake.npc.NpcRegistry;
 import net.namesake.npc.NpcSchema;
 import net.namesake.npc.Persona;
 import net.namesake.platform.PersonaLink;
+import net.namesake.verb.ClientInteractionState;
+import net.namesake.verb.ClientPacketSink;
+import net.namesake.verb.GreetPayload;
+import net.namesake.verb.Interactions;
+import net.namesake.verb.VerbNetwork;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -86,6 +91,9 @@ public final class AttachBetHarness {
     private static int lastReport;
     private static boolean finished;
     private static int registrySizeBeforeCure;
+    private static int wireEntityId;
+    private static long wireToken;
+    private static long wireExpiryBefore;
     private static final List<String> RESULTS = new ArrayList<>();
 
     /** Filled by {@code setup}, reloaded from disk by {@code verify}. */
@@ -297,9 +305,133 @@ public final class AttachBetHarness {
                 record(after == registrySizeBeforeCure,
                         "NO STRAY registry holds " + after + " persona(s), was " + registrySizeBeforeCure);
                 record(subjectsIntact(server), "SUBJECTS all three personas still correct");
+                advance(server, 5);
+            }
+            case 9, 10, 11, 12 -> runWireCheck(server, level);
+            default -> finish(server, true);
+        }
+    }
+
+    // --- session 02: the verb wire ---------------------------------------------------------------
+
+    /**
+     * Proves a packet crosses the real wire, in both directions, on this loader — and that a forged
+     * one does not get through the gate.
+     *
+     * <p><b>Why this is here and not in a unit test.</b> Everything else about the authorization
+     * layer is a pure function and is unit tested: the order of the checks, reach arithmetic, token
+     * lifetime, rate buckets, and the registration gate. The one claim no unit test in
+     * {@code :common} can make is that Fabric's {@code PayloadTypeRegistry} and NeoForge's deferred
+     * {@code RegisterPayloadHandlersEvent} flush actually produce a payload that survives a round
+     * trip — and sessions 00 and 01 both lost time to exactly that gap between "compiles" and
+     * "works in a game". It is a step inside the existing setup phase, not a new leg: no new CI
+     * job, no extra launch.
+     *
+     * <p><b>What it uses as evidence, and why.</b> A refused packet leaves no visible mark, so
+     * asserting "nothing happened" after a fixed wait would pass just as well if the packet were
+     * still in flight — the false-green session 01 kept hitting. So the forged packet is anchored
+     * to something it <i>does</i> do: every packet that reaches the handler spends a rate token,
+     * refused or not. Waiting for the rate bucket to appear proves the packet arrived; the
+     * interaction's expiry being untouched then proves it was refused at the token check. The
+     * legitimate packet is the mirror image — its acceptance is what moves the expiry.
+     *
+     * <p>Reading the client's state from the server thread only works because this is an integrated
+     * server sharing one JVM. It is a harness, not a design.
+     */
+    private static void runWireCheck(MinecraftServer server, ServerLevel level) {
+        switch (step) {
+            case 9 -> {
+                ServerPlayer player = player(server);
+                Entity carrier = boundEntity(server, SUBJECTS.get(0).personaId()).orElse(null);
+                if (!(carrier instanceof Villager villager)) {
+                    record(false, "WIRE subject 0 is not a loaded villager to talk to");
+                    finish(server, false);
+                    return;
+                }
+                teleport(player, level, villager.getX() + 1, villager.getY(), villager.getZ());
+                wireEntityId = villager.getId();
+                ClientInteractionState.clear();
+
+                // The server opens the interaction, exactly as the sneak-right-click gesture does,
+                // and sends the token to the client through the loader's own networking.
+                Interactions.onServerGesture(player, villager);
+                beginAwait(200);
+            }
+            case 10 -> {
+                if (stillWaiting(server, () -> ClientInteractionState.tokenFor(wireEntityId).isPresent(),
+                        false, "the interaction token to reach the client")) {
+                    return;
+                }
+                var held = ClientInteractionState.tokenFor(wireEntityId);
+                record(held.isPresent(), "WIRE S2C the interaction token reached the client");
+                if (held.isEmpty()) {
+                    finish(server, false);
+                    return;
+                }
+                wireToken = held.getAsLong();
+
+                ServerPlayer player = player(server);
+                wireExpiryBefore = VerbNetwork.runtime().tokens().current(player.getUUID())
+                        .map(net.namesake.verb.InteractionTokens.Interaction::expiresAt).orElse(-1L);
+                record(wireExpiryBefore >= 0, "WIRE the server holds an open interaction");
+
+                // A token the server never issued. This is the MCA hole, sent down a real socket.
+                sendFromClient(new GreetPayload(wireToken ^ 0x5A5A5A5A5A5AL, wireEntityId),
+                        "the forged greet");
+                beginAwait(200);
+            }
+            case 11 -> {
+                // The rate bucket is the proof the packet arrived at all: refused or not, every
+                // packet that reaches the handler spends one.
+                if (stillWaiting(server, () -> VerbNetwork.runtime().rates().size() > 0,
+                        false, "the forged greet to reach the server")) {
+                    return;
+                }
+                record(VerbNetwork.runtime().rates().size() > 0,
+                        "WIRE C2S the forged greet reached the server's handler");
+
+                ServerPlayer player = player(server);
+                long expiryNow = VerbNetwork.runtime().tokens().current(player.getUUID())
+                        .map(net.namesake.verb.InteractionTokens.Interaction::expiresAt).orElse(-1L);
+                record(expiryNow == wireExpiryBefore,
+                        "GATE the forged token was refused (interaction expiry unmoved at "
+                                + expiryNow + ")");
+
+                sendFromClient(new GreetPayload(wireToken, wireEntityId), "the real greet");
+                beginAwait(200);
+            }
+            case 12 -> {
+                ServerPlayer player = player(server);
+                if (stillWaiting(server, () -> expiryOf(server, player) > wireExpiryBefore,
+                        false, "the real greet to be accepted")) {
+                    return;
+                }
+                long expiryNow = expiryOf(server, player);
+                record(expiryNow > wireExpiryBefore,
+                        "GATE the real token was accepted (interaction expiry moved "
+                                + wireExpiryBefore + " -> " + expiryNow + ")");
                 finish(server, true);
             }
             default -> finish(server, true);
+        }
+    }
+
+    private static long expiryOf(MinecraftServer server, ServerPlayer player) {
+        return VerbNetwork.runtime().tokens().current(player.getUUID())
+                .map(net.namesake.verb.InteractionTokens.Interaction::expiresAt).orElse(-1L);
+    }
+
+    /**
+     * Sends as the client would. {@code Connection#send} hands off to the channel's event loop when
+     * called from another thread, so doing this from the server tick is safe; a failure is recorded
+     * rather than thrown, because "the send blew up" is itself a result worth reading.
+     */
+    private static void sendFromClient(GreetPayload payload, String what) {
+        try {
+            ClientPacketSink.send(payload);
+        } catch (RuntimeException e) {
+            Namesake.LOGGER.error("[harness] sending {} failed", what, e);
+            record(false, "WIRE sending " + what + " threw " + e);
         }
     }
 
