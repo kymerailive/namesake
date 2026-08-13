@@ -127,8 +127,9 @@ public record Deed(
      *       this is the paragraph to come back to.</li>
      *   <li><b>The derivation is part of the behaviour, so it must not drift.</b> Changing the mix
      *       below re-partitions every ring in every existing save: no corruption, but yesterday's
-     *       duplicates become distinct. {@code DeedTest} pins the id of a fixed deed to a literal, so
-     *       that becomes a decision somebody makes rather than a side effect of tidying.</li>
+     *       duplicates become distinct. {@code MemoriesTest.theDerivationIsPinned} holds the id of a
+     *       fixed deed to a literal computed outside this codebase, so that becomes a decision
+     *       somebody makes rather than a side effect of tidying.</li>
      * </ol>
      */
     public long id() {
