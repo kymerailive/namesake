@@ -3,12 +3,11 @@
 **The ledger.** What happens next, in order, with exit criteria. Read first, update last.
 Where any other document disagrees on sequence, this wins.
 
-- **Status:** session 03 complete, **and it sounds right** — the exit criterion's feel half was
-  played and ruled a pass by the owner, not inferred. **The attach bet holds**, **the authorization
-  gate is real**, and **a villager is now from somewhere**: a persona rides a vanilla `Villager`
-  through save, chunk unload and zombification on both loaders; an unguarded serverbound handler
-  cannot reach a green build; and a settlement detected from a real bell gives its residents a
-  culture, a household and eight rolled axes that survive a reload. Repo live at
+- **Status:** session 04 complete, **and the budget is real**. Four hundred loaded vanilla villagers
+  cost **14.75 ms of server tick** and `DESIGN.md`'s ~18 ms turns out to be that distribution's p90;
+  ours does not appear in a whole-tick measurement at all, and the record sweep it hides — 400
+  records at one bucket of twenty per tick — costs **1.2–3.3 µs**. Before that: **the attach bet
+  holds**, **the authorization gate is real**, and **a villager is from somewhere**. Repo live at
   https://github.com/kymerailive/namesake
 - **Target:** 16 sessions to the ship-or-kill test (session 10), playable slice at 15.
 - **Companion:** `DESIGN.md` owns *what* we build. This owns *what happens next*.
@@ -23,8 +22,8 @@ Where any other document disagrees on sequence, this wins.
 | 01 | Persona, persistence, attach bet | **done** — 2026-08-13 |
 | 02 | Authorization layer | **done** — 2026-08-13 |
 | 03 | Traits, cultures, settlement detection | **done** — 2026-08-13 |
-| 04 | Profiler spike | **NEXT** |
-| 05 | Bonds and deeds | pending |
+| 04 | Profiler spike | **done** — 2026-08-14 |
+| 05 | Bonds and deeds | **NEXT** |
 | 06 | Episodic memory | pending |
 | 07 | Headless simulation harness | pending |
 | 08 | Gossip and distortion | pending |
@@ -325,6 +324,17 @@ Gradle task per loader module that refuses to compile if anything but the transp
 payload, and the abstract `authorize` that makes an unguarded verb a compile error. Prefer this over
 a test where it applies; a check that runs before compilation cannot be forgotten by a test runner
 that was never invoked.
+
+**A fourth, added 2026-08-14, and it is deliberately not in CI: the profiler.** `ProfilerHarness`
+is armed by `-Dnamesake.profile=<phase>` — its own switch, not another phase of the attach-bet
+harness, so a measurement run cannot arm the thing standing between us and a persistence
+regression by typo. It gets **no CI job**, and that is a ruling rather than an omission: a
+wall-clock number from a shared runner whose neighbours we cannot see is not evidence, and a green
+job that means nothing is worse than no job. What *is* in CI is everything about it that is a
+property of arithmetic rather than of a machine — the histogram's layout and percentiles, the
+sweep's coverage and bucket stability, and the guard that refuses to persist a profiling fixture.
+Rerun the measurement when something plausibly moved the budget, and record the machine with the
+number; a number without its conditions is the same mistake in a different unit.
 
 ## Never cut — load-bearing walls, not tuning knobs
 
@@ -861,3 +871,302 @@ scale. The right instrument for that is session 07's headless harness, not anoth
 
 The decision parked in the session 02 log — "only the server opens an interaction", proposed for
 promotion into `DESIGN.md` — is still parked and was deliberately not actioned.
+
+### Session 04 — 2026-08-14 — the profiler spike
+
+**Shipped.** `COMMITRANGE`, pushed to `origin/main`. CI green on all three jobs.
+
+**Hard rule 4 first, and the number it was protecting is right.** Four hundred loaded vanilla
+villagers cost **14.75 ms of server tick, mean** — p50 14.68, p95 19.40, p99 22.02, max 27.22, over
+1,200 consecutive ticks. `DESIGN.md` §8 has carried ~18 ms since before there was any code to
+measure. **18 ms is that distribution's p90.** The figure stands; it was a tail number rather than a
+typical one, and it now has a shape instead of a value.
+
+**Ours does not appear in that measurement at all.** Same world, same seed, same terrain, same four
+hundred villagers, our hooks live rather than inert: **14.43 ms** — 0.3 ms *below* the vanilla run,
+which is smaller than the spread between two runs of the same phase. The report says it in the
+plainest available way: at the 400-villager cell the meters record *"no meter recorded a sample and
+no counter moved"*. Not a small number. **Zero calls.** So the sweep had to be measured directly,
+and it costs **1.2–3.3 µs a tick** for a 400-record population.
+
+#### What was measured, and under what conditions
+
+Windows 11, single-player integrated server, dev client at render distance 10, simulation distance
+10, 30 fps cap, no vsync. Fixed seed 20260814, **world deleted and regenerated before every run**.
+Sixteen sites on a 4×4 grid at 56-block spacing, each 24×32 of cleared *real terrain* — not a
+platform — with a bell, 25 workstations and 25 beds. Day frozen at 2000, which is LABOUR_I in
+`DESIGN.md` §7 and the busiest hour a villager brain has. Per cell: 400 warm-up ticks discarded,
+then 1,200 ticks measured.
+
+**Whole-tick times come from vanilla's own `MinecraftServer.tickTimesNanos`**, not from a clock of
+ours: the number is produced by the thing being measured and our sampling costs one array read.
+
+#### The vanilla curve
+
+| loaded villagers | employed | mean | p50 | p95 | p99 | max |
+|---|---|---|---|---|---|---|
+| 0 | — | 1.73 ms | 1.64 | 2.36 | 2.88 | 9.28 |
+| 96 (8 sites × 12) | 88 | 4.59 ms | 4.46 | 6.29 | 7.47 | 15.06 |
+| 100 (4 × 25) | 94 | 4.75 ms | 4.46 | 7.08 | 8.65 | 47.38 |
+| 200 (8 × 25) | 179 | 7.93 ms | 7.34 | 11.27 | 12.85 | 17.83 |
+| **400 (16 × 25)** | **339** | **14.75 ms** | **14.68** | **19.40** | **22.02** | **27.22** |
+| 400, MC profiler recording | 341 | 19.35 ms | 18.87 | 24.64 | 28.31 | 69.39 |
+
+**Linear at ~32 µs per loaded, employed villager per tick** — 29.8, 30.2, 31.0 and 32.6 µs across
+the four points. Reproduced across two independent runs of the whole phase: 14.58 and 14.75 ms for
+the 400 cell, 1.2% apart.
+
+#### The same cells with our hooks live
+
+| loaded | vanilla | namesake | difference |
+|---|---|---|---|
+| 0 | 1.73 ms | 1.66 ms | −0.07 |
+| 100 | 4.75 ms | 4.88 ms | +0.13 |
+| 200 | 7.93 ms | 7.97 ms | +0.04 |
+| 400 | 14.75 ms | 14.43 ms | −0.32 |
+| 400 + the 400-record sweep | — | 14.49 ms | — |
+
+Every difference is inside ±0.35 ms and two of the four are negative.
+
+#### Both loaders, because "it compiles on both" has never meant "it behaves the same"
+
+Every cell was run again on NeoForge, same machine, same seed, world deleted first:
+
+| | Fabric | NeoForge | apart |
+|---|---|---|---|
+| idle | 1.73 ms | 1.72 ms | 0.6% |
+| 96 loaded | 4.59 ms | 4.64 ms | 1.1% |
+| 100 loaded | 4.75 ms | 4.85 ms | 2.1% |
+| 200 loaded | 7.93 ms | 7.93 ms | 0.0% |
+| **400 loaded** | **14.75 ms** | **14.95 ms** | **1.4%** |
+| 400, with our hooks live | 14.43 ms | 15.25 ms | 5.4% |
+| `villagerBrain` at 400 | 10.41 ms | 10.84 ms | 4.1% |
+| the sweep, warm | 1.28 µs | 1.51 µs | — |
+
+**The loaders agree.** Every vanilla point is within 2.1% and most within 1%; NeoForge's patched
+entity tick is very slightly the more expensive of the two and the difference is smaller than the
+spread between two runs of one phase. This is the one place in three sessions where the answer has
+been "no difference worth recording", and it is worth recording that it was checked.
+
+#### The sweep, measured directly
+
+`PersonaSweep.advance` — one bucket of twenty, so twenty records visited per tick:
+
+| population | per tick | p50 | p95 | p99 | per record |
+|---|---|---|---|---|---|
+| 400 records, empty visitor | 2.64 µs | 2.11 | 3.90 | 4.61 | ~132 ns |
+| 400 records, probe payload | 3.26 µs | 3.14 | 4.03 | 6.02 | ~163 ns |
+| 304 records, probe, warm | 1.21 µs | 1.12 | 1.92 | 2.30 | ~80 ns |
+| 400 records + 400 villagers, warm | 1.28 µs | 1.22 | 1.82 | 2.43 | ~64 ns |
+
+The last two are the same code later in the same run, and the difference between them is the JIT —
+which is what "not one sample on a warm JIT" was asking to see, arriving from the other direction.
+**Take 1.2 µs as the steady state and 3.3 µs as the cold worst case.**
+
+`DESIGN.md` §8 budgets ~5.95 µs/tick for all of our code. The frame plus a trivial payload spends a
+fifth to a half of it before sessions 05–14 have written a line, which leaves **roughly 2.5–4.5 µs
+a tick, or 125–225 ns per record visit**, for everything the sweep will actually do. That is the
+number to hold future sessions to.
+
+**The 100× claim is off by two orders of magnitude, in our favour.** A loaded villager costs ~32 µs
+a tick. A virtual record costs 1.28 µs ÷ 400 = **3.2 ns a tick amortised** — ten thousand times
+cheaper, not a hundred. That margin is headroom for a payload, not a reason to spend it.
+
+**And the architecture's own scenario, measured end to end.** `DESIGN.md` §8's world — 96 loaded as
+entities and the other 304 as records the sweep advances — costs **4.51 ms a tick**, against
+14.75 ms for the same four hundred people all loaded. The record-is-authority design is worth
+**3.3× of the tick** at this population, and that is the whole argument for it, now with a number
+under it.
+
+#### Session 03's two costs
+
+Measured in a real generated world while walking into seven villages.
+
+**The census.** Ten completed, 190 server ticks and 2,890 chunk columns between them: **19 ticks and
+289 columns each**, exactly the shape session 03 predicted.
+
+| | n | mean | p50 | p95 | p99 | max |
+|---|---|---|---|---|---|---|
+| `PoiManager.getInChunk`, one column | 2,890 | 61.7 µs | 10.5 | 30.2 | 75.8 | **72.43 ms** |
+| `SettlementRegistrar.step`, 16 columns | 190 | 946 µs | 176 | 623 | 53.5 ms | **72.44 ms** |
+| `SettlementSurvey.score`, off-thread | 7 | 3.75 ms | 32 µs | 26.1 ms | — | 26.07 ms |
+
+**Bounded in total, and not bounded in the tail.** A census costs under a second of game time and
+never runs twice for one place, so session 03's "bounded and one-shot" is true. But a single cold
+chunk column took **72 ms** — more than a whole tick's budget in one blocking read — and the p99 of
+a census tick is 53 ms. A second run of the same phase saw 10.5 ms as its worst column, so the tail
+is disk-bound and varies by a factor of seven between runs on one machine. **That is the census's
+real cost: not its mean, which is nothing, but two or three visible hitches per world explored.**
+Nothing to do about it yet — `PoiManager` cannot leave the server thread — but it is a measured
+number now rather than a hope, and it is the first thing to point at if a player reports a stutter
+on walking into a new village.
+
+**`Personas.onPersonaLoaded`, and what "almost always" turned out to mean.** Session 03 claimed it
+"returns on its first line for anyone already generated and settled, which is everybody, almost
+always". Both halves check out, and the second needed counting rather than reading:
+
+| branch | when | n | mean | p50 |
+|---|---|---|---|---|
+| `SETTLED` — the first-line return | chunk reload | 2 (11 in an earlier run) | 3.85 µs | **0.41 µs** (0.20 earlier) |
+| `GENERATED_IN_SETTLEMENT` | first contact | 25 | 74.2 µs | 51.2 |
+| `AWAITING_SURVEY` | first contact | 27 | 33.2 µs | 6.5 |
+| `STILL_UNSETTLED` | — | **0** | — | — |
+
+The cheap path is **200–400 ns**, and it is *100% of calls* once a village is known and *0% of them*
+during first contact, where the other two branches cost 180× and 80× more. A villager is discovered
+once and reloaded forever after, so the claim holds — but it holds because of the mix, and the mix
+is what nobody had looked at. `PersonaService.onEntityLoad` around it costs **2–5 µs at the median**
+per villager entering the world.
+
+**One cost named and deliberately not paid.** `STILL_UNSETTLED` never fired in this world, and it is
+the branch that scales badly: a villager who is generated and belongs to no settlement runs
+`Settlements.containing` — a linear scan of the whole settlement table — on **every chunk load, for
+the life of the world**. With seven settlements that is free. With two hundred, in a world someone
+has walked a long way across, it is not. Recorded here rather than fixed: the fix is an index, and
+the need for one is session 08's problem at the earliest.
+
+#### The population target: confirmed as records, revised as entities
+
+Seven villages found by vanilla's own structure locator in a fresh world, each stood in for 900
+ticks so the outlying chunks had arrived before anybody counted. Residents, in order: **11, 9, 2, 4,
+9, 7, 10**.
+
+**52 personas after seven villages — a median of 9 each and a mean of 7.4.** Minting on sight means
+the record count tracks world population, so 400 records is a real target: it is the state of a save
+after roughly **fifty villages have been visited**, which is a long playthrough rather than an
+afternoon.
+
+**As a loaded-entity count, 400 is wrong, and it was never claimed otherwise.** The most villagers
+loaded at once anywhere in this world was **eleven**. `DESIGN.md` §8's 60–100 loaded ceiling would
+need six to ten villages inside one simulation distance, which vanilla's 34-chunk village spacing
+makes almost impossible without a player building it. So the number the tick budget actually has to
+survive is not 14.75 ms — **it is the 96-entity row, at 4.51 ms with our sweep running.** 400 stays
+in `DESIGN.md` as the record target and as the deliberately pessimistic entity figure the
+architecture is sized against; what changed is that both readings are now measured and the gap
+between them is the argument for the architecture rather than an assumption behind it.
+
+#### Was Minecraft's own profiler enough?
+
+Half, and the half it does is the half we cannot do ourselves. It is the only way to reach the
+sections `WORKPLAN.md` names — `Mob#serverAiStep` pushes `sensing`, `targetSelector`,
+`goalSelector` and `navigation`, and `Villager#customServerAiStep` pushes `villagerBrain` inside
+`mob tick` — and without a mixin there is no other route to them. It answered what it was pointed
+at:
+
+```
+minecraft:villager                     32.30%   16.13 ms/tick   (n=80400)
+  ai       24.23%  12.10 ms       newAi  24.07%  12.02 ms
+    mob tick                           21.09%   10.53 ms/tick
+      villagerBrain                    20.84%   10.41 ms/tick
+        the brain itself               15.82%    7.90 ms/tick
+        pathfind                        4.98%    2.49 ms/tick  (n=1406)
+    controls 0.67% · goalSelector 0.50% · targetSelector 0.52% · navigation 0.40% · sensing 0.21%
+```
+
+**Two thirds of a villager is its brain, and a quarter of its brain is pathfinding.** Everything
+`Mob#serverAiStep` pushes outside `mob tick` — sensing, both selectors, navigation, controls — comes
+to 2.3% of the tick between them.
+
+It is no use at all for measuring us, for four independent reasons. `ProfileResults` hands out
+**percentages only** — the absolute durations live in a private map on `FilledProfileResults` — and
+prints them to two decimal places, against a budget that is 0.008% of a tick. It keeps a sum, a
+count and a max per section and **never a distribution**. Turning it on **inflates the tick from
+14.75 ms to 19.35 ms, +31%**, so it changes what it measures. And the tree is eleven levels deep
+before it reaches `villagerBrain`, because `LivingEntity#tick` pushes `ai` and `newAi` before `Mob`
+pushes anything — a walk cut off at nine prints "not reported" for the exact section this session is
+named after, which it did, twice.
+
+So: **vanilla's profiler for vanilla's sections, our own histograms for ours.** The two were checked
+against each other on the one quantity they share — vanilla's tree says the tick is 19.41 ms and our
+sampling of `tickTimesNanos` over the same window says 19.35 ms, **0.3% apart**.
+
+#### The instrument, and what it was pointed at before it was believed
+
+`net.namesake.profile` — a log-bucketed nanosecond `Histogram` with exact count, sum, min and max
+and ~3% percentiles; `Meter` and `Meters`; `PersonaSweep`, the twenty-bucket rotating sweep of
+`DESIGN.md` §8; and `SyntheticPersonas`, the fixture population. `Profiling.MOD_INERT` is the switch
+that makes hard rule 4 possible at all: "400 loaded vanilla villagers with zero mod code" and "the
+same 400 with ours" have to be the same world, terrain, JVM and JIT state, and the only way to get
+that is to be able to switch ourselves off.
+
+Four calibrations, each against something already known:
+
+| | |
+|---|---|
+| An empty measurement | mean 28 ns, p95 101 ns, max 12.6 µs — **the floor; nothing below it is resolvable** |
+| A 20 ms spin timed by `currentTimeMillis`, read by `nanoTime` | **20.02 ms**. Two clocks; a factor-of-1000 unit slip survives neither |
+| Vanilla's profiler against our `tickTimesNanos` sampling | 19.41 vs 19.35 ms over one window |
+| Every villager actually ticked | `n=80400` villager section ticks over 201 ticks = 400 × 201 exactly, and the harness asserts the least-ticked villager advanced with the window |
+
+The last is session 01's lesson made structural. **A baseline measured on villagers that never ran
+their brains is the most confident wrong number available**, and three of the defects below were
+found because the harness insisted on checking.
+
+#### Five defects, every one of which produced a confident report first
+
+1. **A discarded villager keeps its workstation and its bed.** Vanilla releases a villager's points
+   of interest in `Villager#die` and nowhere else, so tearing a cell down leaked a POI ticket per
+   employed villager. Employment fell from 95/96 to **52/200** across one run, and every tick time
+   after that was measuring a village of the unemployed. Nothing threw; found by reading the
+   employment column.
+2. **Iron golems accumulate.** A teardown that removed only villagers left their golems behind, so
+   each cell inherited every golem the cells before it had produced and the second launch inherited
+   the first launch's. Two hundred villagers read **8.75 ms in one phase and 15.50 ms in the other**
+   with nothing of ours running per tick in either. Very nearly attributed to our code.
+3. **And discarding a villager drops its inventory** — four hundred item entities ticking for the
+   five minutes it takes them to despawn, so a cell that ran inside those five minutes measured
+   eight hundred entities while its report said four hundred. Every cell now clears every entity but
+   the player, and every cell prints a census of what else was standing in the grid with it.
+4. **The measurement grid landed in an ocean.** Sixteen stone rafts, four cows and three elder
+   guardians in the profile. The site is now chosen from a list of candidates with all sixteen sites
+   checked for dry land — sampled at the sites, not at the centre, because a coastline is exactly
+   the case where the centre reads fine.
+5. **The client tick hook was registered only when the attach-bet harness was armed**, so the
+   profiler sat at the title screen saying nothing at all.
+
+Defects 1–3 share one shape, and it is the shape this session was written to catch: **state left
+behind by the previous measurement, silently changing the next one.** The cure was not cleverness.
+It was making every cell print what was in the world with it.
+
+#### What is enforced, and what was reverted to watch fail
+
+**Four hundred fake personas must never reach a save.** They live in a reserved id range —
+`Persona.PROFILING_NAMESPACE`, disjoint from a minted id by construction because `UUID.randomUUID`
+stamps version 4 into a nibble this range leaves 0 — and `NpcRegistry` refuses that range at both
+its write door and its save door. The fixtures are held in the profiler's own list and never offered
+to the registry at all, which is the only version of "removed afterwards" that survives a run that
+crashes halfway through.
+
+Proven by querying rather than by intending: after a run that built **1,504 fixtures**, the registry
+held 1,197 personas and **0** of them were fixtures, and `namesake_npcs.dat`, read back off disk,
+held 1,197 records and **0** fixtures. Identically on both loaders.
+
+Rule 3 applied to each new guard — each broken and watched to fail before being called done:
+
+| Breakage | Result |
+|---|---|
+| `NpcRegistry.put`'s fixture refusal removed | **Red.** *"NpcRegistry.put must refuse a fixture; sixty of them in a save look exactly like sixty people — expected: 0 but was: 60"* |
+| The sweep's buckets derived from position instead of identity | **2 red.** *"tick 0 swept a different set after a reorder"* — the coverage test still passed, which is why both tests exist |
+| The histogram's bucket layout shifted by one bit | **Red.** *"expected about 5000 and got 6655, which is 33.1% out"* |
+
+**126 unit tests**, real JUnit XML, `failures=0 errors=0 skipped=0` — fifteen new ones, all of them
+about the instrument rather than about the mod.
+
+#### Carried into session 05
+
+- `$env:JAVA_HOME` still must be pinned to JDK 21. Kill the dev client between runs.
+- **The budget to hold to is 125–225 ns per record visit**, because the sweep frame has already
+  spent the rest of `DESIGN.md`'s 5.95 µs. If the personality weight table needs more, say so and
+  re-rule the budget rather than quietly exceeding it — there is 35 ms of real headroom at 20 tps
+  and 5.95 µs is a discipline, not a wall.
+- The witness scan session 05 ships — `AABB.inflate(24)` + `canSee()` on deed emit — is not on the
+  sweep's budget and is not polled. Give it a meter of its own when it lands; `Meters` and
+  `Histogram` are already there and cost nothing when the profiler is off.
+- Delete `<loader>/run/saves/namesake_profiler` before a measurement run. Three of this session's
+  five defects were the previous run's leftovers changing the next one's numbers.
+
+**Ledger change.** Session 04 → done, session 05 → NEXT. A fourth verification instrument recorded,
+with the ruling that it gets no CI job and why. `DESIGN.md` §8's four numbers — 18 ms, 5.95 µs,
+100× and the 60–100 loaded ceiling — are now measured rather than assumed: three confirmed, and the
+100× wrong by two orders of magnitude in our favour and left exactly as it is. No changes to the
+16-session shape.

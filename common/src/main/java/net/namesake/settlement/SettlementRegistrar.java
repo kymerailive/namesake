@@ -134,8 +134,12 @@ public final class SettlementRegistrar {
         Scan finished = active;
         active = null;
         if (Profiling.ENABLED) {
-            SURVEY_TICKS.record(finished.ticksSpent);
-            Meters.count("SettlementRegistrar chunks censused", finished.chunksRead);
+            // Counters, not a meter: these are chunks and ticks, and a histogram of nanoseconds
+            // prints nineteen ticks as "0.019 us", which is a number that reads like a measurement
+            // and is a unit error.
+            Meters.count("censuses completed");
+            Meters.count("census: server ticks spent", finished.ticksSpent);
+            Meters.count("census: chunk columns read", finished.chunksRead);
         }
         onCensusComplete(server, finished);
     }
@@ -145,10 +149,6 @@ public final class SettlementRegistrar {
 
     private static final Meter CHUNK =
             Profiling.ENABLED ? Meters.meter("PoiManager.getInChunk (one chunk column)") : null;
-
-    /** Not a duration — the tick count a whole census took, recorded through the same histogram. */
-    private static final Meter SURVEY_TICKS =
-            Profiling.ENABLED ? Meters.meter("census duration, in server ticks") : null;
 
     private static final Meter SCORING =
             Profiling.ENABLED ? Meters.meter("SettlementSurvey.score (off-thread)") : null;

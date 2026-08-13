@@ -13,9 +13,11 @@ in a different settlement, says to you later.
 
 ## Status
 
-**Pre-alpha. Not playable.** Session 01 of a planned 16-session build to a vertical slice.
-Villagers carry a persistent identity that survives save, chunk unload and zombification; nothing
-reads it yet. See [`WORKPLAN.md`](WORKPLAN.md) for what is built and what is next.
+**Pre-alpha. Not playable.** Session 04 of a planned 16-session build to a vertical slice.
+Villagers carry a persistent identity that survives save, chunk unload and zombification, and they
+now come from somewhere: a settlement detected from a real bell gives its residents a culture, a
+household and eight rolled personality axes. Nothing branches on those axes yet — that is session
+05. See [`WORKPLAN.md`](WORKPLAN.md) for what is built and what is next.
 
 ## Design
 

@@ -177,7 +177,12 @@ public final class ProfilerHarness {
     /** Population phase. */
     private static final int[][] SEARCH_ORIGINS = {{0, 0}, {1600, 0}, {0, 1600}, {-1600, 0},
             {0, -1600}, {1600, 1600}, {-1600, 1600}, {1600, -1600}};
+
+    /** How long to stand in a village before counting it. A village does not arrive all at once. */
+    private static final int VILLAGE_DWELL_TICKS = 900;
+
     private static int searchOrigin;
+    private static int dwellUntil;
     private static final List<BlockPos> VILLAGES = new ArrayList<>();
     private static int villageIndex;
     private static final List<String> VILLAGE_ROWS = new ArrayList<>();
@@ -769,7 +774,7 @@ public final class ProfilerHarness {
             }
             case 2 -> {
                 if (villageIndex >= VILLAGES.size()) {
-                    stage = 5;
+                    stage = 6;
                     deadline = tick + 100;
                     lastReport = tick;
                     return;
@@ -801,6 +806,20 @@ public final class ProfilerHarness {
                         "village " + villageIndex + " to load and be surveyed")) {
                     return;
                 }
+                // Counted after a dwell, not the moment the settlement registers. A village does
+                // not arrive all at once: its outlying chunks are still loading and the villagers
+                // in them have not been minted yet, so leaving straight away counts the first two
+                // residents of a village of twelve and calls it a population.
+                dwellUntil = tick + VILLAGE_DWELL_TICKS;
+                next();
+            }
+            case 5 -> {
+                if (waiting(server, () -> tick >= dwellUntil,
+                        "village " + villageIndex + " to finish arriving")) {
+                    return;
+                }
+                NpcRegistry registry = NpcRegistry.get(server);
+                BlockPos village = VILLAGES.get(villageIndex);
                 int loaded = level.getEntitiesOfClass(Villager.class,
                         new AABB(village).inflate(96)).size();
                 int residents = registry.settlements()
@@ -816,7 +835,7 @@ public final class ProfilerHarness {
                 villageIndex++;
                 stage = 2;
             }
-            case 5 -> {
+            case 6 -> {
                 NpcRegistry registry = NpcRegistry.get(server);
                 REPORT.add("### a real generated world (seed " + WORLD_SEED + ")");
                 REPORT.addAll(VILLAGE_ROWS);
@@ -835,7 +854,7 @@ public final class ProfilerHarness {
                 teleport(player(server), level, spawn.getX(), 250, spawn.getZ());
                 await(900);
             }
-            case 6 -> {
+            case 7 -> {
                 if (waiting(server, () -> false, "the village chunks to unload")) {
                     return;
                 }
@@ -843,7 +862,7 @@ public final class ProfilerHarness {
                 teleport(player(server), level, village.getX(), 200, village.getZ());
                 await(4000);
             }
-            case 7 -> {
+            case 8 -> {
                 BlockPos village = VILLAGES.get(0);
                 if (waiting(server, () -> !level.getEntitiesOfClass(Villager.class,
                                 new AABB(village).inflate(96)).isEmpty(),
