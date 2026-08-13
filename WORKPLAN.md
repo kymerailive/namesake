@@ -874,8 +874,8 @@ promotion into `DESIGN.md` — is still parked and was deliberately not actioned
 
 ### Session 04 — 2026-08-14 — the profiler spike
 
-**Shipped.** `67eca48..2fcd2d8` plus this ledger commit, pushed to `origin/main`. CI green on all
-three jobs — build and test, and the attach-bet harness on each loader.
+**Shipped.** `67eca48..cef6355` plus this correction, pushed to `origin/main`. CI green on all three
+jobs — build and test, and the attach-bet harness on each loader.
 
 **Hard rule 4 first, and the number it was protecting is right.** Four hundred loaded vanilla
 villagers cost **14.75 ms of server tick, mean** — p50 14.68, p95 19.40, p99 22.02, max 27.22, over
