@@ -3,7 +3,7 @@
 **The ledger.** What happens next, in order, with exit criteria. Read first, update last.
 Where any other document disagrees on sequence, this wins.
 
-- **Status:** design complete, 41 decisions ruled, 0 open. Build not started.
+- **Status:** session 00 complete. Repo live at https://github.com/kymerailive/namesake
 - **Target:** 16 sessions to the ship-or-kill test (session 10), playable slice at 15.
 - **Companion:** `DESIGN.md` owns *what* we build. This owns *what happens next*.
 
@@ -13,8 +13,8 @@ Where any other document disagrees on sequence, this wins.
 
 | Session | Block | State |
 |---|---|---|
-| 00 | Repo and skeleton | **NEXT** |
-| 01 | Persona, persistence, attach bet | pending |
+| 00 | Repo and skeleton | **done** — 2026-08-13 |
+| 01 | Persona, persistence, attach bet | **NEXT** |
 | 02 | Authorization layer | pending |
 | 03 | Traits, cultures, settlement detection | pending |
 | 04 | Profiler spike | pending |
@@ -251,3 +251,41 @@ helper · the sleep-skip cold-start mode.
 
 *(append one entry per session: what shipped, what the exit criterion actually showed, what changed
 in this ledger, and the commit range pushed)*
+
+### Session 00 — 2026-08-13 — repo and skeleton
+
+**Shipped.** `67cbbc8..07a49b4`, pushed to `origin/main`.
+Repo live at https://github.com/kymerailive/namesake (public, LGPL-3.0).
+Hand-rolled multiloader on Gradle 9.6.1 / JDK 21: `common` on NeoForm, `fabric` on Loom 1.17.19,
+`neoforge` on ModDev 2.0.141. Version matrix calibrated against MCA's proven 1.21.1 branch.
+`net.namesake.platform.Platform` establishes the loader seam via `ServiceLoader`.
+
+**What the exit criteria actually showed.**
+
+- Clean build from scratch green; `namesake-fabric-*.jar` and `namesake-neoforge-*.jar` produced.
+- 2 unit tests executed with real JUnit XML — `tests=2 failures=0 errors=0`, not an inferred pass.
+- `net/namesake/Namesake.class` present in **both** jars, each compiled against its own remapped
+  Minecraft. **The multiloader source-sharing approach is confirmed working.**
+- Loaded in-game on both loaders:
+  - `[15:01:39] (Namesake) Namesake initialising on Fabric (Minecraft 1.21.1, dev)`
+  - `[15:03:22] (Namesake) Namesake initialising on NeoForge (Minecraft 1.21.1, dev)`
+
+**Six defects, all past a green build.** The important one: `fabric.mod.json` declared
+`minecraft "[1.21, 1.22)"` — a Maven range. Fabric parses semver predicates and refused to load the
+mod entirely with *"requires an unsatisfiable version range"*. It built perfectly and produced a
+valid-looking jar. **This is the single best argument for the exit criteria being written as
+"loads in-game" rather than "compiles".** Also fixed: generic jar names, a referenced `icon.png`
+that does not exist, the wrong NeoForge version range, `minecraftVersion()` wrongly placed on the
+`Platform` seam when vanilla already answers it via `SharedConstants`, and `gradlew` heading for
+CRLF-without-exec-bit which fails Linux CI.
+
+**New guardrail.** `fabric/build.gradle` now fails the build if a Fabric version range is
+Maven-shaped. Verified per rule 3 by feeding it `[1.21, 1.22)` and watching it fail at line 59,
+then restoring and watching it pass.
+
+**Carried into session 01.** `$env:JAVA_HOME` must be pinned to JDK 21 (system default is 26).
+`runServer` needs Mojang EULA acceptance, so it was deliberately not used — `runClient` proves mod
+init on both sides without it. See `HANDOFF_SESSION_01.md`.
+
+**Ledger change.** Session 00 → done, session 01 → NEXT. No plan changes; the 16-session shape
+holds.
