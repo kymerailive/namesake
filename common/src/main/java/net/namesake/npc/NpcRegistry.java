@@ -234,6 +234,11 @@ public final class NpcRegistry extends SavedData {
         if (result.migrated()) {
             Namesake.LOGGER.info("NPC registry migrated {} -> {} on load ({} record(s) rewritten)",
                     result.foundVersion(), result.resultVersion(), result.recordsRewritten());
+            // Minecraft only writes a SavedData that is dirty, and a migration on its own does not
+            // make it dirty. Without this the fixed records live in memory and die there: the file
+            // stays on the old schema forever and every future load runs the whole chain again.
+            // Found by loading the same world twice and seeing the migration line a second time.
+            registry.setDirty();
         }
 
         ListTag list = tag.getList(NpcSchema.KEY_NPCS, Tag.TAG_COMPOUND);

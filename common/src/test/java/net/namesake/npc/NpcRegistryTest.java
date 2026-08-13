@@ -165,6 +165,25 @@ class NpcRegistryTest {
                         + "a newer save");
     }
 
+    /**
+     * A migration that is never written back is not a migration. Minecraft only saves a
+     * {@code SavedData} that is dirty, so a registry that migrated on load must come back dirty or
+     * the file stays on the old schema and every subsequent load repeats the whole fix chain.
+     */
+    @Test
+    @DisplayName("a registry that migrated on load is dirty, so the fix reaches disk")
+    void migrationMarksTheRegistryForSaving() {
+        NpcRegistry migrated = reload(schemaOneTag());
+        assertTrue(migrated.isDirty(),
+                "a migrated registry must be written back, or it migrates again on every load");
+
+        NpcRegistry alreadyCurrent = new NpcRegistry();
+        alreadyCurrent.put(stamped(UUID.randomUUID(), 4, 1L, (byte) 5));
+        NpcRegistry reloaded = reload(alreadyCurrent.save(new CompoundTag(), null));
+        assertFalse(reloaded.isDirty(),
+                "a registry that needed no migration must not be rewritten for no reason");
+    }
+
     @Test
     @DisplayName("an unreadable record makes the whole registry read-only rather than dropping it")
     void oneCorruptRecordProtectsTheFile() {
@@ -186,5 +205,19 @@ class NpcRegistryTest {
     /** Runs the same path {@code DimensionDataStorage} does: deserialize a tag into a registry. */
     private static NpcRegistry reload(CompoundTag tag) {
         return NpcRegistry.factory().deserializer().apply(tag, null);
+    }
+
+    /** A registry tag in the shape schema 1 wrote: version stamp 1, zero for "no settlement". */
+    private static CompoundTag schemaOneTag() {
+        NpcRegistry registry = new NpcRegistry();
+        registry.put(stamped(UUID.randomUUID(), 0, 1L, (byte) 1));
+        CompoundTag tag = registry.save(new CompoundTag(), null);
+        tag.putInt(NpcSchema.KEY_VERSION, 1);
+        ListTag npcs = tag.getList(NpcSchema.KEY_NPCS, Tag.TAG_COMPOUND);
+        for (int i = 0; i < npcs.size(); i++) {
+            npcs.getCompound(i).putInt("settlement", 0);
+            npcs.getCompound(i).putInt("household", 0);
+        }
+        return tag;
     }
 }

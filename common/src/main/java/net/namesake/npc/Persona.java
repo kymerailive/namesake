@@ -54,8 +54,14 @@ public record Persona(
             "tradition", "acquisitiveness", "temper", "sociability"
     };
 
-    /** Sentinel for "no settlement / no household yet". Settlement detection is session 03. */
-    public static final int UNASSIGNED = 0;
+    /**
+     * Sentinel for "no settlement / no household yet".
+     *
+     * <p>Not {@code 0}: settlement detection in session 03 hands out ids from a counter that starts
+     * at zero, so zero is a legal id and cannot double as "unset". Schema 1 used zero and schema 2
+     * migrates it — see {@code NpcSchema}.
+     */
+    public static final int UNASSIGNED = -1;
 
     private static final Codec<byte[]> TRAITS_CODEC = Codec.BYTE_BUFFER.xmap(
             buffer -> {

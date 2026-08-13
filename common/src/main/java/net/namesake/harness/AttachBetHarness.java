@@ -1,5 +1,6 @@
 package net.namesake.harness;
 
+import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -307,6 +308,7 @@ public final class AttachBetHarness {
                 Namesake.LOGGER.info("[harness] registry schema on disk {}, this build writes {}",
                         registry.loadedSchemaVersion(), NpcSchema.CURRENT);
                 record(!registry.isReadOnly(), "SCHEMA registry is writable (not refused as too new)");
+                checkDataFixer(registry);
                 teleport(player, level, testSite.getX(), testSite.getY() + 2, testSite.getZ());
                 advance(server, 200);
             }
@@ -331,10 +333,70 @@ public final class AttachBetHarness {
                                 + " personas survived save -> quit -> reload with the same id and values");
                 record(subjectsIntact(server),
                         "RELOAD every persona is still attached to a live entity that agrees");
+                exerciseDebugCommands(server);
                 finish(server, true);
             }
             default -> finish(server, true);
         }
+    }
+
+    /**
+     * If the world on disk predates the current schema, prove the fixer ran <i>and</i> that the
+     * data it touched actually changed. "It loaded without crashing" is not evidence of a
+     * migration; a fixer that silently does nothing loads without crashing too.
+     */
+    private static void checkDataFixer(NpcRegistry registry) {
+        int onDisk = registry.loadedSchemaVersion();
+        if (onDisk >= NpcSchema.CURRENT) {
+            Namesake.LOGGER.info("[harness] no migration expected: world is already at schema {}", onDisk);
+            return;
+        }
+        record(true, "DATAFIXER world was written at schema " + onDisk
+                + ", this build understands " + NpcSchema.CURRENT);
+
+        long migrated = SUBJECTS.stream()
+                .map(subject -> registry.persona(subject.personaId()))
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .filter(persona -> persona.settlementId() == Persona.UNASSIGNED
+                        && persona.householdId() == Persona.UNASSIGNED)
+                .count();
+        record(migrated == SUBJECTS.size(),
+                "DATAFIXER " + migrated + "/" + SUBJECTS.size() + " records now carry the schema-"
+                        + NpcSchema.CURRENT + " unassigned sentinel (" + Persona.UNASSIGNED
+                        + "); schema 1 wrote 0");
+    }
+
+    /**
+     * Runs the {@code /namesake debug} commands through the real dispatcher.
+     *
+     * <p>They are the instruments the rest of this session's evidence is read with, and an
+     * instrument nothing exercises is an instrument nobody notices has broken. Going through
+     * {@code performPrefixedCommand} covers argument parsing and the permission gate too, not just
+     * the method bodies.
+     *
+     * <p>{@code settrait} is checked by effect: run the command, then read the registry directly.
+     * {@code prune} is deliberately left out — it deletes personas whose entities are merely
+     * unloaded, which is exactly what a harness should not do to its own subjects.
+     */
+    private static void exerciseDebugCommands(MinecraftServer server) {
+        UUID personaId = SUBJECTS.get(0).personaId();
+        UUID entityId = boundEntity(server, personaId).map(Entity::getUUID).orElse(null);
+        if (entityId == null) {
+            record(false, "COMMANDS subject 0 has no loaded entity to target");
+            return;
+        }
+
+        CommandSourceStack source = server.createCommandSourceStack();
+        server.getCommands().performPrefixedCommand(source, "namesake debug registry");
+        server.getCommands().performPrefixedCommand(source, "namesake debug persona " + entityId);
+        server.getCommands().performPrefixedCommand(source,
+                "namesake debug settrait temper 7 " + entityId);
+
+        byte temper = NpcRegistry.get(server).persona(personaId)
+                .map(persona -> persona.trait(Persona.TEMPER))
+                .orElse((byte) Byte.MIN_VALUE);
+        record(temper == 7, "COMMANDS /namesake debug settrait wrote temper=" + temper + ", expected 7");
     }
 
     // --- helpers -------------------------------------------------------------------------------

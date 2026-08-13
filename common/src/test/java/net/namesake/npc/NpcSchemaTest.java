@@ -3,6 +3,7 @@ package net.namesake.npc;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtOps;
+import net.minecraft.nbt.Tag;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -62,6 +63,42 @@ class NpcSchemaTest {
         assertEquals(1, result.foundVersion());
         assertEquals(NpcSchema.CURRENT, result.resultVersion());
         assertFalse(result.refused());
+    }
+
+    /**
+     * The schema 1 -> 2 fix specifically. Zero was the schema-1 sentinel for "no settlement"; it is
+     * a legal id from schema 2 on, so every stored zero has to become {@link Persona#UNASSIGNED}.
+     */
+    @Test
+    @DisplayName("schema 1 records come out of the fixer with the new unassigned sentinel")
+    void schemaOneUnassignedSentinelIsMigrated() {
+        CompoundTag tag = registryTagAtVersion(1);
+        ListTag before = tag.getList(NpcSchema.KEY_NPCS, Tag.TAG_COMPOUND);
+        assertEquals(0, before.getCompound(0).getInt("settlement"), "fixture must start at the old value");
+
+        NpcSchema.Result result = NpcSchema.migrate(tag);
+
+        assertEquals(1, result.foundVersion());
+        assertEquals(2, result.resultVersion());
+        assertEquals(3, result.recordsRewritten(), "all three fixture records should be rewritten");
+
+        ListTag after = tag.getList(NpcSchema.KEY_NPCS, Tag.TAG_COMPOUND);
+        for (int i = 0; i < after.size(); i++) {
+            assertEquals(Persona.UNASSIGNED, after.getCompound(i).getInt("settlement"));
+            assertEquals(Persona.UNASSIGNED, after.getCompound(i).getInt("household"));
+        }
+    }
+
+    /** A real settlement id must survive the fixer untouched — the fix only rewrites the sentinel. */
+    @Test
+    @DisplayName("the schema 1 fix leaves a non-zero settlement alone")
+    void schemaOneFixDoesNotTouchRealIds() {
+        CompoundTag tag = registryTagAtVersion(1);
+        tag.getList(NpcSchema.KEY_NPCS, Tag.TAG_COMPOUND).getCompound(0).putInt("settlement", 12);
+
+        NpcSchema.migrate(tag);
+
+        assertEquals(12, tag.getList(NpcSchema.KEY_NPCS, Tag.TAG_COMPOUND).getCompound(0).getInt("settlement"));
     }
 
     @Test

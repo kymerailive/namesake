@@ -1,6 +1,7 @@
 package net.namesake.npc;
 
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.namesake.Namesake;
 
@@ -25,7 +26,7 @@ import java.util.function.ToIntFunction;
 public final class NpcSchema {
 
     /** Bump this and add a {@link Fix} in the same commit. Never one without the other. */
-    public static final int CURRENT = 1;
+    public static final int CURRENT = 2;
 
     /**
      * A registry written before {@link #KEY_VERSION} existed cannot occur — the key has been
@@ -48,7 +49,9 @@ public final class NpcSchema {
         }
     }
 
-    private static final List<Fix> FIXES = List.of();
+    private static final List<Fix> FIXES = List.of(
+            new Fix(1, "settlement/household 0 now means unassigned (-1)", NpcSchema::fixUnassignedSentinel)
+    );
 
     private NpcSchema() {
     }
@@ -111,5 +114,37 @@ public final class NpcSchema {
             }
         }
         return null;
+    }
+
+    // --- fixes ---------------------------------------------------------------------------------
+
+    /**
+     * Schema 1 wrote {@code settlement} and {@code household} as {@code 0} to mean "belongs to
+     * neither". That collides: settlement ids in session 03 come off a counter starting at zero, so
+     * zero is a legal id and cannot also be the sentinel. Schema 2 uses {@link Persona#UNASSIGNED}.
+     *
+     * <p>Rewriting every zero is safe precisely because schema 1 never assigned a settlement to
+     * anyone — nothing existed to do the assigning. A record holding zero holds it because it means
+     * "none", and this is the last version where that is true.
+     */
+    private static int fixUnassignedSentinel(CompoundTag root) {
+        ListTag npcs = root.getList(KEY_NPCS, Tag.TAG_COMPOUND);
+        int touched = 0;
+        for (int i = 0; i < npcs.size(); i++) {
+            CompoundTag entry = npcs.getCompound(i);
+            boolean changed = false;
+            if (entry.getInt("settlement") == 0) {
+                entry.putInt("settlement", Persona.UNASSIGNED);
+                changed = true;
+            }
+            if (entry.getInt("household") == 0) {
+                entry.putInt("household", Persona.UNASSIGNED);
+                changed = true;
+            }
+            if (changed) {
+                touched++;
+            }
+        }
+        return touched;
     }
 }
