@@ -1220,7 +1220,10 @@ this paragraph should have expected.*
 
 ### Session 05 — 2026-08-14 — bonds and deeds
 
-**Shipped.** `6847700` plus this ledger commit, pushed to `origin/main`. CI green on all three jobs.
+**Shipped.** `6847700..cc4d697` plus this correction, pushed to `origin/main`. CI green on all three
+jobs. Six commits: the pipeline, the ledger, session 04's closed gap, the owner's `debt` ruling, and
+then the two the playtest produced — the centring and the personality-scaled ceiling, with their own
+ledger entry.
 
 **A village now notices what you do in front of it.** Feed a hungry villager with three others
 watching and the one you fed gains +3 while each witness gains +1 — and the one behind a wall and
