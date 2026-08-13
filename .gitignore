@@ -1,0 +1,38 @@
+# Upstream reference source — GPL-3.0, cloned to read only. NEVER commit.
+reference/
+
+# Gradle / build
+.gradle/
+build/
+out/
+*/build/
+*/out/
+!gradle/wrapper/gradle-wrapper.jar
+.gradletasknamecache
+
+# Loader run directories
+run/
+runs/
+*/run/
+*/runs/
+logs/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.classpath
+.project
+bin/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local secrets / machine-specific
+.env
+*.local.properties

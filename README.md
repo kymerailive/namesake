@@ -1,0 +1,69 @@
+# Namesake
+
+*Villagers who remember your name.*
+
+A village-simulation mod for Minecraft **1.21.1**, on Fabric and NeoForge.
+
+Namesake replaces Minecraft's villagers with people who notice what you do, remember it, and tell
+each other about it. Help someone in one village and, days later, a stranger two settlements away
+may greet you by name — because word travelled the road you built.
+
+**The thesis, in one sentence:** a deed witnessed by one villager changes what a different villager,
+in a different settlement, says to you later.
+
+## Status
+
+**Pre-alpha. Not playable.** Session 00 of a planned 16-session build to a vertical slice.
+See [`WORKPLAN.md`](WORKPLAN.md) for what is built and what is next.
+
+## Design
+
+- [`DESIGN.md`](DESIGN.md) — what we are building and why. 41 ruled decisions.
+- [`WORKPLAN.md`](WORKPLAN.md) — the ledger. What happens next, with exit criteria.
+- [`CLAUDE.md`](CLAUDE.md) — orientation and hard rules for anyone working on this.
+
+Three principles the codebase is built to enforce:
+
+1. **Every social value must have a named consumer that is not a display.** If you cannot name the
+   `if` statement a field feeds, delete the field.
+2. **Every serverbound packet carries its own authorization.** A packet type cannot be registered
+   without one, and a test fails the build if a handler skips the gate.
+3. **Never ship a persisted schema change without a datafixer** and a load test against a
+   pre-change save.
+
+## Architecture
+
+Namesake **attaches** to the vanilla `Villager` rather than replacing it. Every other mod's
+`instanceof Villager` check keeps working, and vanilla trades, professions, POI and raids keep
+working too.
+
+```
+common/     loader-agnostic — the simulation. Target: 96% of all code.
+fabric/     Fabric bootstrap + Platform implementation.
+neoforge/   NeoForge bootstrap + Platform implementation.
+```
+
+Loader differences go behind `net.namesake.platform.Platform`, resolved with `ServiceLoader`.
+Common code never references Fabric or NeoForge types.
+
+## Building
+
+Requires JDK 21.
+
+```bash
+./gradlew test                            # unit tests
+./gradlew :fabric:build :neoforge:build   # both loader jars
+./gradlew :fabric:runClient               # dev client, Fabric
+./gradlew :neoforge:runClient             # dev client, NeoForge
+```
+
+## Relationship to Minecraft Comes Alive
+
+Namesake is a successor **in spirit** to MCA Reborn and shares **no code with it**. MCA is
+GPL-3.0; this project studied its architecture, took ideas, and copied nothing. Where MCA is
+referenced in comments it is as a design citation.
+
+## License
+
+LGPL-3.0. Addons may be licensed however you like; changes to Namesake itself stay open.
+See [`LICENSE`](LICENSE) and [`LICENSE.GPL`](LICENSE.GPL).

@@ -1,0 +1,48 @@
+plugins {
+    id 'net.neoforged.moddev'
+}
+
+// The common module compiles against vanilla Minecraft via NeoForm — no loader, no loader APIs.
+// Loader-specific behaviour lives behind interfaces in net.namesake.platform, implemented in
+// :fabric and :neoforge and resolved with java.util.ServiceLoader.
+neoForge {
+    neoFormVersion = rootProject.neo_form_version
+    parchment {
+        minecraftVersion = rootProject.parchment_minecraft
+        mappingsVersion = rootProject.parchment_version
+    }
+}
+
+dependencies {
+    testImplementation platform("org.junit:junit-bom:${rootProject.junit_version}")
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+// Expose the raw sources so the loader modules can compile them against their own remapped
+// Minecraft. Sharing sources rather than a jar is what keeps 96% of the code loader-agnostic.
+configurations {
+    commonJava {
+        canBeResolved = false
+        canBeConsumed = true
+    }
+    commonResources {
+        canBeResolved = false
+        canBeConsumed = true
+    }
+}
+
+def commonResourcesOutput = layout.buildDirectory.dir('commonResources')
+
+tasks.register('prepareCommonResources', Sync) {
+    from(sourceSets.main.resources)
+    into(commonResourcesOutput)
+    duplicatesStrategy = DuplicatesStrategy.FAIL
+}
+
+artifacts {
+    commonJava sourceSets.main.java.sourceDirectories.singleFile
+    commonResources(commonResourcesOutput) {
+        builtBy tasks.named('prepareCommonResources')
+    }
+}

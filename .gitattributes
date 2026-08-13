@@ -1,0 +1,14 @@
+# Normalise everything to LF in the repository.
+* text=auto eol=lf
+
+# gradlew is a POSIX shell script — CRLF here fails on Linux CI with "bad interpreter".
+gradlew text eol=lf
+
+# Windows batch files need CRLF.
+*.bat text eol=crlf
+
+# Binaries git must not touch.
+*.jar binary
+*.png binary
+*.ogg binary
+*.zip binary

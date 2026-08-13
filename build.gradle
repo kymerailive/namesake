@@ -1,0 +1,36 @@
+plugins {
+    id 'fabric-loom' version "${loom_version}" apply false
+    id 'net.neoforged.moddev' version "${moddev_version}" apply false
+}
+
+allprojects {
+    version = providers.gradleProperty('mod_version').getOrElse("${minecraft_version}-SNAPSHOT")
+    group = rootProject.group
+}
+
+subprojects {
+    apply plugin: 'java'
+
+    java {
+        toolchain.languageVersion = JavaLanguageVersion.of(rootProject.java_version as int)
+        withSourcesJar()
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = 'UTF-8'
+        options.deprecation = true
+        options.compilerArgs << '-Xlint:deprecation' << '-Xlint:unchecked'
+    }
+
+    tasks.withType(Test).configureEach {
+        useJUnitPlatform()
+        testLogging {
+            events 'passed', 'skipped', 'failed'
+            exceptionFormat 'full'
+        }
+    }
+
+    repositories {
+        mavenCentral()
+    }
+}
