@@ -3,11 +3,13 @@
 **The ledger.** What happens next, in order, with exit criteria. Read first, update last.
 Where any other document disagrees on sequence, this wins.
 
-- **Status:** session 03 complete. **The attach bet holds**, **the authorization gate is real**, and
-  **a villager is now from somewhere** — a persona rides a vanilla `Villager` through save, chunk
-  unload and zombification on both loaders; an unguarded serverbound handler cannot reach a green
-  build; and a settlement detected from a real bell gives its residents a culture, a household and
-  eight rolled axes that survive a reload. Repo live at https://github.com/kymerailive/namesake
+- **Status:** session 03 complete, **and it sounds right** — the exit criterion's feel half was
+  played and ruled a pass by the owner, not inferred. **The attach bet holds**, **the authorization
+  gate is real**, and **a villager is now from somewhere**: a persona rides a vanilla `Villager`
+  through save, chunk unload and zombification on both loaders; an unguarded serverbound handler
+  cannot reach a green build; and a settlement detected from a real bell gives its residents a
+  culture, a household and eight rolled axes that survive a reload. Repo live at
+  https://github.com/kymerailive/namesake
 - **Target:** 16 sessions to the ship-or-kill test (session 10), playable slice at 15.
 - **Companion:** `DESIGN.md` owns *what* we build. This owns *what happens next*.
 
@@ -273,14 +275,19 @@ generations and keeps latency out of the interaction path entirely.
 2. **Session 10 fails ship-or-kill.** If nobody reacts when town B knows their name, the central
    thesis is wrong. Better to learn it at session 10 than 60.
 3. **Cultures don't feel foreign.** If settlement two sounds and behaves like settlement one, the
-   travel loop collapses around hour 45 and no era ladder saves it. **Session 03 shipped the first
-   read and it is with the owner, unresolved.** Six cultures now differ in phonotactics, baseline
-   disposition and conformity, and three properties are machine-checked: two points a village apart
-   land in different cultures more than 60% of the time, two points inside one village's reach
-   share one more than 75% of the time, and no two cultures draw from substantially the same
-   consonants. **None of that is the question.** The question is whether the second village *sounds*
-   like somewhere else, and only a person can answer it — see the hand-off at the end of the session
-   03 log. Playtest again before building era 4–5.
+   travel loop collapses around hour 45 and no era ladder saves it. **The first read passed —
+   ruled by the owner, 2026-08-13.** Households read as related and a second village read as
+   foreign unprompted. Six cultures differ in phonotactics, baseline disposition and conformity,
+   and three properties are machine-checked besides: two points a village apart land in different
+   cultures more than 60% of the time, two points inside one village's reach share one more than
+   75% of the time, and no two cultures draw from substantially the same consonants.
+
+   **Not retired, and the reason is the number in its own first sentence.** The failure this risk
+   names happens at hour 45; the read that passed took minutes. Six cultures is enough to make the
+   second village surprising and may not be enough to make the twentieth one, and nothing yet
+   distinguishes two settlements *of the same culture* beyond their survey and a ±10 jitter.
+   Playtest again at session 15, and again before era 4–5, specifically for whether it is still
+   working at the far end of a session rather than at the start of one.
 4. **Traits have no consumer yet.** `Persona.traits` is written, persisted and displayed, and
    nothing branches on it — precisely the failure `DESIGN.md` §1 forbids. The first real consumer is
    the personality weight table in session 05. **No longer carried by memory as of 2026-08-13:**
@@ -712,7 +719,13 @@ unsettled
 
 The Gvirnsk household runs acquisitive (+7 to +36); the Stuksk household, twenty blocks away in the
 same village, runs the other way (−18 to −33). Both are unmistakably Karsk against the Vale trio.
-**That is the machine-checkable half. The other half is the owner's and is handed over below.**
+That is the machine-checkable half.
+
+**The other half is ruled: it landed, both halves, on the owner's playtest at close.** Households
+read as related, and a second village 3,000 blocks away read as foreign without being pointed at.
+No culture pair was reported as weak, so nothing was widened. That is the exit criterion met on the
+question no test in this repo could have had an opinion about — and it is the first real evidence
+against standing risk 3.
 
 Every harness leg green on both loaders, in two launches each:
 
@@ -824,25 +837,23 @@ than afterwards.
   settlements` reports residents per settlement in a real generated world.
 - Minting on sight still stands, so the record count tracks world population.
 
-**Ledger change.** Session 03 → done, session 04 → NEXT. Risk 3 rewritten: the machine-checkable
-half of "cultures feel foreign" is done and green, the half that matters is with the owner. Risk 4
-raised rather than retired — `traits` is still the only thing in the generation chain terminating in
-a renderer, and everything feeding it is now consumed, so if session 05 does not land the weight
-table the honest response is to delete more than one field. No changes to the 16-session shape.
+**Ledger change.** Session 03 → done, session 04 → NEXT. Risk 3 rewritten around its first read
+passing, and deliberately **not** retired: the failure it names is at hour 45 and the read took
+minutes. Risk 4 raised rather than retired — `traits` is still the only thing in the generation
+chain terminating in a renderer, and everything feeding it is now consumed, so if session 05 does
+not land the weight table the honest response is to delete more than one field. No changes to the
+16-session shape.
 
----
+**Ruled at close, by the owner.** The exit criterion landed on both halves: households read as
+related, and a second village 3,000 blocks out read as foreign without being pointed at. ±20 and
+±25 stand as shipped, and no culture pair was called out as weak, so no inventory was widened. The
+±25 individual spread and the per-culture conformity that narrows it are therefore ruled rather than
+merely proposed.
 
-**For the owner, before session 04.** Two things to look at, in a world with `-Pharness` unset:
-
-1. **Stand in a village and run `/namesake debug dump`.** You are looking at whether the households
-   read as families — do the three people with one surname look like each other's relatives next to
-   the three with another? If they read as noise, the household layer is too wide; if they read as
-   clones, too narrow. Those are ±20 and ±25 and I would rather move them on your ear than on mine.
-2. **Walk to a second village and run it again.** This is standing risk 3 and it is the one that
-   decides whether the travel loop works. Do not read the culture name — read the *names*. Does
-   settlement two sound like somewhere else, before you are told it is? If it takes a moment's
-   study to notice, that is a fail, not a pass. If it does read as foreign, say which culture pair
-   landed hardest and which barely registered, and I will widen the ones that did not.
+**Deliberately still open, and the honest limit of what that playtest proved.** Two settlements of
+the *same* culture are separated only by their survey and a ±10 jitter, which is thin — it did not
+show at two villages and it is the first thing to look at if the world starts feeling repetitive at
+scale. The right instrument for that is session 07's headless harness, not another playthrough.
 
 The decision parked in the session 02 log — "only the server opens an interaction", proposed for
 promotion into `DESIGN.md` — is still parked and was deliberately not actioned.
