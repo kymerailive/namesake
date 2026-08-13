@@ -61,10 +61,6 @@ public final class Meters {
         return slot == null ? 0L : slot[0];
     }
 
-    public static List<String> counterNames() {
-        return List.copyOf(COUNTERS.keySet());
-    }
-
     /** Wipes every measurement. Called between windows so a cell measures only itself. */
     public static void reset() {
         METERS.values().forEach(Meter::clear);

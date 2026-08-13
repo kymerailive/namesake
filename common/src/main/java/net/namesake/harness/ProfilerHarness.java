@@ -232,9 +232,13 @@ public final class ProfilerHarness {
             // twenty when the question is "what is villagerBrain actually costing".
             //
             // Two spellings: `sections` runs with our hooks inert and `sections-live` runs with
-            // them on. The pair exists because the two measurement phases disagreed by a factor of
-            // two at four hundred villagers while our meters recorded not one call, and a section
-            // tree from each is the only thing that can say where that went.
+            // them on. The pair was built when the two measurement phases disagreed by a factor of
+            // two at four hundred villagers while our meters recorded not one call during the
+            // window — a section tree from each side being the only instrument that could say
+            // where that went. It turned out to be POI tickets, golems and dropped items left
+            // behind by the previous run, and clearing them made the two phases agree to within
+            // 0.35 ms. The pair stays, because that question will be asked again and this is what
+            // answers it in five minutes.
             return List.of(new Cell("400 loaded, MC profiler recording", 16, 25, 0, false, true));
         }
         if ("vanilla".equals(PHASE)) {
