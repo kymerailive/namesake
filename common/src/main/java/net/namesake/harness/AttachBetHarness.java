@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
 
 /**
  * A scripted run of the session 01 exit criteria, inside a real game.
@@ -207,20 +208,27 @@ public final class AttachBetHarness {
                 ServerPlayer player = player(server);
                 BlockPos spawn = level.getSharedSpawnPos();
                 teleport(player, level, spawn.getX(), 250, spawn.getZ());
-                advance(server, 400);
+                // Waiting on a chunk ticket to expire, which is game time: sprint.
+                beginAwait(4000);
             }
             case 4 -> {
-                long stillLoaded = SUBJECTS.stream()
-                        .map(subject -> boundEntity(server, subject.personaId()))
-                        .filter(Optional::isPresent)
-                        .count();
+                if (stillWaiting(server, () -> loadedSubjects(server) == 0, true,
+                        "the test-site chunks to unload")) {
+                    return;
+                }
+                long stillLoaded = loadedSubjects(server);
                 record(stillLoaded == 0,
                         "UNLOAD test-site villagers unloaded (" + stillLoaded + " still resident)");
                 ServerPlayer player = player(server);
                 teleport(player, level, testSite.getX(), testSite.getY() + 2, testSite.getZ());
-                advance(server, 200);
+                // Waiting on chunk IO, not on game time. Sprinting here outruns the chunk loader.
+                beginAwait(2400);
             }
             case 5 -> {
+                if (stillWaiting(server, () -> subjectsIntact(server), false,
+                        "the test-site chunks to load again")) {
+                    return;
+                }
                 record(subjectsIntact(server), "CHUNK RELOAD personas identical after chunk unload/reload");
                 advance(server, 20);
             }
@@ -265,33 +273,20 @@ public final class AttachBetHarness {
                 zombieVillager.mobInteract(player, InteractionHand.MAIN_HAND);
                 record(zombieVillager.isConverting(), "CURE conversion started");
                 registrySizeBeforeCure = NpcRegistry.get(server).size();
-                // Vanilla picks 3600-6000 ticks for the cure. Poll rather than wait a fixed span:
-                // a fixed wait cannot tell "the persona was lost" from "the game had not got there
-                // yet", and those are opposite conclusions about the architecture.
-                deadline = tick + 16000;
-                lastReport = tick;
-                step++;
+                // Vanilla picks 3600-6000 ticks for the cure, and it is game time, so sprint in
+                // bursts. One 16000-tick burst outruns the chunk loader and the zombie villager
+                // never ticks at all — observed as entityTicks=0 while thousands of server ticks
+                // went by, which looked exactly like a lost persona.
+                beginAwait(16000);
             }
             case 8 -> {
                 Subject subject = SUBJECTS.get(0);
-                Entity carrier = boundEntity(server, subject.personaId()).orElse(null);
-                if (!(carrier instanceof Villager) && tick < deadline) {
-                    // Sprint in short bursts. One 16000-tick burst outruns the chunk loader, and a
-                    // mob in a chunk that has not finished loading does not tick at all.
-                    if (!server.tickRateManager().isSprinting()) {
-                        server.tickRateManager().requestGameToSprint(200);
-                    }
-                    if (tick - lastReport >= 1000) {
-                        lastReport = tick;
-                        Namesake.LOGGER.info(
-                                "[harness] waiting on the cure: carrier={} entityTicks={} converting={} budget={}",
-                                carrier == null ? "none" : EntityType.getKey(carrier.getType()),
-                                carrier == null ? -1 : carrier.tickCount,
-                                carrier instanceof ZombieVillager zv && zv.isConverting(),
-                                deadline - tick);
-                    }
+                if (stillWaiting(server,
+                        () -> boundEntity(server, subject.personaId()).orElse(null) instanceof Villager,
+                        true, "the zombie villager to finish curing")) {
                     return;
                 }
+                Entity carrier = boundEntity(server, subject.personaId()).orElse(null);
                 record(carrier instanceof Villager,
                         "CURE persona rode the zombie villager back onto a villager"
                                 + (carrier == null ? " (no carrier found)"
@@ -326,9 +321,16 @@ public final class AttachBetHarness {
                 record(!registry.isReadOnly(), "SCHEMA registry is writable (not refused as too new)");
                 checkDataFixer(registry);
                 teleport(player, level, testSite.getX(), testSite.getY() + 2, testSite.getZ());
-                advance(server, 200);
+                // Chunk IO again, so no sprint. A blind 200-tick sprint here is what made this
+                // phase report "the persona lost its entity" on a slow runner while the records
+                // themselves were perfectly intact.
+                beginAwait(2400);
             }
             case 1 -> {
+                if (stillWaiting(server, () -> subjectsIntact(server), false,
+                        "the subjects' chunks to load")) {
+                    return;
+                }
                 NpcRegistry registry = NpcRegistry.get(server);
                 int found = 0;
                 for (Subject subject : SUBJECTS) {
@@ -450,6 +452,53 @@ public final class AttachBetHarness {
         step++;
         resumeAt = tick + ticks;
         server.tickRateManager().requestGameToSprint(ticks);
+    }
+
+    /**
+     * Moves to the next step and gives it up to {@code maxTicks} to see its condition come true.
+     *
+     * <p>Replaces "sprint N ticks and hope" for everything that waits on the world rather than on
+     * the clock. A blind sprint cannot tell "not yet" from "never", so it reports a slow machine as
+     * a lost persona — which is exactly how this harness failed on a two-core CI runner after
+     * passing on a fast desktop.
+     */
+    private static void beginAwait(int maxTicks) {
+        step++;
+        resumeAt = 0;
+        deadline = tick + maxTicks;
+        lastReport = tick;
+    }
+
+    /**
+     * True while the caller should keep waiting. Returns false once the condition holds or the
+     * deadline passes, so the caller always runs its assertion and a timeout fails loudly.
+     *
+     * @param sprint whether to run the clock forward hard. Right for anything waiting on game time
+     *               (a chunk ticket expiring, a cure counting down); <b>wrong</b> for anything
+     *               waiting on chunk IO, because sprinting outruns the chunk loader and the mobs
+     *               inside those chunks never start ticking at all.
+     */
+    private static boolean stillWaiting(MinecraftServer server, BooleanSupplier condition,
+                                        boolean sprint, String what) {
+        if (condition.getAsBoolean() || tick >= deadline) {
+            return false;
+        }
+        if (sprint && !server.tickRateManager().isSprinting()) {
+            server.tickRateManager().requestGameToSprint(200);
+        }
+        if (tick - lastReport >= 400) {
+            lastReport = tick;
+            Namesake.LOGGER.info("[harness] waiting for {} ({} ticks left)", what, deadline - tick);
+        }
+        return true;
+    }
+
+    /** How many subjects currently have a loaded entity that agrees it carries their persona. */
+    private static long loadedSubjects(MinecraftServer server) {
+        return SUBJECTS.stream()
+                .map(subject -> boundEntity(server, subject.personaId()))
+                .filter(Optional::isPresent)
+                .count();
     }
 
     private static List<Villager> villagersAt(ServerLevel level) {
