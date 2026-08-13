@@ -17,8 +17,9 @@ import java.util.UUID;
  * here and never derived from {@code Entity#getUUID()} — the entity UUID changes when a villager is
  * zombified and cured, and a persona must survive that.
  *
- * <p>Generation logic (traits, culture, household clustering) is session 03. Everything created
- * today comes out of {@link #create(UUID, long)} with zeroed traits.
+ * <p>A persona is minted the moment a villager loads and <i>generated</i> a little later, once its
+ * settlement is known — see {@link #isGenerated()}. Until then it has no culture, no household and
+ * no traits, which is a real state a save file can hold rather than a transient one.
  *
  * <p><b>On {@code byte[] traits} inside a record:</b> arrays have identity equality, so the
  * generated {@code equals}/{@code hashCode} would compare two personas with identical traits as
@@ -63,6 +64,21 @@ public record Persona(
      */
     public static final int UNASSIGNED = -1;
 
+    /**
+     * Sentinel for "this persona has not been generated yet".
+     *
+     * <p>Not {@code 0}, for exactly the reason {@link #UNASSIGNED} is not: culture ids start at
+     * zero, so zero is a real culture. Schema 2 and earlier wrote {@code 0} into this field meaning
+     * "none", which from session 03 on would read as <i>every villager in an existing world belongs
+     * to the first culture</i> — a save that loads perfectly and is silently wrong. The schema
+     * 2 → 3 fix rewrites it, and this is why that fix exists.
+     *
+     * <p>It also doubles as the generation marker. A generated persona always holds a real culture
+     * id, so no separate "generated" flag has to be persisted and kept in step with the fields it
+     * describes.
+     */
+    public static final byte UNASSIGNED_CULTURE = -1;
+
     private static final Codec<byte[]> TRAITS_CODEC = Codec.BYTE_BUFFER.xmap(
             buffer -> {
                 byte[] copy = new byte[buffer.remaining()];
@@ -94,14 +110,20 @@ public record Persona(
         traits = traits.clone();
     }
 
-    /** A blank persona. Traits are zeroed; session 03 rolls them for real. */
+    /**
+     * A minted, ungenerated persona: an identity with nobody in it yet.
+     *
+     * <p>Generation needs the villager's settlement, and a settlement needs a survey that does not
+     * finish in the tick the villager loads. So minting and generating are two steps, and this is
+     * the first.
+     */
     public static Persona create(UUID id, long birthTick) {
         return new Persona(
                 id,
                 UNASSIGNED,
                 UNASSIGNED,
                 new byte[TRAIT_COUNT],
-                (byte) 0,
+                UNASSIGNED_CULTURE,
                 0,
                 birthTick,
                 deriveAppearanceSeed(id),
@@ -137,6 +159,29 @@ public record Persona(
 
     public Persona withSettlement(int newSettlementId) {
         return new Persona(id, newSettlementId, householdId, traits,
+                cultureId, professionId, birthTick, appearanceSeed, eraOfMajority);
+    }
+
+    /** True once this persona has a culture, a household and rolled traits. */
+    public boolean isGenerated() {
+        return cultureId >= 0;
+    }
+
+    /**
+     * Where this persona belongs, written in one step.
+     *
+     * <p>Deliberately one method rather than three withers. Settlement, household and culture are
+     * decided together and are only meaningful together — a persona holding a household but no
+     * culture is a state nothing should be able to produce by forgetting a line. Traits are rolled
+     * <i>from</i> this placement, by {@link TraitRoll#roll}, and applied with {@link #withTraits}.
+     */
+    public Persona placed(int newSettlementId, int newHouseholdId, byte newCultureId) {
+        return new Persona(id, newSettlementId, newHouseholdId, traits,
+                newCultureId, professionId, birthTick, appearanceSeed, eraOfMajority);
+    }
+
+    public Persona withTraits(byte[] rolled) {
+        return new Persona(id, settlementId, householdId, rolled,
                 cultureId, professionId, birthTick, appearanceSeed, eraOfMajority);
     }
 
