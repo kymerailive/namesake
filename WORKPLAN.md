@@ -1211,6 +1211,10 @@ within 2.1%. The population-and-costs phase ran on **Fabric only** — the censu
 which is exactly the reasoning that has been wrong three times in this project, so treat those two
 tables as Fabric's until somebody runs `-Pprofile=world` on NeoForge.
 
+***Closed 2026-08-14 at the end of session 05 — see that log's last section.** The population number
+reproduces exactly and the census's shape reproduces exactly; its tail does not, in the direction
+this paragraph should have expected.*
+
 ### Session 05 — 2026-08-14 — bonds and deeds
 
 **Shipped.** `6847700` plus this ledger commit, pushed to `origin/main`. CI green on all three jobs.
@@ -1464,6 +1468,50 @@ and armed the same way, for the five social values this session persisted and di
 decisions added to `DESIGN.md` §2 (the bond key, bond storage, bond decay) taking the count 42 → 45,
 one correction to §3's `gainedToday`, and §4 step 4 rewritten to state all six weights and which two
 of them may never soften a harmful deed. No changes to the 16-session shape.
+
+#### The gap session 04 left open, closed
+
+`-Pprofile=world` on NeoForge, same machine, same seed 20260814, world generated fresh. Session 04
+ran this phase on Fabric only and said to treat its two tables as Fabric's until somebody ran it
+here. Somebody has.
+
+**The population number reproduces exactly.** Seven villages found by vanilla's own locator at the
+same seven coordinates, and **52 personas and 7 settlements** in the registry afterwards — the same
+total, from the same villages, on the other loader. Per-village residents came out 11, 9, 2, 4, 9,
+4, 10 against Fabric's 11, 9, 2, 4, 9, 7, 10; the two that differ are villages 5 and 6, where the
+count was taken while chunk tickets were still settling and residents had not all arrived. That is
+session 03's defect 5 for the fifth time, it moves nothing in the total, and it is exactly why the
+figure that matters is the registry total rather than the per-village column.
+
+**The census's shape reproduces exactly, and its tail does not.**
+
+| | Fabric (session 04) | NeoForge |
+|---|---|---|
+| censuses completed | 10 | 8 |
+| server ticks and chunk columns each | 19 and 289 | **19 and 289** |
+| `PoiManager.getInChunk`, one column, mean | 61.7 µs | 25.2 µs |
+| …p50 / p95 / p99 | 10.5 / 30.2 / 75.8 µs | 13.8 / 32.3 / 73.7 µs |
+| …**max** | **72.43 ms** | **9.90 ms** |
+| `SettlementRegistrar.step`, 16 columns, mean | 946 µs | 392 µs |
+| …p99 / max | 53.5 ms / 72.44 ms | 4.98 ms / 10.23 ms |
+| `SettlementSurvey.score`, off-thread | 3.75 ms mean | 445 µs mean |
+
+**The middle of the distribution is the same to within a few microseconds and the tail is seven
+times smaller — which is the number session 04 already predicted.** Its own note says the tail is
+disk-bound and varied by a factor of seven between two runs *on one loader*, so a 72 ms worst column
+against a 9.9 ms one is that same variance and not a loader difference. **The honest reading is
+therefore the opposite of what a table this shape usually means: this run does not lower the census's
+worst case, it confirms that the worst case belongs to the disk rather than to either loader.** The
+72 ms column stands as the number to design against.
+
+**And `STILL_UNSETTLED` fired zero times here too** — the branch that scans the whole settlement
+table on every chunk load, for the life of the world. Zero out of 52 on both loaders now. Session
+04 recorded the fix for it (an index) as session 08's problem at the earliest; that still holds.
+
+One number is a single sample rather than a distribution and is flagged as such: the `SETTLED`
+first-line return measured 9.00 µs at n=1 on NeoForge against Fabric's 0.41 µs at n=2 and 0.20 µs at
+n=11. One call on a cold path is the JIT, not a loader. The claim session 04 made from it — that the
+cheap branch is 100% of calls once a village is known — is about the *mix*, and the mix reproduced.
 
 **Ruled at close, by the owner.** *(pending — the legibility half of the exit criterion is the
 owner's to rule, along with anything above they disagree with. The five new exemptions and `debt` in
