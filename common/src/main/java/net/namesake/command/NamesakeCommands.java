@@ -18,18 +18,28 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.namesake.Namesake;
+import net.namesake.culture.Culture;
+import net.namesake.culture.Cultures;
+import net.namesake.culture.Names;
 import net.namesake.npc.NpcRegistry;
 import net.namesake.npc.NpcSchema;
 import net.namesake.npc.Persona;
 import net.namesake.npc.PersonaService;
 import net.namesake.platform.Platform;
 import net.namesake.platform.PersonaLink;
+import net.namesake.settlement.Need;
+import net.namesake.settlement.Settlement;
 
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * {@code /namesake debug ...} — the instruments for reading persona state out of a running game.
@@ -57,6 +67,9 @@ public final class NamesakeCommands {
 
     private static final double SEARCH_RADIUS = 16.0;
 
+    /** {@code WORKPLAN.md}'s exit criterion for session 03 is written in terms of twenty. */
+    private static final int DEFAULT_DUMP = 20;
+
     private NamesakeCommands() {
     }
 
@@ -71,6 +84,15 @@ public final class NamesakeCommands {
                                                 EntityArgument.getEntity(context, "target")))))
                         .then(Commands.literal("registry")
                                 .executes(NamesakeCommands::dumpRegistry))
+                        // The instrument session 03's exit criterion is read with. Read-only, so
+                        // it stays available outside a development environment.
+                        .then(Commands.literal("dump")
+                                .executes(context -> dump(context, DEFAULT_DUMP))
+                                .then(Commands.argument("count", IntegerArgumentType.integer(1, 200))
+                                        .executes(context -> dump(context,
+                                                IntegerArgumentType.getInteger(context, "count")))))
+                        .then(Commands.literal("settlements")
+                                .executes(NamesakeCommands::dumpSettlements))
                         // settrait and prune both write. An op on a live server could rewrite any
                         // villager's personality, or delete personas whose entities are merely
                         // unloaded — permission level 2 is not a meaningful gate on either. They
@@ -122,12 +144,16 @@ public final class NamesakeCommands {
         }
 
         UUID boundEntity = registry.boundEntity(personaId).orElse(null);
-        String header = "persona " + persona.id();
+        String header = (persona.isGenerated() ? Names.of(persona).full() + " — " : "")
+                + "persona " + persona.id();
+        String culture = persona.isGenerated()
+                ? Culture.byId(persona.cultureId()).displayName() + " (" + persona.cultureId() + ")"
+                : "none yet — not generated";
         String body = "  entity     " + target.getUUID()
                 + " (" + EntityType.getKey(target.getType()) + ")"
                 + "\n  bound to   " + boundEntity + (target.getUUID().equals(boundEntity) ? " (match)" : " (MISMATCH)")
                 + "\n  settlement " + persona.settlementId() + "  household " + persona.householdId()
-                + "\n  culture    " + persona.cultureId() + "  profession " + persona.professionId()
+                + "\n  culture    " + culture + "  profession " + persona.professionId()
                 + "\n  birthTick  " + persona.birthTick() + "  appearanceSeed " + persona.appearanceSeed()
                 + "\n  era        " + persona.eraOfMajority()
                 + "\n  traits     " + traits;
@@ -196,6 +222,145 @@ public final class NamesakeCommands {
         source.sendSuccess(() -> Component.literal(
                 "pruned " + removed + " orphan persona(s) against " + alive.size() + " loaded entities"), true);
         return removed;
+    }
+
+    // --- dump ----------------------------------------------------------------------------------
+
+    /**
+     * The nearest {@code limit} loaded NPCs, grouped by settlement and household.
+     *
+     * <p><b>This is the instrument this session's exit criterion is read with</b>, so it is laid
+     * out for the question being asked rather than for the data structure underneath. Grouping by
+     * household is the point: "households are recognisably related" is a claim about a shelf of
+     * names and eight columns of numbers sitting next to each other, and a flat list sorted by
+     * distance would hide exactly the thing the owner is being asked to judge.
+     *
+     * <p>Only NPCs with a loaded entity appear, because those are the ones you can walk over to and
+     * look at. The total is printed alongside so the difference is never mistaken for a loss.
+     */
+    private static int dump(CommandContext<CommandSourceStack> context, int limit) {
+        CommandSourceStack source = context.getSource();
+        ServerLevel level = source.getLevel();
+        Vec3 origin = source.getPosition();
+        NpcRegistry registry = NpcRegistry.get(source.getServer());
+
+        List<Persona> nearest = registry.all().stream()
+                .map(persona -> Map.entry(persona, distanceTo(level, registry, persona, origin)))
+                .filter(entry -> entry.getValue() < Double.MAX_VALUE)
+                .sorted(Comparator.comparingDouble(Map.Entry::getValue))
+                .limit(limit)
+                .map(Map.Entry::getKey)
+                .toList();
+
+        StringBuilder out = new StringBuilder();
+        out.append(nearest.size()).append(" of ").append(registry.size())
+                .append(" persona(s) — loaded, nearest first")
+                .append("\n  axes: ");
+        for (int axis = 0; axis < Persona.TRAIT_COUNT; axis++) {
+            out.append(axis == 0 ? "" : " ").append(Persona.TRAIT_NAMES[axis], 0, 3);
+        }
+
+        // Grouped by settlement, then household, keeping the nearest-first order within each.
+        Map<Integer, List<Persona>> bySettlement = nearest.stream()
+                .collect(Collectors.groupingBy(Persona::settlementId, LinkedHashMap::new,
+                        Collectors.toList()));
+
+        for (Map.Entry<Integer, List<Persona>> group : bySettlement.entrySet()) {
+            out.append('\n').append(settlementHeader(level, registry, group.getKey()));
+            Map<Integer, List<Persona>> byHousehold = group.getValue().stream()
+                    .collect(Collectors.groupingBy(Persona::householdId, LinkedHashMap::new,
+                            Collectors.toList()));
+            for (Map.Entry<Integer, List<Persona>> household : byHousehold.entrySet()) {
+                out.append("\n  household ").append(household.getKey());
+                for (Persona persona : household.getValue()) {
+                    out.append("\n    ").append(describe(persona));
+                }
+            }
+        }
+
+        String report = out.toString();
+        source.sendSuccess(() -> Component.literal(report), false);
+        Namesake.LOGGER.info("[debug dump] {}", report);
+        return nearest.size();
+    }
+
+    /** One NPC: name, culture, and eight signed axes. */
+    private static String describe(Persona persona) {
+        StringBuilder line = new StringBuilder();
+        if (persona.isGenerated()) {
+            Culture culture = Culture.byId(persona.cultureId());
+            line.append(pad(Names.of(persona).full(), 28)).append(pad(culture.displayName(), 9));
+        } else {
+            line.append(pad("(ungenerated) " + persona.id().toString().substring(0, 8), 28))
+                    .append(pad("-", 9));
+        }
+        for (int axis = 0; axis < Persona.TRAIT_COUNT; axis++) {
+            line.append(String.format(" %+04d", persona.trait(axis)));
+        }
+        return line.toString();
+    }
+
+    private static String settlementHeader(ServerLevel level, NpcRegistry registry, int settlementId) {
+        if (settlementId == Persona.UNASSIGNED) {
+            return "unsettled";
+        }
+        return registry.settlements().byId(settlementId)
+                .map(settlement -> "settlement " + settlement.id()
+                        + "  " + Cultures.at(level, settlement.centre()).displayName()
+                        + "  " + settlement.specialtyValue()
+                        + "  defensibility " + settlement.defensibility()
+                        + "  " + needsOf(settlement)
+                        + "  centre " + settlement.centre().toShortString())
+                .orElse("settlement " + settlementId + "  (MISSING from the registry)");
+    }
+
+    private static int dumpSettlements(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        ServerLevel level = source.getLevel();
+        NpcRegistry registry = NpcRegistry.get(source.getServer());
+        Collection<Settlement> settlements = registry.settlements().all();
+
+        StringBuilder out = new StringBuilder(settlements.size() + " settlement(s)");
+        if (settlements.isEmpty()) {
+            // Every section prints its own absence — DESIGN.md §11's rule, applied early. An empty
+            // report that says nothing reads as a broken command.
+            out.append("\n  none detected yet. A settlement needs a bell; the survey runs when a "
+                    + "villager loads near one.");
+        }
+        for (Settlement settlement : settlements) {
+            long residents = registry.all().stream()
+                    .filter(persona -> persona.settlementId() == settlement.id())
+                    .count();
+            out.append("\n  ").append(settlementHeader(level, registry, settlement.id()))
+                    .append("  residents ").append(residents);
+        }
+
+        String report = out.toString();
+        source.sendSuccess(() -> Component.literal(report), false);
+        Namesake.LOGGER.info("[debug settlements] {}", report.replace("\n", " |"));
+        return settlements.size();
+    }
+
+    private static String needsOf(Settlement settlement) {
+        StringBuilder needs = new StringBuilder("needs");
+        for (Need need : Need.values()) {
+            needs.append(' ').append(need.name().toLowerCase(Locale.ROOT)).append('=')
+                    .append(settlement.need(need));
+        }
+        return needs.toString();
+    }
+
+    private static double distanceTo(ServerLevel level, NpcRegistry registry, Persona persona,
+                                     Vec3 origin) {
+        return registry.boundEntity(persona.id())
+                .map(level::getEntity)
+                .filter(entity -> entity != null && !entity.isRemoved())
+                .map(entity -> entity.distanceToSqr(origin))
+                .orElse(Double.MAX_VALUE);
+    }
+
+    private static String pad(String value, int width) {
+        return value.length() >= width ? value : value + " ".repeat(width - value.length());
     }
 
     // --- targeting -----------------------------------------------------------------------------
