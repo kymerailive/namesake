@@ -1645,7 +1645,8 @@ that leaves for session 07 is a number rather than an adjective: **close the med
 
 ### Session 06 — 2026-08-14 — episodic memory
 
-**Shipped.** `759ce8d..HEAD`, pushed to `origin/main`. CI green on all three jobs.
+**Shipped.** `759ce8d..47ffdda` plus this correction, pushed to `origin/main`. CI green on all three
+jobs. Two commits: the ring, and the ledger.
 
 **A villager now remembers what it saw, and it survives the disk.** Feed one in front of three
 others and all four keep the deed. Feed them nine more times and they still keep it **once** — a
