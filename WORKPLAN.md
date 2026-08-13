@@ -100,8 +100,12 @@ village: the names are audibly from somewhere else, and households are recognisa
 
 ### Session 04 — The profiler spike *(2 days, highest technical risk)*
 **Build.** 400 dummy `Persona` records, the 20-bucket rotating sweep, 8 simulated players each
-tracking 12 entities. Profile at `mob tick → villagerBrain` (`Villager.java:283-285`), plus sensing,
-navigation, goalSelector.
+tracking 12 entities. Profile at `mob tick → villagerBrain` — vanilla pushes that profiler section
+itself, in **`Villager#customServerAiStep`**, so the built-in profiler already reports it. Plus
+sensing, navigation, goalSelector.
+
+*(This line cited `Villager.java:283-285` until 2026-08-13; the brain tick is at 278-281 in the
+current NeoForm decompile. Decompiled line numbers drift with mappings — anchor on the method.)*
 
 **Order matters.** **Baseline vanilla first** — 400 loaded vanilla villagers with zero mod code —
 then add ours. Without that number ours means nothing.
