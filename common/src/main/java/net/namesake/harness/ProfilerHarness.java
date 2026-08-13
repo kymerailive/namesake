@@ -17,11 +17,11 @@ import net.minecraft.util.profiling.ResultField;
 import net.minecraft.world.Difficulty;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.entity.npc.VillagerProfession;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.GameType;
@@ -221,10 +221,15 @@ public final class ProfilerHarness {
      * with no records is our hooks, and {@code namesake 400 + 400} adds the sweep.
      */
     private static List<Cell> cells() {
-        if ("sections".equals(PHASE)) {
+        if (PHASE.startsWith("sections")) {
             // One cell, because Minecraft's own metrics recorder stops itself ten seconds in and
             // this phase exists only to read the section tree out of it. Five minutes rather than
             // twenty when the question is "what is villagerBrain actually costing".
+            //
+            // Two spellings: `sections` runs with our hooks inert and `sections-live` runs with
+            // them on. The pair exists because the two measurement phases disagreed by a factor of
+            // two at four hundred villagers while our meters recorded not one call, and a section
+            // tree from each is the only thing that can say where that went.
             return List.of(new Cell("400 loaded, MC profiler recording", 16, 25, 0, false, true));
         }
         if ("vanilla".equals(PHASE)) {
@@ -264,11 +269,11 @@ public final class ProfilerHarness {
             if ("world".equals(PHASE)) {
                 runPopulation(server);
             } else if ("vanilla".equals(PHASE) || "namesake".equals(PHASE)
-                    || "sections".equals(PHASE)) {
+                    || PHASE.startsWith("sections")) {
                 runMeasurement(server);
             } else {
                 Namesake.LOGGER.error("[profile] unknown phase '{}'; expected vanilla, namesake, "
-                        + "sections or world", PHASE);
+                        + "sections, sections-live or world", PHASE);
                 record(false, "unknown phase '" + PHASE + "'");
                 finish(server, false);
             }
@@ -481,15 +486,20 @@ public final class ProfilerHarness {
         // every golem the cells before it had produced, and the second launch inherited the first
         // launch's as well. That drift is what made two hundred villagers cost 15.5 ms in one
         // phase and 8.8 ms in the other with no code between them doing anything per tick.
-        for (Mob mob : level.getEntitiesOfClass(Mob.class, gridBox())) {
-            if (mob instanceof Villager villager) {
+        for (Entity entity : level.getEntities((Entity) null, gridBox(),
+                candidate -> !(candidate instanceof Player))) {
+            // Items as well as mobs. Discarding a villager drops its inventory, so a teardown that
+            // removed only mobs left four hundred item entities ticking for the five minutes it
+            // takes them to despawn — and a cell that runs inside those five minutes is measuring
+            // eight hundred entities while its report says four hundred.
+            if (entity instanceof Villager villager) {
                 // Vanilla releases a villager's points of interest in Villager#die and nowhere
                 // else, so a discarded villager keeps its workstation and its bed claimed forever.
                 // Without this, employment fell from 95/96 to 52/200 across one run and every tick
                 // time after that was measuring a village of the unemployed. Nothing threw.
                 releasePois(villager);
             }
-            mob.discard();
+            entity.discard();
         }
         SUBJECTS.clear();
         for (int siteIndex = 0; siteIndex < target.sites(); siteIndex++) {
