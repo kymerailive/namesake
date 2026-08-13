@@ -300,7 +300,7 @@ holds.
 
 ### Session 01 — 2026-08-13 — persona, persistence, and the attach bet
 
-**Shipped.** `9736e07..17d5009`, pushed to `origin/main`.
+**Shipped.** `9736e07..5c73416`, pushed to `origin/main`.
 
 **The attach bet holds.** A persona rides a vanilla `Villager` through the whole entity lifecycle on
 *both* loaders. Risk 1 is retired and the 16-session estimate stands.
