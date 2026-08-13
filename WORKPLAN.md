@@ -314,9 +314,11 @@ generations and keeps latency out of the interaction path entirely.
    also the writer looking at its own work, which is the exact lie `cultureId` told in session 03.
 
    **Armed the same way risk 4 was**, against this ledger's own status board, so it fails loudly at
-   the close of the owing session rather than quietly. `debt` is the weakest of the five and weaker
-   than `professionId`: nothing in the sixteen-session slice writes it, let alone reads it. If it is
-   not worth a schema field for eleven sessions, delete it now rather than moving the number later.
+   the close of the owing session rather than quietly. `debt` is the longest of the five and the one
+   with the least behind it: nothing in the sixteen-session slice writes it, let alone reads it.
+   **Deletion was offered at the close of session 05 and the owner ruled the field stays** — so it
+   is carried deliberately rather than by inertia, and the expiry at 16 stands unchanged. Session 16
+   reads it or deletes it; moving the number is still the thing the mechanism exists to stop.
 
 ## How a session is verified — ruled 2026-08-13
 
@@ -1513,6 +1515,31 @@ first-line return measured 9.00 µs at n=1 on NeoForge against Fabric's 0.41 µs
 n=11. One call on a cold path is the JIT, not a loader. The claim session 04 made from it — that the
 cheap branch is 100% of calls once a village is known — is about the *mix*, and the mix reproduced.
 
-**Ruled at close, by the owner.** *(pending — the legibility half of the exit criterion is the
-owner's to rule, along with anything above they disagree with. The five new exemptions and `debt` in
-particular are offered for a different ruling.)*
+**Ruled at close, by the owner.**
+
+- **`Bond.debt` stays.** Deletion was offered — nothing in the sixteen-session slice writes it, let
+  alone reads it — and the ruling is that the field exists. It is therefore carried deliberately
+  rather than by inertia, which is a different thing from the position it was in an hour ago. The
+  exemption is untouched: session 16 reads it or deletes it, and `SocialValueLedgerTest` still turns
+  the build red at the close of 16 if neither happens.
+- **The legibility half of the exit criterion is still open**, and the honest scope of what can be
+  ruled today is narrower than the criterion eventually wants — see below.
+
+**What "legible" can and cannot mean before session 09.** The criterion asks whether the same gift
+*lands differently* on two villagers. Two things are true at once and it is worth separating them:
+
+- **The difference exists and is measurable today.** `/namesake debug bonds` prints a `gift×` column
+  next to each name, and giving the same item to two villagers moves their rows by different amounts.
+- **There is no player-facing surface for it yet, and that is by design.** `DESIGN.md` rules the bond
+  UI as bands and a deed ring, **never raw integers** — so the debug command is an instrument, not
+  the answer. The pools that would let a villager *sound* differently are session 09; the board that
+  would show it without asking is session 11. Until then, "did you notice?" cannot be tested,
+  because there is nothing to notice with.
+
+So the ruling available now is the narrower and more useful one: **is the spread the generator
+actually produces wide enough to be worth building a surface on?** The fixtures in `DeedsTest` are
+mine — I chose a smith at −40 warmth and an innkeeper at +60. The question the playtest answers is
+whether the villagers a *real* world generates differ by enough. **If they do not, the fix is the
+magnitudes in the weight table — every cell is currently ≤ 0.45 — and not the architecture.** That
+is one number per cell and a test update, and it is much cheaper to learn now than after session 09
+has authored 160 lines against it.

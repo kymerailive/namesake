@@ -324,12 +324,14 @@ class SocialValueLedgerTest {
 
             Entry.exemptUntilAfter(Bond.class, "debt", List.of("debt"), 16,
                     "Sessions 16-20: a favour or a gift is what resolves a stage-2 grievance, and "
-                            + "inheritance at 21-23 rules that debts die with the NPC. THE WEAKEST "
-                            + "ENTRY IN THIS FILE, and weaker than professionId's: nothing in the "
-                            + "sixteen-session slice writes it, let alone reads it. It ships "
-                            + "because DESIGN.md §2 locks 'four signed axes plus a debt scalar'. "
-                            + "If that is not worth a schema field for eleven sessions, delete it "
-                            + "now rather than moving this number later."),
+                            + "inheritance at 21-23 rules that debts die with the NPC. The longest "
+                            + "exemption here and the one with the least behind it — nothing in the "
+                            + "sixteen-session slice writes it, let alone reads it. DELETION WAS "
+                            + "OFFERED AT THE CLOSE OF SESSION 05 AND THE OWNER RULED THE FIELD "
+                            + "STAYS, so it is carried deliberately rather than by inertia. The "
+                            + "expiry is untouched by that ruling: session 16 either reads it or "
+                            + "deletes it, and moving this number is still the one thing this file "
+                            + "exists to stop."),
 
             Entry.consumedBy(Bond.class, "lastSeenDay", List.of("lastSeenDay"),
                     Bond.class, "decayedTo",
