@@ -63,6 +63,14 @@ schema version, load the old save, and *watch the datafixer run*.
 `authorize(ServerPlayer sender, Target target)`. Reach, session-token and rate checks in the base.
 One trivial packet end to end.
 
+**Also — the rule 5 enforcement test, carried from session 01.** DESIGN §1 says a social value with
+no non-display consumer is caught by *a failing test, not by intention*, and session 01 shipped
+`Persona.traits` with a ledger risk instead. Write the test: each social field names the non-display
+consumer it feeds, and the build goes red when one cannot. `traits` is listed with an **explicit
+grant that expires at session 05**, so if 05 ships without the personality weight table the build
+fails on its own rather than waiting for someone to remember. Dev-gate `/namesake debug settrait`
+in the same pass — it rewrites personality and currently works in any world at op level 2.
+
 **Exit — revert and watch it fail.** Deliberately add an unguarded handler; the build must go red.
 Remove it; green. Only then is the gate real.
 
@@ -87,6 +95,11 @@ navigation, goalSelector.
 
 **Order matters.** **Baseline vanilla first** — 400 loaded vanilla villagers with zero mod code —
 then add ours. Without that number ours means nothing.
+
+**Profile a populated world, not a spawned-in 400.** Session 01 ruled minting-on-sight: every
+`Villager` that loads gets a persona immediately and keeps it, so the record count tracks *world
+population*, not player experience. 400 is the working figure but it is an assumption — measure what
+a real generated world actually produces before trusting it.
 
 **Exit.** Real numbers written into this ledger. Population target confirmed or revised *before*
 anything depends on it. Expected: ours ~5.95 µs/tick against ~18 ms/tick of vanilla ticking, which
@@ -229,6 +242,18 @@ that turns out not to land is sixteen sessions wasted. Prove the thesis first.
 | 28–30 | Secrets, named factions, migration, rival settlements |
 | 31+ | Era 4–5, addon API hardening, animals in the social graph |
 
+**One open question parked here deliberately: how optional LLM enrichment is delivered** — players
+routing their own API key, or a hosted service. `DESIGN.md` already rules the half that matters
+(*optional enrichment only, nothing may depend on it*); this is the delivery detail underneath it,
+and it is cheap to decide late and expensive to decide early. **Do not open it before session 10**:
+if the propagation thesis fails ship-or-kill, the question evaporates.
+
+The invariant that keeps both options open, and costs nothing to hold: dialogue is *selected* from
+authored pools by struct state, and a model may only decorate a line that is already complete and
+shippable — never produce one. Enrichment can then be generated ahead of time and cached per
+`(culture, pool, register)` rather than per utterance, which bounds the cost to thousands of
+generations and keeps latency out of the interaction path entirely.
+
 ---
 
 ## Standing risks
@@ -243,9 +268,10 @@ that turns out not to land is sixteen sessions wasted. Prove the thesis first.
    travel loop collapses around hour 45 and no era ladder saves it. Session 03 is the first read;
    playtest specifically for this before building era 4–5.
 4. **Traits have no consumer yet.** `Persona.traits` is written, persisted and displayed, and
-   nothing branches on it — which is precisely the failure `DESIGN.md` §1 forbids. The first real
-   consumer is the personality weight table in session 05. **If session 05 ships without it, the
-   enforcement test is overdue and the field should be deleted rather than carried.**
+   nothing branches on it — precisely the failure `DESIGN.md` §1 forbids. The first real consumer is
+   the personality weight table in session 05. Session 02 makes this self-enforcing: the rule 5 test
+   grants `traits` an exemption that **expires at session 05**, so the build goes red on its own
+   rather than relying on anyone remembering. Until that test exists this risk is live.
 
 ## Never cut — load-bearing walls, not tuning knobs
 
@@ -375,6 +401,19 @@ tick list and simply does not tick — `entityTicks=0` while thousands of server
 sprints in 200-tick bursts now. And a zombie left alive among the spare villagers hunted them out of
 the loaded area during the cure, which read as "the persona was lost". The subjects are `setNoAi`
 fixtures now and the zombie is discarded once it has done its one job.
+
+**Ruled at close, by the owner.**
+
+- **The harness stays, and CI runs it on every push** — both loaders, in two launches, reading the
+  verdict file the harness writes rather than the exit code (the game exits 0 either way, so a job
+  watching the exit code would be green forever). Session 01's exit criteria are now re-checked
+  continuously instead of being true only on the day they were first proven.
+- **Minting on sight stays.** Every `Villager` that loads gets a persona immediately and keeps it.
+  Every villager is a person whether or not you have met them, and witnesses in session 05 need
+  identity to already exist. Consequence recorded against session 04: the record count tracks world
+  population, so the profiler must baseline against a real generated world.
+- **The rule 5 enforcement test lands in session 02**, with `traits` granted an exemption that
+  expires at session 05. See the session 02 entry.
 
 **Carried into session 02.** `$env:JAVA_HOME` still must be pinned to JDK 21. Kill the dev client
 between runs — starting the next one too early hits the world's `session.lock` and the crash blames

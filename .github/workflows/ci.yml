@@ -85,6 +85,7 @@ jobs:
       # setup and verify are two launches on purpose: "survives save, quit and reload" cannot be
       # proven inside one run of the game.
       - name: Harness - setup phase
+        timeout-minutes: 12
         env:
           LIBGL_ALWAYS_SOFTWARE: "1"
         run: xvfb-run -a ./gradlew :${{ matrix.loader }}:runClient -Pharness=setup --console=plain
@@ -103,6 +104,7 @@ jobs:
           }
 
       - name: Harness - verify phase
+        timeout-minutes: 12
         env:
           LIBGL_ALWAYS_SOFTWARE: "1"
         run: xvfb-run -a ./gradlew :${{ matrix.loader }}:runClient -Pharness=verify --console=plain
@@ -121,7 +123,7 @@ jobs:
           }
 
       - name: Upload harness logs
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: harness-logs-${{ matrix.loader }}

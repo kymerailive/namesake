@@ -73,6 +73,9 @@ public final class AttachBetHarness {
     /** Far enough from world spawn that the chunks are not held by the permanent spawn ticket. */
     private static final int TEST_SITE_OFFSET = 800;
 
+    /** How long to let Minecraft shut down before giving up on it. See the watchdog below. */
+    private static final long SHUTDOWN_GRACE_MILLIS = 45_000L;
+
     private static final String PHASE = System.getProperty(PROPERTY, "").trim();
 
     private static int tick;
@@ -546,11 +549,46 @@ public final class AttachBetHarness {
         summary.append("==== ").append(allPassed ? "ALL PASSED" : "FAILURES PRESENT").append(" ====");
         Namesake.LOGGER.info(summary.toString());
 
+        // Order matters: everything under test is durable, and the verdict is on disk, before we
+        // ask the game to stop. Whatever happens to the shutdown after this point, the next phase
+        // reloads from disk and would fail if this save had not landed.
         server.saveEverything(true, true, true);
         writeResult(allPassed ? "PASS" : "FAIL", String.join("\n", RESULTS));
         Namesake.LOGGER.info("[harness] HARNESS COMPLETE phase={} result={}",
                 PHASE, allPassed ? "PASS" : "FAIL");
+        startShutdownWatchdog();
         server.halt(false);
+    }
+
+    /**
+     * Hard-exits if Minecraft's own shutdown does not finish.
+     *
+     * <p>On the CI runner the integrated server reliably wedges after logging "Saving worlds" —
+     * inside vanilla's {@code saveAllChunks}, which joins a chunk-IO future — and the process never
+     * exits. Locally it shuts down in about three seconds. Nothing of ours is involved: the harness
+     * has already finished, the world is already saved and the verdict is already written.
+     *
+     * <p>A test harness that can hang forever is worse than one that stops rudely, so this bounds
+     * it. It is not silent: the warning below is the signal that the wedge is still happening. The
+     * exit cannot corrupt anything under test, and the {@code verify} phase reloads from disk, so
+     * a truncated save would be caught rather than hidden.
+     */
+    private static void startShutdownWatchdog() {
+        Thread watchdog = new Thread(() -> {
+            try {
+                Thread.sleep(SHUTDOWN_GRACE_MILLIS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+            Namesake.LOGGER.warn(
+                    "[harness] the game did not shut down within {}s. Exiting hard. Everything under "
+                            + "test was saved and the verdict written before this point.",
+                    SHUTDOWN_GRACE_MILLIS / 1000);
+            Runtime.getRuntime().halt(0);
+        }, "namesake-harness-shutdown-watchdog");
+        watchdog.setDaemon(true);
+        watchdog.start();
     }
 
     /** Stamps {@link #RESULT_FILE}. Never throws — a reporting failure must not fail the run. */
