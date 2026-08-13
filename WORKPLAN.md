@@ -1168,7 +1168,33 @@ about the instrument rather than about the mod.
   five defects were the previous run's leftovers changing the next one's numbers.
 
 **Ledger change.** Session 04 → done, session 05 → NEXT. A fourth verification instrument recorded,
-with the ruling that it gets no CI job and why. `DESIGN.md` §8's four numbers — 18 ms, 5.95 µs,
-100× and the 60–100 loaded ceiling — are now measured rather than assumed: three confirmed, and the
-100× wrong by two orders of magnitude in our favour and left exactly as it is. No changes to the
-16-session shape.
+with the ruling that it gets no CI job and why. `DESIGN.md` §8's four numbers — 18 ms, 5.95 µs, 100×
+and the 60–100 loaded ceiling — are now measured rather than assumed. No changes to the 16-session
+shape.
+
+**Ruled at close, by the owner.** Four, and two of them changed `DESIGN.md`:
+
+- **§8 is corrected rather than left to drift.** It now carries the measured numbers and points here
+  for the distributions and the conditions. Its stale survey line went with them — session 03 moved
+  the census onto the server thread at sixteen chunks a tick and §8 still said "once, off-thread, at
+  registration". Two documents disagreeing is the thing `CLAUDE.md` names as the problem, and the
+  session log is not a licence for the design document to be wrong.
+- **The 5.95 µs budget stands, re-ruled rather than inherited.** The measurement found ~35 ms of
+  real headroom and the budget was deliberately not raised to meet it. Session 05's weight table is
+  held to **125–225 ns per record visit**. Raise it when a payload has been priced and does not fit,
+  never the first time it pinches — a budget re-ruled the moment it binds is not a budget.
+- **"Only the server opens an interaction" is promoted into `DESIGN.md`**, parked since session 02.
+  It is load-bearing rather than incidental: the strictness in "every serverbound packet carries a
+  live token" is only free because the client can never ask for one, and an addon author needs that
+  before writing a verb. §2's Platform table, and the count goes 41 → 42.
+- **The census tail is recorded and not acted on.** One cold POI column read took 72 ms, but the
+  census is one-shot per place and only fires on first arrival somewhere new. It is a measured
+  number in this log now and the first thing to point at if a playtest reports a stutter on walking
+  into a new village. Lowering `CHUNKS_PER_TICK` would shrink the aggregate and cannot bound the
+  worst case, which is a single blocking disk read.
+
+**One gap, stated rather than glossed.** The measurement phases ran on both loaders and agreed
+within 2.1%. The population-and-costs phase ran on **Fabric only** — the census and
+`onPersonaLoaded` numbers above are one-loader evidence. Nothing in that path is loader-specific,
+which is exactly the reasoning that has been wrong three times in this project, so treat those two
+tables as Fabric's until somebody runs `-Pprofile=world` on NeoForge.

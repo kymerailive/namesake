@@ -1,7 +1,7 @@
 # DESIGN — Namesake
 
 What we are building and why. `WORKPLAN.md` owns *what happens next*; this owns *what it is*.
-41 decisions ruled, 0 open.
+42 decisions ruled, 0 open.
 
 **The thesis:** a deed witnessed by one villager changes what a different villager, in a different
 settlement, says to you later.
@@ -31,6 +31,7 @@ Enforce with a failing test, not intention.
 | Loaders | Fabric + NeoForge, hand-rolled multiloader (`common`/`fabric`/`neoforge`) |
 | Architecture | **Attach a Persona to the vanilla `Villager`.** Never replace the entity. |
 | Mod id / package | `namesake` / `net.namesake` |
+| Interactions | **Only the server ever opens one.** The client cannot ask; the server issues a token from the vanilla interact hook it has already reach-checked. That is what lets every serverbound packet require a live token with no bootstrap exemption — hard rule 6 is strict for free. An addon verb inherits this and must not work around it. |
 | License | LGPL-3.0 — addons may be any license; forks stay open |
 | LLM | Optional enrichment only. Nothing may depend on it. |
 | Addon API | Day one, narrow: professions, deed types, need types, gift data |
@@ -246,15 +247,43 @@ tick; with it, worst case ~6/tick. *Never expose "make everyone punctual" as a c
 | Witness scan | on deed emit — **never polled** |
 | Gossip drain | every 250 ticks |
 | Grievance escalation | 1×/in-game day, per settlement |
-| Settlement survey | once, off-thread, at registration |
+| Settlement survey | census on the server thread at 16 chunks/tick, scoring off-thread, once per place, ever |
 | Road edge A* | 1 edge/tick, off-thread, 16×16-chunk heightmap grid |
 
-**Our code: ~5.95 µs/tick — 3% of a 200 µs budget. But 400 loaded vanilla-brained villagers cost
-~18 ms/tick before we run.** We cannot fix that while attached, and shouldn't try.
+### What a tick actually costs — measured, session 04
+
+Every figure below was written here as an estimate before there was code to measure. Session 04
+measured them. **`WORKPLAN.md`'s session 04 log carries the distributions, the conditions and the
+five ways the measurement was wrong first**; these are the conclusions.
+
+| | |
+|---|---|
+| 400 loaded vanilla villagers | **14.75 ms/tick** mean, p95 19.40, p99 22.02. ~32 µs each, linear to 400. Fabric and NeoForge within 2.1%. |
+| …of which `villagerBrain` | **10.41 ms** — two thirds of a villager, and a quarter of that is pathfinding |
+| our sweep over 400 records | **1.2 µs/tick warm, 3.3 µs cold** |
+| our per-tick cost, 400 villagers loaded, no sweep | **zero calls** — not a small number |
+
+The ~18 ms this section carried is a tail of that distribution rather than its middle. **We still
+cannot fix vanilla's cost while attached, and still shouldn't try.**
+
+**Our budget stays ~5.95 µs/tick — re-ruled at the close of session 04 with the measurement in
+hand, not merely inherited.** The sweep frame already spends a fifth to a half of it, leaving
+**125–225 ns per record visit** for everything sessions 05–14 put in the payload. There is far more
+real headroom than that — 14.75 ms of a 50 ms tick leaves ~35 ms — and the budget is deliberately
+not raised to meet it. The discipline is the point. Raise it when a payload has been priced and
+does not fit, never the first time it pinches.
 
 **The architectural answer: the persona record is the authority.** Only 60–100 NPCs are ever loaded
-as entities; the other 300+ exist purely as records the bucket sweep advances. A virtual NPC is ~100×
-cheaper than a loaded one.
+as entities; the rest exist purely as records the bucket sweep advances. Measured, that is worth
+**3.3× of the tick** — 96 loaded plus 304 as records costs **4.51 ms**, against 14.75 ms for the
+same four hundred people all loaded. A virtual record is **~10,000× cheaper** than a loaded
+villager, not the ~100× this section guessed; that margin is headroom for a payload, not licence to
+spend it.
+
+**400 is a record count, not an entity count.** Seven real generated villages produced 52 personas,
+a median of nine each, and nowhere were more than **eleven** villagers loaded at once — so 400
+records is the state of a save after roughly fifty villages. It stays as the record target and as
+the deliberately pessimistic entity figure the architecture is sized against.
 
 ---
 
