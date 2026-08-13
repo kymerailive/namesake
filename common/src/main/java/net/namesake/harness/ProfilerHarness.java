@@ -15,7 +15,9 @@ import net.minecraft.tags.StructureTags;
 import net.minecraft.util.profiling.ProfileResults;
 import net.minecraft.util.profiling.ResultField;
 import net.minecraft.world.Difficulty;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.npc.Villager;
@@ -219,6 +221,12 @@ public final class ProfilerHarness {
      * with no records is our hooks, and {@code namesake 400 + 400} adds the sweep.
      */
     private static List<Cell> cells() {
+        if ("sections".equals(PHASE)) {
+            // One cell, because Minecraft's own metrics recorder stops itself ten seconds in and
+            // this phase exists only to read the section tree out of it. Five minutes rather than
+            // twenty when the question is "what is villagerBrain actually costing".
+            return List.of(new Cell("400 loaded, MC profiler recording", 16, 25, 0, false, true));
+        }
         if ("vanilla".equals(PHASE)) {
             return List.of(
                     new Cell("idle, no villagers", 0, 0, 0, false, false),
@@ -255,11 +263,12 @@ public final class ProfilerHarness {
             }
             if ("world".equals(PHASE)) {
                 runPopulation(server);
-            } else if ("vanilla".equals(PHASE) || "namesake".equals(PHASE)) {
+            } else if ("vanilla".equals(PHASE) || "namesake".equals(PHASE)
+                    || "sections".equals(PHASE)) {
                 runMeasurement(server);
             } else {
-                Namesake.LOGGER.error("[profile] unknown phase '{}'; expected vanilla, namesake or "
-                        + "world", PHASE);
+                Namesake.LOGGER.error("[profile] unknown phase '{}'; expected vanilla, namesake, "
+                        + "sections or world", PHASE);
                 record(false, "unknown phase '" + PHASE + "'");
                 finish(server, false);
             }
@@ -467,15 +476,20 @@ public final class ProfilerHarness {
 
     /** Rebuilds the world to match a cell: this many villagers at these sites, these records. */
     private static void populate(MinecraftServer server, ServerLevel level, Cell target) {
-        for (Villager villager : villagersInGrid(level)) {
-            // Vanilla releases a villager's points of interest in Villager#die and nowhere else, so
-            // a discarded villager keeps its workstation and its bed claimed forever. Tearing a
-            // cell down without this leaks a ticket per employed villager into the world's POI
-            // file, and the next cell finds those workstations occupied by nobody: employment fell
-            // from 95/96 to 52/200 across a run and every tick time after that was measuring a
-            // village of the unemployed. Nothing threw. Found by reading the employment column.
-            releasePois(villager);
-            villager.discard();
+        // Every mob, not just the villagers. Villagers with beds and jobs spawn iron golems, and a
+        // teardown that only removed villagers left the golems behind — so each cell inherited
+        // every golem the cells before it had produced, and the second launch inherited the first
+        // launch's as well. That drift is what made two hundred villagers cost 15.5 ms in one
+        // phase and 8.8 ms in the other with no code between them doing anything per tick.
+        for (Mob mob : level.getEntitiesOfClass(Mob.class, gridBox())) {
+            if (mob instanceof Villager villager) {
+                // Vanilla releases a villager's points of interest in Villager#die and nowhere
+                // else, so a discarded villager keeps its workstation and its bed claimed forever.
+                // Without this, employment fell from 95/96 to 52/200 across one run and every tick
+                // time after that was measuring a village of the unemployed. Nothing threw.
+                releasePois(villager);
+            }
+            mob.discard();
         }
         SUBJECTS.clear();
         for (int siteIndex = 0; siteIndex < target.sites(); siteIndex++) {
@@ -603,6 +617,16 @@ public final class ProfilerHarness {
                             + " hold a workstation, so the brain has work to do");
         }
 
+        // What else is in the world, because a cell is only comparable to another cell that had
+        // the same things in it. The two measurement phases are separate launches sharing one
+        // save, so anything the first left behind — golems, dropped items, animals that wandered
+        // in — is in the second's numbers, and a tick time is not evidence of our cost until that
+        // has been ruled out rather than assumed.
+        REPORT.add("  also in the grid    " + entityCensus(server.overworld()));
+        REPORT.add("  registry            "
+                + NpcRegistry.get(server).size() + " persona(s), "
+                + NpcRegistry.get(server).settlements().size() + " settlement(s)");
+
         REPORT.addAll(Meters.report());
         if (cell.records() > 0) {
             REPORT.add("  sweep sink          " + SyntheticPersonas.SINK
@@ -659,10 +683,12 @@ public final class ProfilerHarness {
      */
     private static void walk(ProfileResults results, String path, int depth, long nanos, int ticks,
                              Map<String, ResultField> wanted) {
-        // Nine, not six. A villager's own sections sit at root.tick.levels.<level>.tick.entities.
-        // tick.minecraft:villager.sensing — eight deep — and the first run of this cut the tree off
-        // one level above them and printed "not reported" for every section the session is about.
-        if (depth > 9) {
+        // Twelve, and it took two runs to find out why. A villager's own sections are deeper than
+        // they look: root.tick.levels.<level>.tick.entities.tick.minecraft:villager.ai.newAi.
+        // mob tick.villagerBrain is eleven, because LivingEntity#tick pushes "ai" and "newAi"
+        // around serverAiStep before Mob pushes anything. A tree cut off one level short prints
+        // "not reported" for the exact section this session is named after.
+        if (depth > 12) {
             return;
         }
         List<ResultField> fields = results.getTimes(path);
@@ -923,6 +949,20 @@ public final class ProfilerHarness {
         }
     }
 
+    /** Every entity type in the measurement grid and how many of each, commonest first. */
+    private static String entityCensus(ServerLevel level) {
+        Map<String, Integer> counts = new LinkedHashMap<>();
+        for (Entity entity : level.getEntities((Entity) null,
+                gridBox(), e -> true)) {
+            counts.merge(EntityType.getKey(entity.getType()).getPath(), 1, Integer::sum);
+        }
+        return counts.entrySet().stream()
+                .sorted((a, b) -> Integer.compare(b.getValue(), a.getValue()))
+                .limit(10)
+                .map(entry -> entry.getValue() + " " + entry.getKey())
+                .collect(java.util.stream.Collectors.joining(", "));
+    }
+
     /** Everything {@code Villager#releaseAllPois} releases, which is private and only runs on death. */
     private static void releasePois(Villager villager) {
         villager.releasePoi(MemoryModuleType.HOME);
@@ -980,9 +1020,8 @@ public final class ProfilerHarness {
         return true;
     }
 
-    private static List<Villager> villagersInGrid(ServerLevel level) {
-        return level.getEntitiesOfClass(Villager.class,
-                new AABB(gridCentre).inflate(SITE_GRID * SITE_SPACING + 160));
+    private static AABB gridBox() {
+        return new AABB(gridCentre).inflate(SITE_GRID * SITE_SPACING + 160);
     }
 
     /**

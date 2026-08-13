@@ -36,3 +36,6 @@ desktop.ini
 # Local secrets / machine-specific
 .env
 *.local.properties
+
+# Profiler run transcripts. The numbers that matter go in WORKPLAN.md; these are scratch.
+*.gradle.log

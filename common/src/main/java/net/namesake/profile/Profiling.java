@@ -15,6 +15,9 @@ package net.namesake.profile;
  *       Minecraft with villagers in it and none of our code. Hard rule 4's baseline.</li>
  *   <li>{@code namesake} — the same world, the same villager counts, our hooks live. The
  *       difference between the two is what we cost.</li>
+ *   <li>{@code sections} — {@code vanilla}'s last cell on its own, for reading Minecraft's own
+ *       section tree. Its metrics recorder stops itself ten seconds in, so the other five cells are
+ *       twenty minutes of nothing when that tree is the only question.</li>
  *   <li>{@code world} — a real generated world, visited village by village, to find out what
  *       population a save actually produces and what the session 03 costs do in one.</li>
  * </ul>
@@ -37,7 +40,7 @@ public final class Profiling {
      * rather than the mod. The only way to get that is to be able to switch ourselves off, so this
      * switch is part of the mod rather than part of the harness.
      */
-    public static final boolean MOD_INERT = "vanilla".equals(PHASE);
+    public static final boolean MOD_INERT = "vanilla".equals(PHASE) || "sections".equals(PHASE);
 
     private Profiling() {
     }
