@@ -136,7 +136,23 @@ public final class NpcRegistry extends SavedData {
         return persona;
     }
 
+    /**
+     * Writes a persona into the registry.
+     *
+     * <p>Refuses an id in {@link Persona#PROFILING_NAMESPACE}. Session 04 builds hundreds of
+     * fixture records to time a sweep over them, and a fixture that reached this map would be
+     * saved, reloaded and indistinguishable from a person — a silent corruption rather than a
+     * loud one. The fixtures are held in the profiler's own list and never offered here; this is
+     * the door that makes that a property of the code rather than of the harness remembering to
+     * tidy up after a run it may not have finished.
+     */
     public void put(Persona persona) {
+        if (Persona.isReservedForProfiling(persona.id())) {
+            Namesake.LOGGER.error(
+                    "Refused to store persona {}: that id is reserved for profiling fixtures and "
+                            + "must never reach a save file. Nothing was written.", persona.id());
+            return;
+        }
         personas.put(persona.id(), persona);
         setDirty();
     }
@@ -233,6 +249,15 @@ public final class NpcRegistry extends SavedData {
         tag.putInt(NpcSchema.KEY_VERSION, NpcSchema.CURRENT);
         ListTag list = new ListTag();
         for (Persona persona : personas.values()) {
+            if (Persona.isReservedForProfiling(persona.id())) {
+                // The backstop to the one in put(). Two doors rather than one because the thing
+                // being guarded against is silent: a fixture on disk loads perfectly and reads as
+                // a person forever after.
+                Namesake.LOGGER.error(
+                        "Persona {} is a profiling fixture and is being dropped rather than saved. "
+                                + "It should never have reached the registry.", persona.id());
+                continue;
+            }
             CompoundTag entry = (CompoundTag) Persona.CODEC
                     .encodeStart(NbtOps.INSTANCE, persona)
                     .getOrThrow(error -> new IllegalStateException(

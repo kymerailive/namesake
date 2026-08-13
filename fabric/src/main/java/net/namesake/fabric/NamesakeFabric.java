@@ -12,6 +12,7 @@ import net.minecraft.world.InteractionResult;
 import net.namesake.Namesake;
 import net.namesake.command.NamesakeCommands;
 import net.namesake.harness.AttachBetHarness;
+import net.namesake.harness.ProfilerHarness;
 import net.namesake.npc.PersonaService;
 import net.namesake.settlement.SettlementRegistrar;
 import net.namesake.verb.Interactions;
@@ -67,6 +68,7 @@ public final class NamesakeFabric implements ModInitializer {
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             SettlementRegistrar.onServerTick(server);
             AttachBetHarness.onServerTick(server);
+            ProfilerHarness.onServerTick(server);
         });
     }
 }

@@ -12,6 +12,9 @@ import net.minecraft.world.level.Level;
 import net.namesake.Namesake;
 import net.namesake.npc.NpcRegistry;
 import net.namesake.npc.Personas;
+import net.namesake.profile.Meter;
+import net.namesake.profile.Meters;
+import net.namesake.profile.Profiling;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -95,6 +98,10 @@ public final class SettlementRegistrar {
 
     /** Hooked to the end of every server tick by both loaders. */
     public static void onServerTick(MinecraftServer server) {
+        if (Profiling.MOD_INERT) {
+            // Hard rule 4's baseline: the same world with none of our code in it. See Profiling.
+            return;
+        }
         if (scoring) {
             return;
         }
@@ -114,14 +121,37 @@ public final class SettlementRegistrar {
             active = new Scan(level, next.origin(), next.cell());
         }
 
+        long begun = Meters.now();
         active.step(CHUNKS_PER_TICK);
+        if (Profiling.ENABLED) {
+            // What a survey costs the tick it is running in. Session 03 shipped this spread at
+            // sixteen chunks a tick and recorded it as "bounded and one-shot, but unmeasured".
+            STEP.end(begun);
+        }
         if (!active.done()) {
             return;
         }
         Scan finished = active;
         active = null;
+        if (Profiling.ENABLED) {
+            SURVEY_TICKS.record(finished.ticksSpent);
+            Meters.count("SettlementRegistrar chunks censused", finished.chunksRead);
+        }
         onCensusComplete(server, finished);
     }
+
+    private static final Meter STEP =
+            Profiling.ENABLED ? Meters.meter("SettlementRegistrar step (" + CHUNKS_PER_TICK + " chunks)") : null;
+
+    private static final Meter CHUNK =
+            Profiling.ENABLED ? Meters.meter("PoiManager.getInChunk (one chunk column)") : null;
+
+    /** Not a duration — the tick count a whole census took, recorded through the same histogram. */
+    private static final Meter SURVEY_TICKS =
+            Profiling.ENABLED ? Meters.meter("census duration, in server ticks") : null;
+
+    private static final Meter SCORING =
+            Profiling.ENABLED ? Meters.meter("SettlementSurvey.score (off-thread)") : null;
 
     /** Clears per-run state. Tokens, buckets and probes do not outlive a server. */
     public static void onServerStopping() {
@@ -162,9 +192,19 @@ public final class SettlementRegistrar {
         scoring = true;
         Util.backgroundExecutor().execute(() -> {
             try {
+                long begun = Meters.now();
                 SettlementSurvey.Tally tally = scan.census.tally(bell, SettlementSurvey.SURVEY_RADIUS);
                 SettlementSurvey.Survey survey = SettlementSurvey.score(tally);
-                server.execute(() -> commit(server, scan, bell, tally, survey));
+                // Measured here and recorded on the server thread. A meter written from two
+                // threads would need a lock, and a lock inside an instrument changes what it
+                // measures — so the duration crosses the boundary, not the meter.
+                long spent = Profiling.ENABLED ? System.nanoTime() - begun : 0L;
+                server.execute(() -> {
+                    if (Profiling.ENABLED) {
+                        SCORING.record(spent);
+                    }
+                    commit(server, scan, bell, tally, survey);
+                });
             } catch (RuntimeException e) {
                 Namesake.LOGGER.error("Settlement survey around {} failed to score",
                         bell.toShortString(), e);
@@ -245,6 +285,8 @@ public final class SettlementRegistrar {
         private final int maxZ;
         private int cursorX;
         private int cursorZ;
+        private int chunksRead;
+        private int ticksSpent;
 
         Scan(ServerLevel level, BlockPos origin, long cell) {
             this.level = level;
@@ -266,10 +308,19 @@ public final class SettlementRegistrar {
 
         void step(int chunks) {
             PoiManager poi = level.getPoiManager();
+            ticksSpent++;
             for (int i = 0; i < chunks && !done(); i++) {
+                // Timed one chunk column at a time rather than sixteen at once, because the shape
+                // of this cost is the point: PoiManager reads a whole column off disk on a miss,
+                // so the interesting number is not the mean but the tail.
+                long begun = Meters.now();
                 poi.getInChunk(holder -> holder.is(PoiTypeTags.VILLAGE),
                                 new ChunkPos(cursorX, cursorZ), PoiManager.Occupancy.ANY)
                         .forEach(record -> census.record(record.getPoiType(), record.getPos()));
+                if (Profiling.ENABLED) {
+                    CHUNK.end(begun);
+                }
+                chunksRead++;
                 if (++cursorX > maxX) {
                     cursorX = minX;
                     cursorZ++;

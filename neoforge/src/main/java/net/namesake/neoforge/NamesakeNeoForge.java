@@ -5,6 +5,7 @@ import net.minecraft.world.InteractionResult;
 import net.namesake.Namesake;
 import net.namesake.command.NamesakeCommands;
 import net.namesake.harness.AttachBetHarness;
+import net.namesake.harness.ProfilerHarness;
 import net.namesake.npc.PersonaService;
 import net.namesake.platform.VerbTransport;
 import net.namesake.settlement.SettlementRegistrar;
@@ -115,5 +116,6 @@ public final class NamesakeNeoForge {
     private static void onServerTick(ServerTickEvent.Post event) {
         SettlementRegistrar.onServerTick(event.getServer());
         AttachBetHarness.onServerTick(event.getServer());
+        ProfilerHarness.onServerTick(event.getServer());
     }
 }

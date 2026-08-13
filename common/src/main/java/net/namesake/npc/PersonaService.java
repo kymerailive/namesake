@@ -7,6 +7,9 @@ import net.minecraft.world.entity.monster.ZombieVillager;
 import net.minecraft.world.entity.npc.Villager;
 import net.namesake.Namesake;
 import net.namesake.platform.PersonaLink;
+import net.namesake.profile.Meter;
+import net.namesake.profile.Meters;
+import net.namesake.profile.Profiling;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -51,9 +54,28 @@ public final class PersonaService {
      * the identity and makes the loss visible in the log instead.
      */
     public static void onEntityLoad(Entity entity) {
+        if (Profiling.MOD_INERT) {
+            // Hard rule 4's baseline: the same world with none of our code in it. See Profiling.
+            return;
+        }
         if (!(entity.level() instanceof ServerLevel level) || !isPersonaCarrier(entity)) {
             return;
         }
+        long begun = Meters.now();
+        try {
+            mint(level, entity);
+        } finally {
+            if (Profiling.ENABLED) {
+                ENTITY_LOAD.end(begun);
+                Meters.count("PersonaService.onEntityLoad calls");
+            }
+        }
+    }
+
+    private static final Meter ENTITY_LOAD =
+            Profiling.ENABLED ? Meters.meter("PersonaService.onEntityLoad") : null;
+
+    private static void mint(ServerLevel level, Entity entity) {
         NpcRegistry registry = NpcRegistry.get(level);
         Optional<UUID> linked = PersonaLink.get().personaId(entity);
 

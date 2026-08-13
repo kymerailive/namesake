@@ -25,11 +25,19 @@ dependencies {
 // inert unless this property is set, and it must stay that way — it rewrites game rules, moves the
 // player and kills a villager.
 //   .\gradlew.bat :fabric:runClient -Pharness=setup
+// The session 04 profiler is a second, independent switch:
+//   .\gradlew.bat :fabric:runClient -Pprofile=vanilla
+// Deliberately its own property rather than another phase of -Pharness. The attach-bet harness runs
+// on every push and is the thing standing between us and a silent persistence regression; a
+// measurement run has no business being able to arm it by typo.
 loom {
     runs {
         client {
             if (project.hasProperty('harness')) {
                 property('namesake.harness', project.property('harness').toString())
+            }
+            if (project.hasProperty('profile')) {
+                property('namesake.profile', project.property('profile').toString())
             }
         }
     }

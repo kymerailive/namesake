@@ -79,6 +79,33 @@ public record Persona(
      */
     public static final byte UNASSIGNED_CULTURE = -1;
 
+    /**
+     * The high half of every persona id that exists only to be measured.
+     *
+     * <p><b>Why this is in {@code Persona} and not in the profiler that uses it.</b> Session 04
+     * creates hundreds of fake persona records to time a sweep over them, and
+     * {@link NpcRegistry} writes to disk. Four hundred fixtures left in a save are not a schema
+     * break — they are worse, because they load without complaint and look exactly like people.
+     * The rule "an id in this range must never be persisted" therefore belongs to the identity
+     * itself, and {@code NpcRegistry} enforces it at both doors rather than trusting a harness to
+     * tidy up after a run that may have crashed.
+     *
+     * <p>Disjoint from a real id by construction, not by luck: {@code UUID.randomUUID} sets the
+     * version nibble to 4 and this constant leaves it 0, so no minted persona can ever collide
+     * with the range however many are minted.
+     */
+    public static final long PROFILING_NAMESPACE = 0x7E57_0000_5EED_0000L;
+
+    /** An id in the reserved range. {@code index} distinguishes one fixture from another. */
+    public static UUID profilingId(long index) {
+        return new UUID(PROFILING_NAMESPACE, index);
+    }
+
+    /** True for a fixture id, which must never reach a save file. */
+    public static boolean isReservedForProfiling(UUID id) {
+        return id.getMostSignificantBits() == PROFILING_NAMESPACE;
+    }
+
     private static final Codec<byte[]> TRAITS_CODEC = Codec.BYTE_BUFFER.xmap(
             buffer -> {
                 byte[] copy = new byte[buffer.remaining()];

@@ -8,6 +8,9 @@ import net.namesake.Namesake;
 import net.namesake.culture.Cultures;
 import net.namesake.culture.Names;
 import net.namesake.platform.PersonaLink;
+import net.namesake.profile.Meter;
+import net.namesake.profile.Meters;
+import net.namesake.profile.Profiling;
 import net.namesake.settlement.Settlement;
 import net.namesake.settlement.SettlementRegistrar;
 import net.namesake.settlement.SettlementSurvey;
@@ -50,40 +53,98 @@ public final class Personas {
     }
 
     /**
+     * What one call to {@link #onPersonaLoaded} actually did.
+     *
+     * <p><b>Returned rather than inferred, because session 03 left a claim here that needed
+     * counting.</b> Its log says this method "returns on its first line for anyone already
+     * generated and settled, which is everybody, almost always". The first half is easy to read off
+     * the source; the second half is a claim about a distribution, and a fast branch taken three
+     * times in a hundred is worth nothing. Naming the outcomes is what lets session 04 count them
+     * instead of agreeing with the comment.
+     */
+    public enum Outcome {
+        /** Already a person, already a resident. Two field reads and a return. */
+        SETTLED,
+        /** Already a person, and standing in a settlement they did not belong to before. */
+        MOVED_IN,
+        /**
+         * Already a person, still nobody's resident — and therefore paying a scan of the whole
+         * settlement table on every chunk load, for the life of the world.
+         */
+        STILL_UNSETTLED,
+        /** Not yet a person, and there is a settlement here to make them one of. */
+        GENERATED_IN_SETTLEMENT,
+        /** Not yet a person, and this area is surveyed and has no bell. Nobody's resident. */
+        GENERATED_UNSETTLED,
+        /** Not yet a person, and a survey has been asked for. They generate when it lands. */
+        AWAITING_SURVEY
+    }
+
+    /** One meter per outcome, built only when the profiler is armed. */
+    private static final Meter[] OUTCOMES = Profiling.ENABLED ? outcomeMeters() : null;
+
+    private static Meter[] outcomeMeters() {
+        Outcome[] values = Outcome.values();
+        Meter[] meters = new Meter[values.length];
+        for (int i = 0; i < values.length; i++) {
+            meters[i] = Meters.meter("Personas.onPersonaLoaded " + values[i]);
+        }
+        return meters;
+    }
+
+    /**
      * Called for every persona whose villager has just entered the world.
      *
      * <p>Three cases: already a person and settled — nothing to do; already a person but
      * unsettled — record it if they are standing in a settlement now; not yet a person — generate
      * them, which may have to wait for a survey.
+     *
+     * @return which of those actually happened, so it can be counted rather than assumed
      */
-    public static void onPersonaLoaded(ServerLevel level, NpcRegistry registry, Persona persona,
-                                       BlockPos pos) {
+    public static Outcome onPersonaLoaded(ServerLevel level, NpcRegistry registry, Persona persona,
+                                          BlockPos pos) {
+        if (!Profiling.ENABLED) {
+            return load(level, registry, persona, pos);
+        }
+        long begun = System.nanoTime();
+        Outcome outcome = load(level, registry, persona, pos);
+        OUTCOMES[outcome.ordinal()].end(begun);
+        return outcome;
+    }
+
+    private static Outcome load(ServerLevel level, NpcRegistry registry, Persona persona,
+                                BlockPos pos) {
         if (persona.isGenerated()) {
-            if (persona.settlementId() == Persona.UNASSIGNED) {
-                // Only the settlement changes. Culture, household and traits are who they are, and
-                // an immigrant keeps their birth culture and their family name — which is the whole
-                // reason a persona stores a culture of its own rather than borrowing its
-                // settlement's. Session 28's migration inherits this behaviour rather than
-                // replacing it.
-                settlementAt(registry, level, pos).ifPresent(settlement -> {
-                    registry.put(persona.withSettlement(settlement.id()));
-                    Namesake.LOGGER.debug("Persona {} moved into settlement {}",
-                            persona.id(), settlement.id());
-                });
+            if (persona.settlementId() != Persona.UNASSIGNED) {
+                return Outcome.SETTLED;
             }
-            return;
+            // Only the settlement changes. Culture, household and traits are who they are, and
+            // an immigrant keeps their birth culture and their family name — which is the whole
+            // reason a persona stores a culture of its own rather than borrowing its
+            // settlement's. Session 28's migration inherits this behaviour rather than
+            // replacing it.
+            Optional<Settlement> moved = settlementAt(registry, level, pos);
+            if (moved.isEmpty()) {
+                return Outcome.STILL_UNSETTLED;
+            }
+            registry.put(persona.withSettlement(moved.get().id()));
+            Namesake.LOGGER.debug("Persona {} moved into settlement {}",
+                    persona.id(), moved.get().id());
+            return Outcome.MOVED_IN;
         }
 
         Optional<Settlement> home = settlementAt(registry, level, pos);
         if (home.isPresent()) {
             generate(level, registry, persona, pos);
-            return;
+            return Outcome.GENERATED_IN_SETTLEMENT;
         }
         if (!SettlementRegistrar.request(level, pos)) {
             // This area has already been surveyed and has no bell in it. They are nobody's
             // resident, which is a real answer — not a reason to leave them blank.
             generate(level, registry, persona, pos);
+            return Outcome.GENERATED_UNSETTLED;
         }
+        return Outcome.AWAITING_SURVEY;
     }
 
     /**

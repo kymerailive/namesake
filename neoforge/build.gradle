@@ -29,6 +29,11 @@ neoForge {
             if (project.hasProperty('harness')) {
                 systemProperty('namesake.harness', project.property('harness').toString())
             }
+            // Session 04's profiler, on its own switch. See the note in fabric/build.gradle.
+            //   .\gradlew.bat :neoforge:runClient -Pprofile=vanilla
+            if (project.hasProperty('profile')) {
+                systemProperty('namesake.profile', project.property('profile').toString())
+            }
         }
         server {
             server()
