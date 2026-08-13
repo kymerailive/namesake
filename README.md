@@ -13,8 +13,9 @@ in a different settlement, says to you later.
 
 ## Status
 
-**Pre-alpha. Not playable.** Session 00 of a planned 16-session build to a vertical slice.
-See [`WORKPLAN.md`](WORKPLAN.md) for what is built and what is next.
+**Pre-alpha. Not playable.** Session 01 of a planned 16-session build to a vertical slice.
+Villagers carry a persistent identity that survives save, chunk unload and zombification; nothing
+reads it yet. See [`WORKPLAN.md`](WORKPLAN.md) for what is built and what is next.
 
 ## Design
 
@@ -56,6 +57,20 @@ Requires JDK 21.
 ./gradlew :fabric:runClient               # dev client, Fabric
 ./gradlew :neoforge:runClient             # dev client, NeoForge
 ```
+
+### The attach-bet harness
+
+Some claims can only be checked by playing the game: that a persona survives a chunk unload, a
+save/quit/reload, and being zombified and cured. `-Pharness` drives a real client through all of it
+and prints a pass/fail line per leg.
+
+```bash
+./gradlew :fabric:runClient -Pharness=setup    # build the subjects, then save and quit
+./gradlew :fabric:runClient -Pharness=verify   # reopen and check they came back unchanged
+```
+
+It creates its own world (`namesake_attachbet`), and it is inert without the flag — it rewrites game
+rules, moves the player and kills a villager, so it must never run in a real world.
 
 ## Relationship to Minecraft Comes Alive
 
