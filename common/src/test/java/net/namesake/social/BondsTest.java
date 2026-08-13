@@ -40,7 +40,7 @@ class BondsTest {
     @DisplayName("every field survives a save and a load")
     void everyFieldSurvivesARoundTrip() {
         Bonds written = new Bonds();
-        Bond anna = bond(-30, 61, 12, 4, 88, 74).apply(new int[]{2, 0, 0, 0}, 88);
+        Bond anna = bond(-30, 61, 12, 4, 88, 74).apply(new int[]{2, 0, 0, 0}, 88, Bond.DAILY_CAP);
         written.put(ANNA, PLAYER, anna);
         written.put(BRAM, PLAYER, bond(5, 0, -64, 100, 3, 0));
 

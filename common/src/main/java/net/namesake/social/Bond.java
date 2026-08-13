@@ -63,11 +63,17 @@ public record Bond(
     private static final int CEILING = 100;
 
     /**
-     * How much one axis may gain from one party in one in-game day.
+     * How much one axis may gain from one party in one in-game day, <b>for a typical villager</b>.
      *
      * <p>The single most load-bearing number in the social system: without it the shortest path to
      * a village that loves you is to stand in the square handing out bread until it does, and every
      * threshold session 07 measures would be measuring how long somebody was willing to click.
+     *
+     * <p><b>A base rather than a constant, from the close of session 05.</b> Personality scales it —
+     * see {@link Personality#allowance} — so a receptive villager's day is worth about ten and a
+     * closed one's about six. That is where personality lives now, because scaling only the
+     * per-deed step was erased the moment a player gave enough gifts to fill the cap: everybody
+     * converged on the same eight and personality decided nothing but how many gifts it took.
      *
      * <p>Eight is provisional and is <b>due for calibration against session 07's earn-rate
      * histogram</b>, not against anyone's intuition — that is the mistake LNK made when it set skill
@@ -176,13 +182,18 @@ public record Bond(
      * brought up to {@code day} — which resets the allowance if the day turned — and only then is
      * the delta spent against what remains of it.
      *
-     * @param delta four signed values in axis order, already weighted by {@link Deeds#deltaFor}
-     * @param day   the in-game day the deed happened on
+     * @param delta     four signed values in axis order, already weighted by {@link Deeds#deltaFor}
+     * @param day       the in-game day the deed happened on
+     * @param allowance how much this axis may gain today — {@link Personality#allowance} for a real
+     *                  villager, {@link #DAILY_CAP} for anything that has no persona to ask.
+     *                  Clamped to what the four-bit counters can hold; the build-time guard that
+     *                  the clamp can never engage is in {@code BondTest}.
      */
-    public Bond apply(int[] delta, int day) {
+    public Bond apply(int[] delta, int day, int allowance) {
         if (delta.length != AXIS_COUNT) {
             throw new IllegalArgumentException("A bond delta has " + AXIS_COUNT + " axes, got " + delta.length);
         }
+        int capped = Math.max(0, Math.min(NIBBLE_MASK, allowance));
         Bond base = decayedTo(day);
 
         int[] axes = {base.trust, base.warmth, base.respect, base.fear};
@@ -203,7 +214,7 @@ public record Bond(
                 continue;
             }
             int already = (gained >> (axis * NIBBLE_BITS)) & NIBBLE_MASK;
-            int allowed = Math.min(change, DAILY_CAP - already);
+            int allowed = Math.min(change, capped - already);
             if (allowed <= 0) {
                 continue;
             }

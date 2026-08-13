@@ -40,6 +40,7 @@ import net.namesake.social.Bond;
 import net.namesake.social.Deed;
 import net.namesake.social.DeedBus;
 import net.namesake.social.DeedType;
+import net.namesake.social.Personality;
 import net.namesake.verb.ClientInteractionState;
 import net.namesake.verb.ClientPacketSink;
 import net.namesake.verb.GreetPayload;
@@ -462,11 +463,17 @@ public final class AttachBetHarness {
                 witnessOutOfRange = RESIDENTS.get(5).personaId();
                 place(server, level, witnessOutOfRange, stand.getX() + 0.5, stand.getY() + 40, stand.getZ() + 0.5);
 
-                // Neutral personalities, so the numbers under test are the structural ones.
+                // Typical personalities, so the numbers under test are the structural ones.
+                //
+                // Deliberately Personality.typical() rather than eight zeroes. Since the close of
+                // session 05 the weight table is centred on the population the generator actually
+                // produces, so a villager with no personality at all scores *below* nominal — the
+                // reference point is the average villager, not an impossible one. Zeroing here
+                // would make the exit criterion read +2/+1 and look like a broken cap.
                 NpcRegistry registry = NpcRegistry.get(server);
                 for (Resident resident : RESIDENTS) {
                     registry.persona(resident.personaId()).ifPresent(persona ->
-                            registry.put(persona.withTraits(new byte[Persona.TRAIT_COUNT])));
+                            registry.put(persona.withTraits(Personality.typical())));
                 }
                 beginAwait(400);
             }

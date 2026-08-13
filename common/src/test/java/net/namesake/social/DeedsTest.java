@@ -23,9 +23,18 @@ class DeedsTest {
 
     private static final int DAY = 12;
 
-    /** A villager of settlement {@code home} with the given axes, zero for any not supplied. */
+    /**
+     * A villager of settlement {@code home}, <b>typical unless axes are supplied</b>.
+     *
+     * <p>The base is {@code Personality.typical()} rather than eight zeroes, and that is the whole
+     * of what centring changed for these tests. Since the close of session 05 the weight table is
+     * centred on the population the generator actually produces, so nominal is what a <i>real</i>
+     * villager gets — a villager with no personality at all now scores below it, because no such
+     * villager exists. Every test below that expects a nominal number therefore asks for a typical
+     * person, and every test about a specific personality supplies all eight axes.
+     */
     private static Persona person(long seed, int home, int... axes) {
-        byte[] traits = new byte[Persona.TRAIT_COUNT];
+        byte[] traits = Personality.typical();
         for (int axis = 0; axis < axes.length; axis++) {
             traits[axis] = (byte) axes[axis];
         }
@@ -73,14 +82,17 @@ class DeedsTest {
     }
 
     @Test
-    @DisplayName("a villager with no traits scores exactly nominal")
-    void neutralTraitsGiveTheNominalNumbers() {
-        Persona neutral = person(4, 0);
+    @DisplayName("a typical villager scores exactly nominal, on every deed type")
+    void typicalTraitsGiveTheNominalNumbers() {
+        // The point of centring: the numbers in DeedType are what a real villager gets, not what an
+        // impossible one would. Before session 05's close this held for eight zeroes instead, and
+        // the population sat 4% above nominal on a gift and 13% above on a defended raid.
+        Persona typical = person(4, 0);
         for (DeedType type : DeedType.values()) {
-            int[] delta = Deeds.deltaFor(doneTo(type, 0, neutral), neutral);
+            int[] delta = Deeds.deltaFor(doneTo(type, 0, typical), typical);
             for (int axis = 0; axis < Bond.AXIS_COUNT; axis++) {
                 assertEquals(type.delta(axis), delta[axis],
-                        type + " axis " + axis + " must be its own nominal value at neutral");
+                        type + " axis " + axis + " must be its own nominal value for a typical villager");
             }
         }
     }
@@ -197,8 +209,12 @@ class DeedsTest {
         int[] toInnkeeper = Deeds.deltaFor(doneTo(DeedType.GIFT_WANTED, 1, innkeeper), innkeeper);
 
         assertArrayEquals(new int[]{1, 2, 0, 0}, toSmith);
-        assertArrayEquals(new int[]{3, 5, 0, 0}, toInnkeeper);
-        assertTrue(toInnkeeper[Bond.WARMTH] > toSmith[Bond.WARMTH] * 2,
+        assertArrayEquals(new int[]{3, 4, 0, 0}, toInnkeeper);
+        assertTrue(toInnkeeper[Bond.WARMTH] - toSmith[Bond.WARMTH] >= 2,
                 "the difference has to be big enough for a person to notice, not just for a test");
+        // And the fixtures are extremes I chose. PersonalityDistributionTest is what says whether
+        // the villagers a real world generates differ by anything like this much — a playtest at
+        // the close of session 05 found they span about half of it, which is what moved personality
+        // onto the daily ceiling as well as the step.
     }
 }

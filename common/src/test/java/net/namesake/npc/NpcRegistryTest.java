@@ -326,7 +326,7 @@ class NpcRegistryTest {
         assertTrue(registry.isDirty());
         registry.setDirty(false);
 
-        Bond bond = Bond.fresh(40).apply(new int[]{3, 3, 0, 0}, 40);
+        Bond bond = Bond.fresh(40).apply(new int[]{3, 3, 0, 0}, 40, Bond.DAILY_CAP);
         registry.putBond(personaId, A_PLAYER, bond);
 
         // CLAUDE.md's note for this session: a SavedData is only written when it is dirty, so a
@@ -348,7 +348,7 @@ class NpcRegistryTest {
         registry.put(stamped(bram, 3, 1L, (byte) 0));
         registry.setDirty(false);
 
-        registry.putBond(anna, bram, Bond.fresh(1).apply(new int[]{5, 0, 0, 0}, 1));
+        registry.putBond(anna, bram, Bond.fresh(1).apply(new int[]{5, 0, 0, 0}, 1, Bond.DAILY_CAP));
 
         // Session 05 decision 1: the key is general so session 16 needs no migration, and the
         // population is restricted because an NPC-to-NPC bond has no consumer until then. Twelve
@@ -358,7 +358,7 @@ class NpcRegistryTest {
         assertFalse(registry.isDirty(), "and a refusal must not dirty the file either");
 
         // The same bond about somebody the registry has never heard of — a player — goes through.
-        registry.putBond(anna, A_PLAYER, Bond.fresh(1).apply(new int[]{5, 0, 0, 0}, 1));
+        registry.putBond(anna, A_PLAYER, Bond.fresh(1).apply(new int[]{5, 0, 0, 0}, 1, Bond.DAILY_CAP));
         assertEquals(1, registry.bonds().size());
     }
 
@@ -368,7 +368,7 @@ class NpcRegistryTest {
         NpcRegistry registry = new NpcRegistry();
         UUID personaId = UUID.randomUUID();
         registry.put(stamped(personaId, 3, 1L, (byte) 0));
-        registry.putBond(personaId, A_PLAYER, Bond.fresh(1).apply(new int[]{5, 0, 0, 0}, 1));
+        registry.putBond(personaId, A_PLAYER, Bond.fresh(1).apply(new int[]{5, 0, 0, 0}, 1, Bond.DAILY_CAP));
         registry.setDirty(false);
 
         assertTrue(registry.remove(personaId));
@@ -383,7 +383,7 @@ class NpcRegistryTest {
         NpcRegistry good = new NpcRegistry();
         UUID personaId = UUID.randomUUID();
         good.put(stamped(personaId, 3, 1L, (byte) 0));
-        good.putBond(personaId, A_PLAYER, Bond.fresh(1).apply(new int[]{5, 0, 0, 0}, 1));
+        good.putBond(personaId, A_PLAYER, Bond.fresh(1).apply(new int[]{5, 0, 0, 0}, 1, Bond.DAILY_CAP));
         CompoundTag tag = good.save(new CompoundTag(), null);
 
         tag.getList("bonds", Tag.TAG_COMPOUND).add(new CompoundTag());

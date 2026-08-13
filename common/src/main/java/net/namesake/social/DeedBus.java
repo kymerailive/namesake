@@ -199,7 +199,9 @@ public final class DeedBus {
 
         Optional<Bond> existing = registry.bonds().stored(persona.id(), deed.actor());
         Bond before = existing.orElseGet(() -> Bond.fresh(deed.gameDay()));
-        Bond after = before.apply(delta, deed.gameDay());
+        // The ceiling, not the step: a receptive villager's day is worth more than a closed one's.
+        // See Personality.allowance for why that is where personality had to move to.
+        Bond after = before.apply(delta, deed.gameDay(), Personality.allowance(persona));
 
         if (after.isNothing() && existing.isEmpty()) {
             return 0;

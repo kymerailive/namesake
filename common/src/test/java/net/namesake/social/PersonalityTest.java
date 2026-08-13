@@ -1,6 +1,7 @@
 package net.namesake.social;
 
 import net.namesake.npc.Persona;
+import net.namesake.testing.MethodBody;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -20,8 +21,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class PersonalityTest {
 
+    /** Typical unless axes are supplied — see the note on the same helper in {@code DeedsTest}. */
     private static Persona person(int... axes) {
-        byte[] traits = new byte[Persona.TRAIT_COUNT];
+        byte[] traits = Personality.typical();
         for (int axis = 0; axis < axes.length; axis++) {
             traits[axis] = (byte) axes[axis];
         }
@@ -40,12 +42,59 @@ class PersonalityTest {
     }
 
     @Test
-    @DisplayName("a villager with eight zeroes scores exactly neutral")
-    void neutralIsNeutral() {
+    @DisplayName("a typical villager scores exactly neutral, on every column")
+    void theTableIsCentredOnTheTypicalVillager() {
+        // The invariant centring buys, and it holds by construction rather than by tuning: the
+        // per-column offset is computed from the same vector this asks about, so it cannot drift
+        // from it. What CAN drift is whether that vector is still the population's — which is
+        // PersonalityDistributionTest's job, not this one's.
         for (DeedType type : DeedType.values()) {
-            assertEquals(Personality.NEUTRAL, Personality.scale(person(), type), 1.0E-6F,
-                    type + " must be worth its nominal value to somebody with no personality");
+            assertEquals(Personality.NEUTRAL, Personality.scale(person(), type), 1.0E-5F,
+                    type + " must be worth its nominal value to a typical villager");
         }
+    }
+
+    @Test
+    @DisplayName("a villager with no personality at all scores below nominal, and that is the point")
+    void eightZeroesIsNotTheReferencePoint() {
+        // Before the close of session 05 eight zeroes was the reference, which made every nominal
+        // number the value of a deed to a person who does not exist. Every culture has a baseline —
+        // industry averages 24 across the six — so an all-zero villager is not average, it is
+        // unusually incurious, idle and untraditional, and it should read that way.
+        Persona nobody = Persona.create(new UUID(12, 12), 0L)
+                .placed(1, 1, (byte) 0)
+                .withTraits(new byte[Persona.TRAIT_COUNT]);
+
+        assertTrue(Personality.scale(nobody, DeedType.GIFT_WANTED) < Personality.NEUTRAL,
+                "an all-zero villager must not be the yardstick any more");
+    }
+
+    @Test
+    @DisplayName("a typical villager's daily allowance is exactly the base cap")
+    void theTypicalAllowanceIsTheBaseCap() {
+        assertEquals(Bond.DAILY_CAP, Personality.allowance(person()),
+                "the base is what a typical villager gets; personality moves it either way");
+    }
+
+    @Test
+    @DisplayName("the allowance follows receptiveness, and never escapes its four bits")
+    void theAllowanceMovesWithPersonalityAndFitsItsNibble() {
+        // Warm, sociable and generous against cold, antisocial and short-tempered. The allowance is
+        // read off the four benign columns only: the cap exists to limit positives, so a hot temper
+        // scoring high on STRUCK_RESIDENT must not raise anybody's capacity for warmth.
+        Persona open = person(80, 20, 0, 40, 0, 40, -40, 70);
+        Persona closed = person(-60, 0, 0, -40, 40, -40, 80, -60);
+
+        assertTrue(Personality.allowance(open) > Bond.DAILY_CAP,
+                "a receptive villager's day is worth more than the base");
+        assertTrue(Personality.allowance(closed) < Bond.DAILY_CAP,
+                "and a closed one's is worth less");
+
+        // The build-time half of the nibble guard: no personality the clamp allows can produce an
+        // allowance that overflows the four bits gainedToday stores each counter in.
+        assertTrue(Math.round(Bond.DAILY_CAP * Personality.MAX) <= 15,
+                "the largest allowance personality can produce must still fit four bits");
+        assertTrue(Personality.allowance(closed) >= 1, "and nobody's day is worth nothing");
     }
 
     @Test
@@ -109,6 +158,21 @@ class PersonalityTest {
                 "the smith landed at " + smith);
         assertTrue(innkeeper < Personality.MAX && innkeeper > Personality.NEUTRAL,
                 "the innkeeper landed at " + innkeeper);
+    }
+
+    @Test
+    @DisplayName("the deed pipeline actually asks for the personality-scaled allowance")
+    void theBusUsesTheAllowance() {
+        // The gap this closes is the one every other test here leaves open. Bond.apply takes the
+        // allowance as an argument and DeedBus is the only production caller, so a version that
+        // passed Bond.DAILY_CAP instead would put every villager back on the base cap and no unit
+        // test would notice — the arithmetic is all still correct, it is simply being asked the
+        // wrong question. Read out of the bytecode, which is the same instrument the rule 5 ledger
+        // uses for exactly this shape of claim.
+        assertTrue(MethodBody.of(DeedBus.class, "applyTo").invokes(Personality.class, "allowance"),
+                "DeedBus.applyTo never calls Personality.allowance, so the daily ceiling is not "
+                        + "personalised and the ruling at the close of session 05 is a method "
+                        + "nobody calls.");
     }
 
     @Test

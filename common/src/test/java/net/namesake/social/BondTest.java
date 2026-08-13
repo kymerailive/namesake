@@ -36,7 +36,7 @@ class BondTest {
         // repeating it nine times in a day must land on the cap rather than on twenty-seven.
         Bond bond = Bond.fresh(7);
         for (int i = 0; i < 9; i++) {
-            bond = bond.apply(delta(3, 3, 0, 0), 7);
+            bond = bond.apply(delta(3, 3, 0, 0), 7, Bond.DAILY_CAP);
         }
 
         assertEquals(Bond.DAILY_CAP, bond.trust(), "trust must stop at the daily cap");
@@ -50,13 +50,13 @@ class BondTest {
     void theCapIsPerAxis() {
         Bond bond = Bond.fresh(1);
         for (int i = 0; i < 4; i++) {
-            bond = bond.apply(delta(3, 0, 0, 0), 1);
+            bond = bond.apply(delta(3, 0, 0, 0), 1, Bond.DAILY_CAP);
         }
         // Trust is spent; warmth has its own allowance and has not been touched.
         assertEquals(Bond.DAILY_CAP, bond.trust());
         assertEquals(0, bond.gainedToday(Bond.WARMTH));
 
-        bond = bond.apply(delta(3, 3, 0, 0), 1);
+        bond = bond.apply(delta(3, 3, 0, 0), 1, Bond.DAILY_CAP);
         assertEquals(Bond.DAILY_CAP, bond.trust(), "trust was already at the cap");
         assertEquals(3, bond.warmth(), "warmth had a full allowance of its own");
     }
@@ -66,14 +66,14 @@ class BondTest {
     void theCapResetsOnANewDay() {
         Bond bond = Bond.fresh(3);
         for (int i = 0; i < 5; i++) {
-            bond = bond.apply(delta(3, 0, 0, 0), 3);
+            bond = bond.apply(delta(3, 0, 0, 0), 3, Bond.DAILY_CAP);
         }
         assertEquals(Bond.DAILY_CAP, bond.trust());
 
-        Bond sameDay = bond.apply(delta(3, 0, 0, 0), 3);
+        Bond sameDay = bond.apply(delta(3, 0, 0, 0), 3, Bond.DAILY_CAP);
         assertEquals(Bond.DAILY_CAP, sameDay.trust(), "the same day must not hand out a second allowance");
 
-        Bond nextDay = bond.apply(delta(3, 0, 0, 0), 4);
+        Bond nextDay = bond.apply(delta(3, 0, 0, 0), 4, Bond.DAILY_CAP);
         assertEquals(Bond.DAILY_CAP + 3, nextDay.trust(), "a new day is a new allowance");
     }
 
@@ -84,10 +84,41 @@ class BondTest {
         // rising half is an allowance to spend; the falling half is not.
         Bond bond = Bond.fresh(2);
         for (int i = 0; i < 12; i++) {
-            bond = bond.apply(delta(-6, 0, 1, 0), 2);
+            bond = bond.apply(delta(-6, 0, 1, 0), 2, Bond.DAILY_CAP);
         }
         assertEquals(Bond.DAILY_CAP, bond.respect(), "the positive axis stopped at the cap");
         assertEquals(-64, bond.trust(), "the negative axis ran all the way to its floor");
+    }
+
+    @Test
+    @DisplayName("the allowance passed in is what bounds a day, not the base cap")
+    void theAllowanceIsWhatBounds() {
+        // The ceiling ruling, at the level of the record. Bond.apply must spend against what it was
+        // handed; a version that quietly used DAILY_CAP would pass every other test in this file,
+        // because every other test passes DAILY_CAP.
+        Bond receptive = Bond.fresh(1);
+        Bond closed = Bond.fresh(1);
+        for (int i = 0; i < 6; i++) {
+            receptive = receptive.apply(delta(3, 0, 0, 0), 1, 11);
+            closed = closed.apply(delta(3, 0, 0, 0), 1, 5);
+        }
+
+        assertEquals(11, receptive.trust(), "a bigger allowance must let a day go further");
+        assertEquals(5, closed.trust(), "and a smaller one must stop it sooner");
+    }
+
+    @Test
+    @DisplayName("an allowance too big for the counters is clamped rather than wrapped")
+    void anOversizedAllowanceIsClamped() {
+        // Belt to the build-time brace in PersonalityTest. Four bits per axis hold 0..15; a caller
+        // passing 40 must not wrap into the neighbouring axis's counter and hand out an allowance
+        // nobody has spent.
+        Bond bond = Bond.fresh(0);
+        for (int i = 0; i < 30; i++) {
+            bond = bond.apply(delta(3, 3, 0, 0), 0, 40);
+        }
+        assertEquals(15, bond.gainedToday(Bond.TRUST));
+        assertEquals(15, bond.gainedToday(Bond.WARMTH), "the neighbouring counter is intact");
     }
 
     @Test
@@ -101,10 +132,10 @@ class BondTest {
                         + "and a schema version");
 
         Bond bond = Bond.fresh(0)
-                .apply(delta(8, 0, 0, 0), 0)
-                .apply(delta(0, 8, 0, 0), 0)
-                .apply(delta(0, 0, 8, 0), 0)
-                .apply(delta(0, 0, 0, 8), 0);
+                .apply(delta(8, 0, 0, 0), 0, Bond.DAILY_CAP)
+                .apply(delta(0, 8, 0, 0), 0, Bond.DAILY_CAP)
+                .apply(delta(0, 0, 8, 0), 0, Bond.DAILY_CAP)
+                .apply(delta(0, 0, 0, 8), 0, Bond.DAILY_CAP);
         for (int axis = 0; axis < Bond.AXIS_COUNT; axis++) {
             assertEquals(Bond.DAILY_CAP, bond.gainedToday(axis),
                     "axis " + axis + "'s counter was corrupted by its neighbours");
@@ -118,7 +149,7 @@ class BondTest {
     void negativesBypassTheCap() {
         Bond bond = Bond.fresh(5);
         for (int i = 0; i < 4; i++) {
-            bond = bond.apply(delta(-6, 0, 0, 0), 5);
+            bond = bond.apply(delta(-6, 0, 0, 0), 5, Bond.DAILY_CAP);
         }
         assertEquals(-24, bond.trust(), "four blows is four blows, whatever day it is");
         assertEquals(0, bond.gainedToday(Bond.TRUST),
@@ -131,7 +162,7 @@ class BondTest {
     @Test
     @DisplayName("warmth floors at zero — there is no negative warmth, only its absence")
     void warmthFloorsAtZero() {
-        Bond bond = bond(0, 30, 0, 0, 1, 30).apply(delta(0, -100, 0, 0), 1);
+        Bond bond = bond(0, 30, 0, 0, 1, 30).apply(delta(0, -100, 0, 0), 1, Bond.DAILY_CAP);
         assertEquals(0, bond.warmth());
         assertEquals(0, Bond.floorOf(Bond.WARMTH));
         assertEquals(0, Bond.floorOf(Bond.FEAR), "'unafraid' is not a feeling either");
@@ -140,7 +171,7 @@ class BondTest {
     @Test
     @DisplayName("trust and respect floor at -64 — active distrust and contempt are real states")
     void trustAndRespectFloorAtMinusSixtyFour() {
-        Bond bond = Bond.fresh(1).apply(delta(-127, 0, -127, 0), 1);
+        Bond bond = Bond.fresh(1).apply(delta(-127, 0, -127, 0), 1, Bond.DAILY_CAP);
         assertEquals(-64, bond.trust());
         assertEquals(-64, bond.respect());
         assertEquals(-64, Bond.floorOf(Bond.TRUST));
@@ -152,7 +183,7 @@ class BondTest {
     void everyAxisStopsAtTheCeiling() {
         Bond bond = Bond.fresh(0);
         for (int day = 0; day < 40; day++) {
-            bond = bond.apply(delta(8, 8, 8, 8), day);
+            bond = bond.apply(delta(8, 8, 8, 8), day, Bond.DAILY_CAP);
         }
         for (int axis = 0; axis < Bond.AXIS_COUNT; axis++) {
             assertEquals(Bond.ceilingOf(), bond.axis(axis), "axis " + axis + " passed the ceiling");
@@ -174,11 +205,11 @@ class BondTest {
     @Test
     @DisplayName("the peak is a high-water mark and survives being knocked down")
     void thePeakIsAHighWaterMark() {
-        Bond risen = Bond.fresh(0).apply(delta(0, 5, 0, 0), 0);
+        Bond risen = Bond.fresh(0).apply(delta(0, 5, 0, 0), 0, Bond.DAILY_CAP);
         assertEquals(5, risen.peakWarmth(), "the peak follows warmth up");
 
         Bond warm = bond(0, 80, 0, 0, 5, 80);
-        Bond struck = warm.apply(delta(0, -60, 0, 0), 5);
+        Bond struck = warm.apply(delta(0, -60, 0, 0), 5, Bond.DAILY_CAP);
         assertEquals(20, struck.warmth());
         assertEquals(80, struck.peakWarmth(), "the peak records what they once felt, not what they feel");
         // And a bond knocked below its own decay floor is not healed by being left alone.
@@ -236,14 +267,14 @@ class BondTest {
     @DisplayName("a bond that has never been anything says so")
     void freshIsNothing() {
         assertTrue(Bond.fresh(4).isNothing());
-        assertTrue(Bond.fresh(4).apply(delta(0, 0, 0, 0), 4).isNothing());
-        assertTrue(!Bond.fresh(4).apply(delta(1, 0, 0, 0), 4).isNothing());
+        assertTrue(Bond.fresh(4).apply(delta(0, 0, 0, 0), 4, Bond.DAILY_CAP).isNothing());
+        assertTrue(!Bond.fresh(4).apply(delta(1, 0, 0, 0), 4, Bond.DAILY_CAP).isNothing());
     }
 
     @Test
     @DisplayName("a delta of the wrong width is a programming error, not a silent truncation")
     void aDeltaMustHaveFourAxes() {
         assertThrows(IllegalArgumentException.class,
-                () -> Bond.fresh(0).apply(new int[]{1, 2, 3}, 0));
+                () -> Bond.fresh(0).apply(new int[]{1, 2, 3}, 0, Bond.DAILY_CAP));
     }
 }
