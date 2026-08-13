@@ -4,11 +4,11 @@
 Where any other document disagrees on sequence, this wins.
 
 - **Status:** session 04 complete, **and the budget is real**. Four hundred loaded vanilla villagers
-  cost **14.75 ms of server tick** and `DESIGN.md`'s ~18 ms turns out to be that distribution's p90;
-  ours does not appear in a whole-tick measurement at all, and the record sweep it hides — 400
-  records at one bucket of twenty per tick — costs **1.2–3.3 µs**. Before that: **the attach bet
-  holds**, **the authorization gate is real**, and **a villager is from somewhere**. Repo live at
-  https://github.com/kymerailive/namesake
+  cost **14.75 ms of server tick** and `DESIGN.md`'s ~18 ms turns out to be a tail of that
+  distribution rather than its middle; ours does not appear in a whole-tick measurement at all, and
+  the record sweep it hides — 400 records at one bucket of twenty a tick — costs **1.2–3.3 µs**.
+  Before that: **the attach bet holds**, **the authorization gate is real**, and **a villager is
+  from somewhere**. Repo live at https://github.com/kymerailive/namesake
 - **Target:** 16 sessions to the ship-or-kill test (session 10), playable slice at 15.
 - **Companion:** `DESIGN.md` owns *what* we build. This owns *what happens next*.
 
@@ -880,8 +880,9 @@ three jobs — build and test, and the attach-bet harness on each loader.
 **Hard rule 4 first, and the number it was protecting is right.** Four hundred loaded vanilla
 villagers cost **14.75 ms of server tick, mean** — p50 14.68, p95 19.40, p99 22.02, max 27.22, over
 1,200 consecutive ticks. `DESIGN.md` §8 has carried ~18 ms since before there was any code to
-measure. **18 ms is that distribution's p90.** The figure stands; it was a tail number rather than a
-typical one, and it now has a shape instead of a value.
+measure. **18 ms sits between that distribution's p50 and its p95** — interpolating the two, about
+one tick in five exceeds it. The figure stands; it was a tail number rather than a typical one, and
+it now has a shape instead of a value.
 
 **Ours does not appear in that measurement at all.** Same world, same seed, same terrain, same four
 hundred villagers, our hooks live rather than inert: **14.43 ms** — 0.3 ms *below* the vanilla run,
