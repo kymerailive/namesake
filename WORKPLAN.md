@@ -3,7 +3,11 @@
 **The ledger.** What happens next, in order, with exit criteria. Read first, update last.
 Where any other document disagrees on sequence, this wins.
 
-- **Status:** session 05 complete, **and a village now notices what you do in front of it**. Feed a
+- **Status:** session 06 complete, **and a village now remembers**. Feed a villager in front of three
+  others and each of the four keeps the deed in a thirty-two entry ring that survives the disk — and
+  feed them nine times and they keep it *once*, because a deed's id is derived from the deed rather
+  than assigned, so a ring cannot be ground out by repetition. Before that: session 05, **and a
+  village notices what you do in front of it**. Feed a
   hungry villager with three watching and the one you fed gains +3 while each witness gains +1; the
   one behind a wall and the one out of range gain nothing; nine feedings in a day stop at eight. The
   same gift is worth **+2 warmth to a suspicious smith and +4 to a warm innkeeper**, and a receptive
@@ -28,8 +32,8 @@ Where any other document disagrees on sequence, this wins.
 | 03 | Traits, cultures, settlement detection | **done** — 2026-08-13 |
 | 04 | Profiler spike | **done** — 2026-08-14 |
 | 05 | Bonds and deeds | **done** — 2026-08-14 |
-| 06 | Episodic memory | **NEXT** |
-| 07 | Headless simulation harness | pending |
+| 06 | Episodic memory | **done** — 2026-08-14 |
+| 07 | Headless simulation harness | **NEXT** |
 | 08 | Gossip and distortion | pending |
 | 09 | Dialogue pools and residency | pending |
 | 10 | Roads and propagation — **SHIP-OR-KILL** | pending |
@@ -1633,19 +1637,314 @@ fixture only got written because the breakage was actually run rather than reaso
   would show it without asking is session 11. Until then, "did you notice?" cannot be tested,
   because there is nothing to notice with.
 
-**What "legible" can and cannot mean before session 09.** The criterion asks whether the same gift
-*lands differently* on two villagers. Two things are true at once and it is worth separating them:
-
-- **The difference exists and is measurable today.** `/namesake debug bonds` prints a `gift×` column
-  next to each name, and giving the same item to two villagers moves their rows by different amounts.
-- **There is no player-facing surface for it yet, and that is by design.** `DESIGN.md` rules the bond
-  UI as bands and a deed ring, **never raw integers** — so the debug command is an instrument, not
-  the answer. The pools that would let a villager *sound* differently are session 09; the board that
-  would show it without asking is session 11. Until then, "did you notice?" cannot be tested,
-  because there is nothing to notice with.
-
 So the ruling available now was the narrower and more useful one: **is the spread the generator
 actually produces wide enough to be worth building a surface on?** It was asked, it was answered
 with a real village, and the answer moved the design twice — see the playtest section above. What
 that leaves for session 07 is a number rather than an adjective: **close the median week-apart from
 14 to 25**, against real earn-rate data and not against anyone's eye.
+
+### Session 06 — 2026-08-14 — episodic memory
+
+**Shipped.** `759ce8d..HEAD`, pushed to `origin/main`. CI green on all three jobs.
+
+**A villager now remembers what it saw, and it survives the disk.** Feed one in front of three
+others and all four keep the deed. Feed them nine more times and they still keep it **once** — a
+deed's id is derived from the deed rather than assigned, so a ring cannot be ground out by
+repetition. Give them something else the same afternoon and that is a second memory, in order, still
+there after a save and a full reload.
+
+**What shipped.**
+
+- **`Deed.CODEC` and `Deed.id()`** — the record session 05 deliberately left un-persisted now has a
+  store and a key. The id is a 64-bit mix of the deed's own six identity fields, derived rather than
+  assigned, and never written to disk.
+- **`Memories`** — a 32-entry ring per persona, oldest first, newest-32 on overflow, exact dedupe on
+  `(npcUuid, deedId)`. A side table keyed by persona id, exactly as `Bonds` is.
+- **`NpcRegistry.remember`** — the one door that marks the file dirty, and only when the ring
+  actually changed.
+- **Schema 5**, with a fixer watched to run against worlds written by the previous build on both
+  loaders — and then watched *not* to run on the next load of the same world.
+- **`DeedBus` does step 3 of `DESIGN.md` §4**, before step 4 and independently of it.
+- **`/namesake debug deeds`**, and a `mem` column on `debug bonds`.
+- **No new harness leg.** The existing bond-reload check in the `verify` phase grew rings.
+- **25 unit tests** (185 → 210), and one diagnosis that was not in the brief — see below.
+
+#### The three decisions the session opened with
+
+**1. What a deed id is: derived, not assigned.** The question is not "which emit was this" but *are
+two identical feedings on the same day one deed or two?* A counter or a random UUID keeps both; a
+hash of the deed's own fields collapses them.
+
+**Collapsing them is what stops the ring being grindable, and that is the property the ring exists to
+have.** The store is a memory, not a log. With assigned ids an afternoon of standing in the square
+handing out bread evicts every distinct thing an NPC knows about you and replaces it with thirty-two
+copies of one gift — the exact failure `Bond.DAILY_CAP` prevents one level down, arriving through a
+door the cap does not watch. Content addressing is the ring's version of that cap and it costs
+nothing to hold. `MemoriesTest.theRingIsNotGrindable` is that sentence as a test: five hundred
+identical gifts against a full ring push out two days and leave the killing.
+
+Nothing is softened by it. A second identical blow still moves the bond — negatives bypass the cap
+entirely and `Bond.apply` has already run by the time the ring is consulted. **The bond is the tally
+of how much and the ring is the record of what**; collapsing a repeat in one does not forgive it in
+the other. It also costs **zero persisted bytes**, because it is a pure function of fields already on
+disk — storing it would be a cache, and session 03 deleted `Settlement.culture` for being exactly
+that. `DESIGN.md` §3's "~24 B, ring ≈ 768 B" stays true instead of becoming 40 B and 1,280.
+
+**What it costs at session 08, in three parts, because the brief asked for it plainly.**
+
+- **`confidence` is deliberately outside the derivation, and that *is* the session 08 decision.** A
+  rumour retold is the same event known less well, so the same deed arriving twice by different
+  routes collapses to one ring entry rather than two rows for one murder. Which of two copies
+  survives when they disagree is session 08's to rule; `Memories` keeps the one it already has and
+  does not reorder for a duplicate, because being told a thing again is not the thing happening again
+  — and refreshing the slot would let gossip push first-hand memories out of a ring.
+- **Blurring the actor produces a different id.** Session 08 blurs an actor below confidence 50, and
+  a blurred deed will not dedupe against the first-hand one, so a villager could hold both "you
+  killed the smith" and "someone from the north killed the smith". **Bounded rather than solved:** at
+  `confidence × 0.85` a hop and max two hops from first-hand, confidence floors at 72, so within the
+  propagation session 08 actually ships the blur cannot fire at all. If that changes, the paragraph
+  to come back to is in `Deed.id()`.
+- **The derivation is behaviour and must not drift.** Changing the mix re-partitions every ring in
+  every existing save — no corruption, but yesterday's duplicates become distinct. There is no schema
+  break to catch that because nothing is stored, so `MemoriesTest` pins the id of one fixed deed to a
+  literal. **The literal was computed outside this codebase** from the documented mix rather than
+  copied out of a first run, so it says the implementation matches the algorithm the javadoc
+  describes rather than pinning whatever the code happens to do.
+
+**2. Where the ring lives: a side table, not a field on `Persona`.** Three reasons, and the third
+decided it.
+
+- Bonds set the precedent one session ago and the shape is identical — per-persona social state,
+  written by `DeedBus` on emit, read by sessions 09 and 11. One beside the persona and one inside it
+  would be two answers to one question.
+- `Persona` is the durable *identity* and is rebuilt whole on every write; its `equals` is
+  hand-written because `byte[] traits` would otherwise compare by identity. A ring on that record
+  means up to thirteen record rebuilds per deed, and it quietly turns "the fields survived the
+  reload" — session 01's exit criterion, still asserted by the harness — into a claim about history.
+- **The load path.** `Persona.CODEC` is parsed per record and a parse failure counts the whole record
+  unreadable. **A single malformed deed inside a persona would take that person's name, culture,
+  household and traits with it.** As a table of its own it is counted in its own lane, next to
+  settlements and bonds, and the worst a bad deed can do is cost one villager one memory.
+
+**3. Which file: the same one, under the same schema version.** Sessions 03 and 05's tear argument,
+unchanged — a deed references a persona and a settlement by id, and two files torn apart by a crash
+between two writes produce a save that loads, in which a village remembers things about people no
+longer in it.
+
+**The size counter-argument is real this time and was measured rather than dismissed.** Four hundred
+personas each holding a full ring is 12,800 deeds:
+
+| | |
+|---|---|
+| NBT tag tree, built on every save | **1,565,620 B** — 122.3 B a deed |
+| gzipped, as written to `namesake_npcs.dat` | **46,506 B** — 3.6 B a deed |
+
+Gzip pays for the readable key names thirty-four times over, because twelve thousand copies of seven
+strings and one actor UUID is what a compressor is for. **So the cost actually paid is the tag tree,
+not the file** — and it is bounded by a test rather than by this paragraph: one more `int` on `Deed`
+would add ~17 B a deed and still fit, two would not. Two things bound it in practice besides: a ring
+only fills for a villager a player has done thirty-two *distinct* things in front of, and the derived
+id makes a day of repeating yourself one entry.
+
+**And a fourth thing, decided by not doing it.** `DESIGN.md` §4 step 3 says *the subject records it
+weighted higher*, and the brief warned to read that before inventing a field. Nothing new needed
+storing: a deed already carries its own `subject`, so anyone reading a ring can tell whether it
+happened to them by comparing their persona id against it — which is exactly what `Deeds.deltaFor`
+does one step later to give the subject the whole share and a bystander a fraction. Storing the
+weighting would be storing an answer the struct already contains, and session 05 already found the
+version of that mistake worth avoiding: a deed that has to be *told* who it happened to can be told
+wrong. **`SocialValueLedgerTest` therefore gained no entries this session and lost none**, and the
+comment above `Deed`'s block now says why the obvious eighth field was not added — including the trap
+it would have walked into, since the check reads bytecode for a *call* and a record touching its own
+field compiles to a `getfield` no such check can see.
+
+#### What the exit criteria actually showed
+
+The ledger's criterion is arithmetic and is therefore a unit test: **forty deeds at one NPC leave the
+newest thirty-two, in order, with zero duplicates, and survive a save and a load.** `MemoriesTest`
+asserts each clause separately, including that the oldest survivor is day 8 and the newest day 39.
+
+The in-game half needed no new fixture, because **the setup phase's nine feedings already are the
+dedupe**: same type, same actor, same subject, same settlement, same day, same severity. Both
+loaders, in two launches each, every leg green:
+
+| Leg | Evidence |
+|---|---|
+| RING | nine identical feedings left **1** memory rather than nine |
+| RING | a different kind of deed the same day is a **second** memory, `[FED_HUNGRY, GIFT_WANTED]`, oldest first |
+| RING | the subject and all **3** witnesses recorded it (4) |
+| RING | the gift moved **0** bonds — every allowance was spent — and was remembered by **4** people regardless |
+| RING | the villager behind the wall remembers nothing either: no bond and no memory |
+| MEMORY RELOAD | **4/4** rings survived save → quit → reload holding **8** deeds, in order, every field intact |
+
+**That fourth row is the one no unit test in `:common` can make**, because it is about `DeedBus`
+rather than about `Memories`: step 3 does not depend on step 4. All four villagers had spent their
+whole daily allowance on the nine feedings, so the tenth deed moved nothing at all and was remembered
+by every one of them. **Seeing something is not the same as it changing your mind about somebody**,
+and moving the ring append below the bond guard turns that line red on its own.
+
+And the instruments, read out of a running game:
+
+```
+Gvirkezh Gvirnsk — 2 of 32 remembered, newest first; today is day 0
+  day 0     GIFT_WANTED   to them   by ac813ddb  settlement 0  severity 100  confidence 100
+  day 0     FED_HUNGRY    to them   by ac813ddb  settlement 0  severity 100  confidence 100
+
+day 0 — 6 loaded NPC(s), nearest first; 4 bond(s) and 8 deed(s) across 4 ring(s) in the world
+  who                         trust warmth respect fear   cap   gift×  mem
+  Gvirkezh Gvirnsk               +8     +8      +0   +0   8/8/0/0  1.00   2
+  Taztanyak Stuksk               +0     +0      +0   +0   0/0/0/0  1.00   0
+```
+
+**The second criterion is the owner's and is deliberately not in the ledger:** *a villager who
+watched you do something last week can still tell you what it was.* The mechanism is proven — the
+ring holds it, in order, across a reload, and `/namesake debug deeds` prints the day it happened on.
+Whether **32 feels like memory rather than a buffer** is a ruling and not a test, and it is handed
+over. What can honestly be judged before session 09 is narrower than the sentence sounds, for the
+same reason session 05's "legible" was: there is no player-facing surface yet. Dialogue is 09 and the
+Notice Board is 11, so today the only way to see a ring is the debug command, which is an instrument
+rather than the answer. **The question that can be answered now is whether 32 is the right depth**,
+and the honest note is that nothing has yet exhausted one — session 07's hundred-day harness is the
+instrument that can.
+
+#### Hard rule 1, and the pre-change half done first
+
+The attach-bet harness `setup` phase was run on commit `99dd510` — schema 4 — on **both loaders
+before a line of session 06 was written**, and those saves were archived. Mid-session the working
+tree was stashed rather than trusted, so the NeoForge pre-change run compiled schema 4 rather than
+the half-finished schema 5 sitting in the editor. The schema-5 build then loaded them:
+
+```
+NPC registry datafixer: schema 4 -> 5 (deed rings added; nothing to rewrite, an absent
+table means nobody has witnessed anything) rewrote 0 record(s)
+Loaded 9 persona(s), 9 bound to an entity, 1 settlement(s), 4 bond(s),
+0 deed(s) across 0 ring(s) (schema 5)
+```
+
+**This is the additive kind, and saying so out loud is the point — for the second time running.**
+Schema 4 said it and schema 5 says it again, because "additive" is a claim rather than a default.
+What makes it checkable here is stronger than it was at 4: **`Deed` did not arrive with session 06.**
+The record and all seven of its fields shipped in session 05; what 06 added is a codec and a store.
+So there is no older shape of a deed anywhere on disk to reconcile — a schema-4 save cannot contain
+one in any shape, because nothing could write one.
+
+**And the assertion is on the thing that would actually break, not on the rewrite count**, exactly as
+the brief asked. Zero rewrites is also what a fixer that does nothing at all reports — session 03
+broke the 2 → 3 fix into precisely that and turned the build red for it. The hazard here is the
+absent `memories` key being read as damage, which turns the registry read-only; and because
+settlements, bonds and rings share one file, a world somebody has played for a week then silently
+stops saving **all three**. So the evidence is the four bonds the schema-4 build wrote coming through
+intact on a writable registry:
+
+```
+PASS  DATAFIXER 4->5 the 4 bond(s) the schema-4 build wrote came through intact — which is
+      what an absent ring table being read as damage would have cost this world
+PASS  DATAFIXER 4->5 the registry is writable, so the migrated file will be written back at
+      schema 5 rather than migrating again on every load
+```
+
+**Then the same world was loaded again**, which is the only way session 01's defect 1 is ever caught:
+`no migration expected: world is already at schema 5`. The fix reached disk.
+
+#### Rule 3: sixteen deliberate breakages, each watched to fail and removed
+
+| Breakage | Result |
+|---|---|
+| The exact dedupe removed | **5 red.** *"five hundred identical gifts on one day must not push out a killing"* |
+| The 32-entry bound removed | **6 red.** *"the newest 32 of 40 — expected: &lt;32&gt; but was: &lt;40&gt;"* |
+| A duplicate allowed to refresh its slot | **4 red.** *"expected: &lt;[1, 2]&gt; but was: &lt;[2, 1]&gt;"* |
+| An over-long ring on disk refused instead of truncated | **Red.** *"a bound this build does not share is not damage — expected: &lt;0&gt; but was: &lt;18&gt;"* |
+| An absent ring table read as damage | **5 red**, three of them about bonds and personas |
+| `confidence` folded into the deed id | **2 red**, including the pinned literal |
+| `severity` dropped from the deed id | **3 red.** *"the derivation collided, so it is dropping an input — expected: &lt;120000&gt; but was: &lt;30000&gt;"* |
+| The subject dropped from the deed id | **2 red.** *"a different subject"* |
+| The `setDirty` removed from `NpcRegistry.remember` | **Red.** *"a ring written into a clean registry never reaches the file"* |
+| A duplicate allowed to mark the registry dirty | **Red** |
+| Unreadable deeds left out of the damaged-file guard | **Red.** *"a villager who has quietly lost a memory is exactly as unsafe to write back as a village that has lost its bell"* |
+| A pruned persona allowed to keep its ring | **Red** |
+| `RING_CAPACITY` doubled to 64 | **6 red**, one of them the budget: *"the tag tree built on every save was 3114420 B, over the 2,000,000 B ceiling"* |
+| `Deed.CODEC` renamed out from under `Memories` | **Does not compile** |
+| The schema bumped to 6 with no matching fix | **12 red.** *"the fix chain has a hole between 5 and 6"* |
+| `Deed.severity`'s ledger entry deleted | **Red.** *"Deed has fields with no entry in the social value ledger: [severity]"* |
+
+**The last one reported NOTHING FAILED the first time it was run, and that turned out to be the
+script rather than the guard.** The regex did not match, so nothing was deleted and a green build was
+reported for a breakage that had never been applied. Worth recording because it is the *inverse* of
+session 05's fifth row and just as dangerous: **a breakage that silently fails to apply reads exactly
+like a guard that works.** Every breakage after it is checked for a non-empty diff before the tests
+are run.
+
+#### One defect, and it is not in this session's code
+
+**`GameRenderer.render` pauses a single-player world when the window loses focus, and a paused
+integrated server does not tick.** The first pre-change run stopped dead after
+`PASS CURE conversion started`: no error, no timeout, no further output for eight minutes, the
+process alive at about five seconds of CPU a minute. Vanilla's own log says it two lines later —
+`Saving and pausing game...` — and the mechanism is `GameRenderer.render` calling
+`Minecraft.pauseGame(false)` after 500 ms of an inactive window, which opens a `PauseScreen`, which
+sets `Minecraft.pause`, which stops the server. **Every deadline this harness has is counted in
+server ticks**, so the script simply stops.
+
+**This is session 05's undiagnosed mid-run wedge.** That entry records the symptoms — *"no further
+output for four minutes, the process alive at 2.4 seconds of CPU across ninety seconds of wall clock
+— idle, not working"* — and that a re-run passed first time. Both follow from this: a re-run passes
+because a freshly launched window has focus. It read as a NeoForge problem because of when the owner
+happened to click away, and it never was one. **It was diagnosable this session only because the
+owner was working alongside the run**, which is the condition that produces it.
+
+`HarnessClient` now turns `pauseOnLostFocus` off on every armed run, beside muting the client — the
+two properties an unattended run needs from a machine nobody is sitting in front of. With it off, the
+same pre-change run finished in about four minutes, and eight further client launches across both
+loaders did not stall once. **Session 05's carried note is therefore half retired:** the CPU-time
+discriminator is still the right instrument and worth keeping, but the thing it was detecting has a
+name and a fix. What remains undiagnosed is only session 01's *shutdown* hang — a different failure
+at a different point, still bounded by the watchdog.
+
+Two smaller defects, both mine and both in tests rather than in code: a grindability fixture that put
+its killing on a day the ring already held, and an off-by-one count of identity fields. Neither
+survived first contact with the test runner, which is what it is for.
+
+#### The gap session 05 left open, and why it is still open
+
+`DeedBus.witnessScan` and `DeedBus.emit` have meters and have still never been pointed at anything.
+The brief offered a `-Pprofile=deeds` phase if it were cheap. **It is not, and the reason is specific
+to today rather than general.**
+
+Session 04 ruled the profiler gets no CI job because *"a wall-clock number from a shared runner whose
+neighbours we cannot see is not evidence"*. This session's runs happened on the owner's machine
+**while the owner was working on it** — and the proof that this matters is the defect above, which is
+the machine's other user reaching into a measurement and stopping the server. A deed cost measured
+under those conditions would be the confident-wrong kind, and a new phase needs its own crowd
+fixture, warm-up and teardown, which is exactly the shape of session 04's five defects.
+
+What can be said without measuring has moved, though, and it is worth saying because **the cost is no
+longer where the brief expected it.** The emit side is bounded by construction: at most thirteen ring
+appends, each a linear walk of at most thirty-two `long` comparisons, on emit only and never on a
+tick where nothing happened. What session 06 actually added is on the **save** path, not the tick
+path — an emit now marks the registry dirty, and a dirty registry is up to 1.5 MB of NBT built at the
+next autosave. That number is measured and guarded above. A `-Pprofile=deeds` phase would have
+measured the wrong half. `Meters.count("DeedBus ring entries written")` is there for whoever writes
+it anyway.
+
+#### Carried into session 07
+
+- `$env:JAVA_HOME` still must be pinned to JDK 21. Kill the dev client between runs.
+- **A quiet harness run is now much more likely to be genuinely stuck**, because the commonest cause
+  of a quiet one has been fixed. Read `<loader>/run/namesake-harness-result.txt` and the client's CPU
+  time as before; both logs still buffer.
+- **The 32 is provisional in the same way `Bond.DAILY_CAP = 8` is**, and for the same reason: it is a
+  number nobody has watched a real playthrough exhaust. Session 07's harness is the instrument that
+  can — a hundred in-game days of a settlement will say how fast a ring actually fills and whether
+  anything worth keeping is being evicted. Ask it rather than anyone's eye.
+- **Session 07's number is unchanged and is still the one that matters:** the median settlement's
+  week-apart is **14** and the ruling wants **25**. Widen the weights, not the base cap.
+- The derived deed id is why a ring fills slowly. If session 07's data shows rings full of one deed
+  type, that is a signal about the deed types rather than about the ring.
+
+**Ledger change.** Session 06 → done, session 07 → NEXT. **No risk changes**: risk 5's five
+exemptions are untouched and none fell due this session, so for the first time since session 02 the
+forcing function was not the thing keeping rule 5 honest — the discipline was applied while the
+record was being written, and it came out as an eighth field deliberately not added. Two decisions
+added to `DESIGN.md` §2, the deed id and the deed store, taking the count 47 → 49. A duplicated
+paragraph at the end of the session 05 entry was deleted; it was a copy-paste, not a disagreement.
+No changes to the 16-session shape.

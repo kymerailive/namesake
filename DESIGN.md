@@ -1,7 +1,7 @@
 # DESIGN — Namesake
 
 What we are building and why. `WORKPLAN.md` owns *what happens next*; this owns *what it is*.
-47 decisions ruled, 0 open.
+49 decisions ruled, 0 open.
 
 **The thesis:** a deed witnessed by one villager changes what a different villager, in a different
 settlement, says to you later.
@@ -60,6 +60,8 @@ Enforce with a failing test, not intention.
 | Bond decay | **Lazy, warmth only, toward `peak × 0.4` at a point a day.** Computed on read, never ticked; one catch-up applies at most `dayDelta ≤ 64` days. Absence cools a bond; it never resets one. |
 | Personality | **One static `float[8][6]`, centred on the population the generator actually produces.** Nominal means *typical*, not "a villager with no personality" — every culture has a baseline, so eight zeroes is not average and never was. The centring offsets are derived from the measured mean, not written down. |
 | Daily allowance | **8 for a typical villager, scaled by the same personality weight.** Personality controls the **ceiling, not the step**: scaling only what one deed is worth is erased the moment a player gives enough to fill the cap — everybody converges on the same number and personality decides nothing but how many gifts it took. Read off the benign columns only; the cap limits positives, so a short temper must not raise anybody's capacity for warmth. |
+| Deed id | **Derived from the deed's own six identity fields, never assigned.** Two identical feedings on the same day are therefore one deed. That is what stops a ring being ground out by repetition — the daily cap's job, one level up, through a door the cap cannot see — and it costs zero persisted bytes, because it is a pure function of fields already on disk. **Confidence is deliberately outside it**, so session 08's retelling dedupes against the deed it retells instead of becoming a second row for one murder. |
+| Deed storage | **A 32-entry ring per persona, in a side table inside `namesake_npcs.dat`** — beside the bonds, never a field on `Persona`. A persona is durable identity and is rebuilt whole on every write; and one malformed deed inside a persona record would cost that villager their name, culture and traits, where a table of its own costs one memory. Oldest out on overflow. Worst case measured: 1.57 MB of NBT, 46 KB on disk, held there by a test. |
 | Bond UI | Bands + the deed ring. **Never raw integers.** |
 | Gossip | Distorts, never lies. Confidence degrades; identity blurs below 50. |
 | Grievance notification | None — you must notice. Board is the backstop. |
