@@ -59,6 +59,17 @@ public final class AttachBetHarness {
     public static final String WORLD_NAME = "namesake_attachbet";
     public static final Path SUBJECT_FILE = Path.of("namesake-harness-subjects.txt");
 
+    /**
+     * Machine-readable verdict, for CI.
+     *
+     * <p>The game exits 0 whether the harness passed or failed, so a CI job that only watched the
+     * exit code would be green forever — session 00's "a green build proves almost nothing" wearing
+     * a different hat. This file is stamped {@code RUNNING} the moment the script starts and only
+     * becomes {@code PASS} or {@code FAIL} when it reaches a conclusion, so a crash halfway through
+     * leaves {@code RUNNING} and fails the check rather than leaving a stale verdict behind.
+     */
+    public static final Path RESULT_FILE = Path.of("namesake-harness-result.txt");
+
     /** Far enough from world spawn that the chunks are not held by the permanent spawn ticket. */
     private static final int TEST_SITE_OFFSET = 800;
 
@@ -106,6 +117,9 @@ public final class AttachBetHarness {
             return;
         }
         try {
+            if (tick == 1) {
+                writeResult("RUNNING", "the script started but never reached a conclusion");
+            }
             if ("setup".equals(PHASE)) {
                 runSetup(server);
             } else if ("verify".equals(PHASE)) {
@@ -533,8 +547,18 @@ public final class AttachBetHarness {
         Namesake.LOGGER.info(summary.toString());
 
         server.saveEverything(true, true, true);
+        writeResult(allPassed ? "PASS" : "FAIL", String.join("\n", RESULTS));
         Namesake.LOGGER.info("[harness] HARNESS COMPLETE phase={} result={}",
                 PHASE, allPassed ? "PASS" : "FAIL");
         server.halt(false);
+    }
+
+    /** Stamps {@link #RESULT_FILE}. Never throws — a reporting failure must not fail the run. */
+    private static void writeResult(String verdict, String detail) {
+        try {
+            Files.write(RESULT_FILE, List.of("RESULT " + verdict + " phase=" + PHASE, detail));
+        } catch (IOException e) {
+            Namesake.LOGGER.error("[harness] could not write {}", RESULT_FILE.toAbsolutePath(), e);
+        }
     }
 }

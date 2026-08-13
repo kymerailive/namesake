@@ -46,3 +46,87 @@ jobs:
             neoforge/build/libs/*.jar
           if-no-files-found: error
           retention-days: 14
+
+  # Session 01's exit criteria, re-run on every push. None of them can be checked by a unit test:
+  # they are claims about a live entity surviving a chunk unload, a save/quit/reload, and being
+  # zombified and cured. This drives a real client under a virtual display and reads the verdict the
+  # harness writes to disk.
+  #
+  # It reads a file rather than the exit code on purpose. The game exits 0 whether the harness
+  # passed or failed, so a job that only watched the exit code would be green forever — which is
+  # the failure this whole project is built to avoid.
+  harness:
+    name: attach-bet harness (${{ matrix.loader }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        loader: [ fabric, neoforge ]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Install a virtual display and software OpenGL
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb libgl1 libgl1-mesa-dri libglu1-mesa
+
+      # setup and verify are two launches on purpose: "survives save, quit and reload" cannot be
+      # proven inside one run of the game.
+      - name: Harness - setup phase
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: xvfb-run -a ./gradlew :${{ matrix.loader }}:runClient -Pharness=setup --console=plain
+
+      - name: Check the setup verdict
+        run: |
+          file="${{ matrix.loader }}/run/namesake-harness-result.txt"
+          if [ ! -f "$file" ]; then
+            echo "::error::$file is missing - the harness never ran"
+            exit 1
+          fi
+          cat "$file"
+          head -n 1 "$file" | grep -qx "RESULT PASS phase=setup" || {
+            echo "::error::attach-bet harness did not pass its setup phase on ${{ matrix.loader }}"
+            exit 1
+          }
+
+      - name: Harness - verify phase
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: xvfb-run -a ./gradlew :${{ matrix.loader }}:runClient -Pharness=verify --console=plain
+
+      - name: Check the verify verdict
+        run: |
+          file="${{ matrix.loader }}/run/namesake-harness-result.txt"
+          if [ ! -f "$file" ]; then
+            echo "::error::$file is missing - the harness never ran"
+            exit 1
+          fi
+          cat "$file"
+          head -n 1 "$file" | grep -qx "RESULT PASS phase=verify" || {
+            echo "::error::attach-bet harness did not pass its verify phase on ${{ matrix.loader }}"
+            exit 1
+          }
+
+      - name: Upload harness logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: harness-logs-${{ matrix.loader }}
+          path: |
+            ${{ matrix.loader }}/run/logs/
+            ${{ matrix.loader }}/run/namesake-harness-*.txt
+          if-no-files-found: warn
+          retention-days: 7
