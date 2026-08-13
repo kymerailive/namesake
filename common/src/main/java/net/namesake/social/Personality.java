@@ -14,15 +14,17 @@ import net.namesake.npc.Persona;
  * doing something.
  *
  * <p><b>How to read a cell.</b> {@code WEIGHT[axis][type]} is how strongly that trait, at its
- * extreme, moves what that kind of deed is worth to this person. A villager with every axis at zero
- * scores exactly {@link #NEUTRAL} and gets the nominal numbers in {@link DeedType}; each axis then
- * adds {@code trait/100 × weight} to that. So an acquisitive villager values a wanted gift far more
- * than a placid one does, and a hot-tempered one discounts gifts and takes a blow much harder.
+ * extreme, moves what that kind of deed is worth to this person. A <i>typical</i> villager — see
+ * {@link #typical()} — scores exactly {@link #NEUTRAL} and gets the nominal numbers in
+ * {@link DeedType}; each axis then adds {@code trait/100 × weight} to that. So an acquisitive
+ * villager values a wanted gift far more than a placid one does, and a hot-tempered one discounts
+ * gifts and takes a blow much harder.
  *
  * <p><b>Bounded, and the bound is not decoration.</b> Eight axes at their extremes can sum past
  * anything sensible, and an unbounded multiplier means one lucky roll produces a villager for whom
  * a single loaf is worth a rescue. {@link #MIN} and {@link #MAX} are where that stops. They bind
- * only at the corners: a strongly-drawn villager lands around 0.7 or 1.5 and never reaches them.
+ * only at the corners: measured over the whole generator space a wanted gift spans ×0.66 to ×1.34
+ * from the fifth percentile to the ninety-fifth, and about half that inside any one settlement.
  *
  * <p><b>A weight may sharpen a harmful deed and may never soften one.</b> That rule does not live
  * here — {@link Deeds#deltaFor} owns it — because it is a property of how a weight is <i>used</i>

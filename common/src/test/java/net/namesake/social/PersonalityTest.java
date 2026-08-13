@@ -161,6 +161,27 @@ class PersonalityTest {
     }
 
     @Test
+    @DisplayName("taking violence hard does not give a villager more warmth to hand out")
+    void theAllowanceIgnoresTheHarmfulColumns() {
+        // Tradition and temper both score very high on STRUCK_RESIDENT and KILLED_RESIDENT, and the
+        // acquisitiveness here is chosen so that this villager's four *benign* columns average out
+        // to almost exactly typical. Averaging all six instead would hand them a bigger day for
+        // being easy to offend, which is the opposite of what the number means — the cap exists to
+        // limit positives, and a negative bypasses it entirely.
+        //
+        // Written after the guard was found missing: breaking the filter and re-running turned
+        // nothing red, because the obvious fixture for it clamps three benign columns to the floor
+        // and comes out under the base cap either way.
+        Persona easilyOffended = person(0, 0, 0, 0, 100, 70, 100, 0);
+
+        assertTrue(Personality.scale(easilyOffended, DeedType.STRUCK_RESIDENT) > 1.5F,
+                "the fixture must actually score high on a harmful column or this proves nothing");
+        assertEquals(Bond.DAILY_CAP, Personality.allowance(easilyOffended),
+                "a villager whose kindness columns average typical must get a typical day, however "
+                        + "hard they take a blow");
+    }
+
+    @Test
     @DisplayName("the deed pipeline actually asks for the personality-scaled allowance")
     void theBusUsesTheAllowance() {
         // The gap this closes is the one every other test here leaves open. Bond.apply takes the

@@ -6,9 +6,10 @@ Where any other document disagrees on sequence, this wins.
 - **Status:** session 05 complete, **and a village now notices what you do in front of it**. Feed a
   hungry villager with three watching and the one you fed gains +3 while each witness gains +1; the
   one behind a wall and the one out of range gain nothing; nine feedings in a day stop at eight. The
-  same gift is worth **+2 warmth to a suspicious smith and +5 to a warm innkeeper**, which is the
-  static `float[8][6]` weight table paying off `Persona.traits` — the exemption standing risk 4 has
-  carried since session 01. Before that: **the attach bet holds**, **the authorization gate is
+  same gift is worth **+2 warmth to a suspicious smith and +4 to a warm innkeeper**, and a receptive
+  villager's whole day is worth more than a closed one's — which is the static `float[8][6]` weight
+  table paying off `Persona.traits`, the exemption standing risk 4 has carried since session 01.
+  Before that: **the attach bet holds**, **the authorization gate is
   real**, **a villager is from somewhere**, and **the budget is real** — 400 loaded vanilla
   villagers cost **14.75 ms of server tick** against our **1.2–3.3 µs** sweep. Repo live at
   https://github.com/kymerailive/namesake
@@ -1330,13 +1331,13 @@ day 0 — 6 loaded NPC(s), nearest first; 4 bond(s) in the world
   Trusmyrmest Stuksk             +0     +0      +0   +0   0/0/0/0  1.00
 ```
 
-**The second half of the criterion is machine-checked and its ruling is the owner's.** The same
-wanted gift is `{trust +1, warmth +2}` to a suspicious smith and `{trust +3, warmth +5}` to a warm
-innkeeper — a personality multiplier of **0.72 against 1.51**. `DeedsTest` asserts both numbers, and
+**The second half of the criterion is machine-checked and its ruling was the owner's.** The same
+wanted gift is `{trust +1, warmth +2}` to a suspicious smith and `{trust +3, warmth +4}` to a warm
+innkeeper — a personality multiplier of **0.68 against 1.47**. `DeedsTest` asserts both numbers, and
 `/namesake debug bonds` prints the multiplier in its last column next to the name, which is where to
-look. **Whether that difference is *legible* — whether a player notices two villagers reacting
-differently to the same loaf rather than merely measuring it — is not something any test in this
-repo can have an opinion about. Handed over rather than decided.**
+look. **Whether that difference is *legible* is not something any test in this repo can have an
+opinion about, so it was handed over — and the playtest that followed changed the design twice. See
+below.**
 
 **Hard rule 1 followed as written, and the pre-change half was done first.** The attach-bet harness
 `setup` phase was run on commit `5921797` — schema 3 — on **both loaders before a line of session 05
@@ -1366,7 +1367,7 @@ registry goes read-only and a world that has bonds in it silently stops saving t
 **Then the same world was loaded a second time**, which is the only way session 01's defect 1 is
 ever caught: `no migration expected: world is already at schema 4`. The fix reached disk.
 
-**172 unit tests**, real JUnit XML, `failures=0 errors=0 skipped=0` — 46 new, and every one of them
+**185 unit tests**, real JUnit XML, `failures=0 errors=0 skipped=0` — 59 new, and every one of them
 a claim `WORKPLAN.md` says belongs in a unit test rather than in six minutes of CI.
 
 **Four defects, and three of them were found by applying a rule rather than by a red test.**
@@ -1426,15 +1427,28 @@ That is the mechanism firing on the session it was aimed at, four sessions after
 against a date nobody had to remember. It did not have to fire for real, because the table landed —
 but it was watched to fire, which is the only way to know it would have.
 
-**One recurrence worth recording, and it is session 01's.** On the final NeoForge `verify` run the
-integrated server wedged after logging "Saving worlds" and the shutdown watchdog hard-exited it 45
-seconds later, exactly as designed. Session 01 saw this only on a CI runner and recorded it as
-*bounded, not diagnosed*; this is its first appearance on the owner's machine, once in eleven client
-launches today. The verdict was already on disk and reads `PASS`, and the `verify` phase had already
-reloaded everything from disk. **The thing to know is that the hard exit makes Gradle report the
-task as failed** — a green harness inside a red build — so a CI job that watched the exit code
-rather than the verdict file would fail on it. This one reads the verdict file, which is why that
-was ruled in session 01.
+**Session 01's wedge came back twice, both on NeoForge, and it is still bounded rather than
+diagnosed.** Session 01 saw the integrated server stop making progress only on a CI runner. It
+happened twice on the owner's machine across this session's seventeen client launches, and never
+once on Fabric:
+
+- **At shutdown**, the documented shape: the server hung after logging "Saving worlds" and the
+  watchdog hard-exited it 45 seconds later, exactly as designed. The verdict was already on disk and
+  read `PASS`. **The thing to know is that the hard exit makes Gradle report the task as failed** —
+  a green harness inside a red build — so a CI job watching the exit code rather than the verdict
+  file would fail on it. This one reads the verdict file, which is why that was ruled in session 01.
+- **Mid-run, which is new.** A `setup` phase logged "phase setup starting" and then stopped: no
+  further output for four minutes, the process alive at **2.4 seconds of CPU across ninety seconds
+  of wall clock** — idle, not working. Nothing in the harness recovers from that, because every
+  deadline it has is counted in server ticks and the server had stopped producing them. Killed,
+  world deleted, re-run: **green on the first retry, all 37 legs.**
+
+**Diagnosing it is not this session's job, and guessing at it would be worse than leaving it.** What
+is worth carrying is the discriminator, which cost ten minutes to work out and will cost ten seconds
+next time: **the Gradle console log is buffered and Minecraft's own log is buffered, so neither can
+tell you whether a run is alive.** Two things can — the verdict file, which the harness writes
+unbuffered, and the process's CPU time. A wedged run and a slow one look identical in every log and
+completely different in `Get-Process java | Select-Object CPU`.
 
 **One thing is instrumented and not measured, and it is named rather than glossed.**
 `DeedBus.witnessScan` and `DeedBus.emit` have meters of their own and two counters beside them,
@@ -1451,6 +1465,9 @@ ever suspected, the phase is the first thing to write.
 **Carried into session 06.**
 
 - `$env:JAVA_HOME` still must be pinned to JDK 21. Kill the dev client between runs.
+- **A harness run that has gone quiet is not necessarily stuck.** Both logs buffer; read
+  `<loader>/run/namesake-harness-result.txt`, which is written unbuffered, and the client's CPU time.
+  Seconds of CPU per minute of wall clock is the tell.
 - **The deed ring is session 06's, and `Deed` has been left un-persisted for it.** It declares no
   codec and nothing stores a deed; giving it one now would have meant either an unbounded per-NPC
   list, which is a leak, or building the ring early. Its store, its 32-entry bound, its dedupe key
@@ -1459,6 +1476,15 @@ ever suspected, the phase is the first thing to write.
 - **`Bond.DAILY_CAP = 8` and the one-point-a-day decay are provisional and due for calibration
   against session 07's earn-rate histogram**, not against anyone's intuition. That is the mistake
   LNK made when it set skill gates at 35–205 against an observed maximum of 32.
+- **Session 07 inherits one number and one instrument.** The number: the median settlement's
+  week-apart is **14** and the ruling wants **25**. The instrument:
+  `PersonalityDistributionTest` already prints the percentiles, the within-town spread, the
+  per-culture medians and both week-aparts, so the tuning pass has a before-and-after rather than an
+  impression. **Widen the weights, not the base cap** — the cap is what stops a village being ground
+  out, and it is the same number the band thresholds will be set against.
+- **`Personality.TYPICAL` is a measurement with a shelf life.** Retune a specialty bias, change a
+  culture's baseline or add a seventh culture and it stops describing the population; the test says
+  so with the new vector in the failure message, and the constant is a one-line update.
 - The give gesture takes the click a villager would have used to open a trade screen while sneaking.
   It takes nothing away — vanilla already routes a sneaking right-click on a villager to
   `Villager#mobInteract` — but it is the first place to look if a playtest reports trading feeling
@@ -1466,10 +1492,11 @@ ever suspected, the phase is the first thing to write.
 
 **Ledger change.** Session 05 → done, session 06 → NEXT. **Risk 4 retired**: the weight table landed
 and nothing in the generation chain still terminates in a renderer. **Risk 5 added** in its place
-and armed the same way, for the five social values this session persisted and did not read. Three
-decisions added to `DESIGN.md` §2 (the bond key, bond storage, bond decay) taking the count 42 → 45,
-one correction to §3's `gainedToday`, and §4 step 4 rewritten to state all six weights and which two
-of them may never soften a harmful deed. No changes to the 16-session shape.
+and armed the same way, for the five social values this session persisted and did not read. Five
+decisions added to `DESIGN.md` §2 — the bond key, bond storage, bond decay, and after the playtest
+the centring and the personality-scaled daily allowance — taking the count 42 → 47, one correction
+to §3's `gainedToday`, and §4 step 4 rewritten to state all six weights and which two of them may
+never soften a harmful deed. No changes to the 16-session shape.
 
 #### The gap session 04 left open, closed
 
@@ -1515,15 +1542,82 @@ first-line return measured 9.00 µs at n=1 on NeoForge against Fabric's 0.41 µs
 n=11. One call on a cold path is the JIT, not a loader. The claim session 04 made from it — that the
 cheap branch is 100% of calls once a village is known — is about the *mix*, and the mix reproduced.
 
+#### The playtest, and the two things it changed
+
+**The owner played it, and the criterion did not pass on the first read.** Ten villagers of one Yun
+village spanned ×0.94 to ×1.29 on a wanted gift — a third of what the smith-and-innkeeper fixtures
+in `DeedsTest` span, because **those fixtures are ones I chose**. A test that only ever asks about
+its own extremes cannot notice that the villagers a real world produces are closer together than
+that. Two of my readings of it were wrong and are recorded here rather than quietly fixed:
+
+- I said the table was **biased**, mean ×1.16, nobody below neutral. Measured across the generator's
+  whole space the population median is **×1.04**; ×1.16 was that one village standing above it.
+- I said the spread was **too timid at 0.16**. It is **0.68** across the population and **0.36**
+  inside one settlement — the latter matching the owner's ten villagers almost exactly. What looked
+  flat was the within-town number, and the gap between the two is culture: **Karsk medians ×0.74
+  against Meridian's ×1.25**, a 65% difference in what the same loaf is worth.
+
+**`PersonalityDistributionTest` is the instrument that settled it**, and it is the one this session
+was missing. It rolls 4,536 personas through the real three-layer roll across every culture,
+specialty, defensibility and needs vector, and reports percentiles per deed type — **decomposed into
+population spread and within-settlement spread, because the criterion is about two villagers you can
+walk between, not two villagers three thousand blocks apart.** It also simulates a week of gifts
+through the real records, so the cap, the ceiling, the rounding and the lazy decay all bite.
+
+**And it found the thing the playtest was actually pointing at, which was not the magnitudes.** The
+daily cap and the weight table were pulling against each other:
+
+- at **one gift a day** the cap never binds, and the per-deed step compounds to a **14-point** warmth
+  gap over a week;
+- at **enough gifts to fill the cap** every villager converges on the same eight, and the gap is
+  **zero**. Personality decided how many gifts it took, and nothing about where anybody ended up.
+
+Which is why the ruling was to move personality onto **the ceiling**: scaling the daily allowance
+survives the cap because it *is* the cap. Re-measured after the change, the saturating player's gap
+is a median of **14** and a widest of **28** — the full standing band the owner asked for, at the
+top end, with the median still short of it. **That gap is the magnitude work, and it is session
+07's**, exactly as ruled: shape now, numbers against real earn-rate data later.
+
+**Centring, and the honest note about it.** The owner ruled that nominal should mean *typical*, and
+re-ruled it after being told the premise I gave was wrong — it is a 4% correction on gifts, not the
+16% I first reported, and 13% on a defended raid. `Personality.TYPICAL` is the measured population
+mean, the per-column offsets are **derived from it at class initialisation rather than written
+down**, and the invariant *a typical villager scores exactly one* therefore holds by construction on
+every column. What can still rot is whether that vector is still the population's, so a test
+re-measures it on a different seed and fails with the new numbers in the message.
+
+**Six more breakages, each watched to fail and removed.** The fifth is the one worth its place:
+
+| Breakage | Result |
+|---|---|
+| The centring removed | **5 red**, across two files: *"STRUCK_RESIDENT axis 1 must be its own nominal value for a typical villager — expected: &lt;-8&gt; but was: &lt;-9&gt;"* |
+| `Personality.TYPICAL` drifted from the population | **Red**, and the message carries the fix: *"TYPICAL says industry=10, but the generator now averages 25"* |
+| `Bond.apply` ignoring the allowance it was handed | **2 red.** *"a bigger allowance must let a day go further — expected: &lt;11&gt; but was: &lt;8&gt;"* |
+| `DeedBus` back on the base cap for everybody | **Red.** *"DeedBus.applyTo never calls Personality.allowance, so the ruling is a method nobody calls"* |
+| The allowance built from the harmful columns too | **NOTHING FAILED.** The guard did not exist. |
+| …the same breakage, after writing the guard | **Red.** *"a villager whose kindness columns average typical must get a typical day, however hard they take a blow — expected: &lt;8&gt; but was: &lt;10&gt;"* |
+
+**That fifth row is the whole reason rule 3 is a rule.** The filter that keeps the harmful columns
+out of the daily allowance is load-bearing — without it a short temper *raises* a villager's capacity
+for warmth, because they score high on being hit — and nothing tested it. Worse, the obvious fixture
+for it does not catch it: a villager cold enough to be interesting clamps three benign columns to the
+floor and comes out under the base cap either way. The guard that works needed a villager whose
+kindness columns average almost exactly typical while their harmful ones sit at the ceiling, and that
+fixture only got written because the breakage was actually run rather than reasoned about.
+
 **Ruled at close, by the owner.**
 
 - **`Bond.debt` stays.** Deletion was offered — nothing in the sixteen-session slice writes it, let
   alone reads it — and the ruling is that the field exists. It is therefore carried deliberately
-  rather than by inertia, which is a different thing from the position it was in an hour ago. The
-  exemption is untouched: session 16 reads it or deletes it, and `SocialValueLedgerTest` still turns
-  the build red at the close of 16 if neither happens.
-- **The legibility half of the exit criterion is still open**, and the honest scope of what can be
-  ruled today is narrower than the criterion eventually wants — see below.
+  rather than by inertia. The exemption is untouched: session 16 reads it or deletes it, and
+  `SocialValueLedgerTest` still turns the build red at the close of 16 if neither happens.
+- **Personality controls the ceiling, not the step.** The daily allowance is scaled by the same
+  weight table; the base of 8 is what a typical villager gets.
+- **Nominal means typical.** The table is centred on the measured population, re-ruled after the
+  first premise turned out to be wrong.
+- **Two villagers a week apart on identical treatment should end up a full band apart**, ~25 points.
+  Currently a median of 14 and a widest of 28. **The target belongs to session 07.**
+- **Shape now, magnitude at session 07.** The weights themselves are untouched.
 
 **What "legible" can and cannot mean before session 09.** The criterion asks whether the same gift
 *lands differently* on two villagers. Two things are true at once and it is worth separating them:
@@ -1536,10 +1630,19 @@ cheap branch is 100% of calls once a village is known — is about the *mix*, an
   would show it without asking is session 11. Until then, "did you notice?" cannot be tested,
   because there is nothing to notice with.
 
-So the ruling available now is the narrower and more useful one: **is the spread the generator
-actually produces wide enough to be worth building a surface on?** The fixtures in `DeedsTest` are
-mine — I chose a smith at −40 warmth and an innkeeper at +60. The question the playtest answers is
-whether the villagers a *real* world generates differ by enough. **If they do not, the fix is the
-magnitudes in the weight table — every cell is currently ≤ 0.45 — and not the architecture.** That
-is one number per cell and a test update, and it is much cheaper to learn now than after session 09
-has authored 160 lines against it.
+**What "legible" can and cannot mean before session 09.** The criterion asks whether the same gift
+*lands differently* on two villagers. Two things are true at once and it is worth separating them:
+
+- **The difference exists and is measurable today.** `/namesake debug bonds` prints a `gift×` column
+  next to each name, and giving the same item to two villagers moves their rows by different amounts.
+- **There is no player-facing surface for it yet, and that is by design.** `DESIGN.md` rules the bond
+  UI as bands and a deed ring, **never raw integers** — so the debug command is an instrument, not
+  the answer. The pools that would let a villager *sound* differently are session 09; the board that
+  would show it without asking is session 11. Until then, "did you notice?" cannot be tested,
+  because there is nothing to notice with.
+
+So the ruling available now was the narrower and more useful one: **is the spread the generator
+actually produces wide enough to be worth building a surface on?** It was asked, it was answered
+with a real village, and the answer moved the design twice — see the playtest section above. What
+that leaves for session 07 is a number rather than an adjective: **close the median week-apart from
+14 to 25**, against real earn-rate data and not against anyone's eye.
