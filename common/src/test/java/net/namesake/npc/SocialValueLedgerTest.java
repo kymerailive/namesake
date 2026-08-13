@@ -3,6 +3,11 @@ package net.namesake.npc;
 import com.mojang.serialization.Codec;
 import net.namesake.settlement.Settlement;
 import net.namesake.settlement.Settlements;
+import net.namesake.social.Bond;
+import net.namesake.social.Deed;
+import net.namesake.social.DeedBus;
+import net.namesake.social.Deeds;
+import net.namesake.social.Personality;
 import net.namesake.testing.MethodBody;
 import net.namesake.testing.ModClasses;
 import net.namesake.testing.SessionLedger;
@@ -44,9 +49,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *       compared against {@code WORKPLAN.md}'s own status board. Nobody has to remember.</li>
  * </ul>
  *
- * <p>{@code Persona.traits} carries the exemption ruled in the session 01 log: it expires after
- * session 05, so if 05 closes without the personality weight table this build goes red on its own.
- * That is standing risk 4, paid off.
+ * <p><b>{@code Persona.traits} is the entry this file was built around, and session 05 paid it.</b>
+ * The exemption was ruled in the session 01 log and expired at the close of 05; the consumer that
+ * pays it is {@code Personality.scale}, the static {@code float[8][6]} weight table. Had it not
+ * landed, this test would have turned the build red by itself at the moment the status board moved
+ * to session 06 — which is the whole design: nobody has to remember.
+ *
+ * <p><b>And session 05 opened five more, which is worth stating rather than burying.</b> A bond's
+ * four axes and its debt scalar are written here and read by sessions 09, 12 and 16. The temptation
+ * was to name the arithmetic that writes them, which would have passed every check in this file and
+ * been the same lie {@code cultureId} told in session 03. See the notes on {@code Bond} below.
  *
  * <p><b>Session 03 is the first time the mechanism fired at anyone.</b> Three exemptions —
  * {@code settlementId}, {@code householdId} and {@code cultureId} — expired at the close of that
@@ -132,12 +144,15 @@ class SocialValueLedgerTest {
                     "TraitRoll.roll seeds the household layer (±20 about the settlement mean) "
                             + "from this and nothing else, so households cluster."),
 
-            // Ruled in the session 01 log, and the reason this test exists at all.
-            Entry.exemptUntilAfter(Persona.class, "traits",
-                    List.of("traits", "trait", "withTrait"), 5,
-                    "Session 05: the static float[8][6] personality weight table multiplies a deed "
-                            + "delta by the subject's traits. Written, persisted and displayed "
-                            + "since session 01 with nothing branching on it — standing risk 4."),
+            // Paid off in session 05, and the reason this test exists at all. The exemption was
+            // ruled in the session 01 log, carried through 02, 03 and 04, and expired at the close
+            // of this session. It landed exactly where it said it would: the static float[8][6]
+            // weight table reads all eight axes and multiplies what a deed is worth by them.
+            Entry.consumedBy(Persona.class, "traits", List.of("traits", "trait", "withTrait"),
+                    Personality.class, "scale",
+                    "Personality.scale reads all eight axes to decide what a deed is worth to this "
+                            + "person. The same loaf is +2 warmth to a suspicious smith and +5 to a "
+                            + "warm innkeeper. Standing risk 4, paid."),
 
             // Paid off in session 03 — but NOT by the thing the exemption predicted. The exemption
             // named the syllable grammar, and the grammar turns a culture id into a string that is
@@ -216,7 +231,123 @@ class SocialValueLedgerTest {
                     TraitRoll.class, "settlementMean",
                     "Each of the four needs moves an axis: hunger raises acquisitiveness and "
                             + "lowers warmth, missing tools raise industry, crowding raises "
-                            + "temper. This is the whole reason the survey is worth running.")
+                            + "temper. This is the whole reason the survey is worth running."),
+
+            // --- Deed, new in session 05 -------------------------------------------------------
+            //
+            // Seven fields, seven consumers, no exemptions. Deed is ledgered by name rather than by
+            // declaring a codec: it is not persisted yet — its store is session 06's ring — and the
+            // scan that finds persisted records would therefore not find it. A record that carries
+            // social meaning through the pipeline is held to rule 5 whether or not it has reached a
+            // save file, or the rule would be about serialisation rather than about consequence.
+
+            Entry.consumedBy(Deed.class, "typeId", List.of("typeId", "type"),
+                    Deeds.class, "deltaFor",
+                    "Chooses the four nominal deltas and the column of the personality weight "
+                            + "table. Everything a deed is worth begins here."),
+
+            Entry.consumedBy(Deed.class, "actor", List.of("actor"),
+                    DeedBus.class, "applyTo",
+                    "The subject of the bond that moves. A deed is a thing somebody did, and the "
+                            + "bond is about whoever did it."),
+
+            Entry.consumedBy(Deed.class, "subject", List.of("subject"),
+                    Deeds.class, "deltaFor",
+                    "Decides whether this person takes the whole share or a witness's fraction of "
+                            + "it, by comparing their persona id against it. Read off the deed "
+                            + "rather than passed in, so a caller cannot get it wrong."),
+
+            Entry.consumedBy(Deed.class, "settlementId", List.of("settlementId"),
+                    Deeds.class, "deltaFor",
+                    "A witness who is not a resident of the settlement the deed happened in "
+                            + "records it at three quarters weight. It is not their village."),
+
+            Entry.consumedBy(Deed.class, "gameDay", List.of("gameDay"),
+                    DeedBus.class, "applyTo",
+                    "The day the bond is brought up to before the delta is spent — which resets "
+                            + "the daily allowance if the day has turned, and applies the decay if "
+                            + "it has turned several times."),
+
+            Entry.consumedBy(Deed.class, "severity", List.of("severity"),
+                    Deeds.class, "deltaFor",
+                    "Scales the whole delta. A blow for two hearts costs a quarter of what a blow "
+                            + "for eight does; SocialEvents.severityOf is what writes it."),
+
+            Entry.consumedBy(Deed.class, "confidence", List.of("confidence"),
+                    Deeds.class, "deltaFor",
+                    "Scales the whole delta, so a story heard at second hand moves a bond less "
+                            + "than having watched it. Every deed emitted in session 05 is "
+                            + "first-hand at 100; session 08 is what makes any of them less."),
+
+            // --- Bond, new in session 05 -------------------------------------------------------
+            //
+            // Five exemptions, and that is the honest count rather than a comfortable one. Session
+            // 03 shipped Settlement with none, because every one of its fields was read by the trait
+            // roll in the same session. A bond's four axes are not like that: they are written here
+            // and read by sessions 09 and 12, and the only thing in this session that touches them
+            // is the arithmetic that writes them.
+            //
+            // Naming that arithmetic would have passed this test and been a lie of exactly the shape
+            // session 03 caught with cultureId — a consumer that exists, is not a display, reads the
+            // field, and is still not a consumer, because it is the writer looking at its own work.
+            // A number whose only reader is the thing that wrote it has no output.
+            //
+            // The three bookkeeping fields below are a different case and are consumed for real.
+            // gainedToday, lastSeenDay and peakWarmth exist to be read by the cap and the decay, and
+            // the cap and the decay change what the bond becomes. That is an `if` statement with a
+            // consequence, which is all rule 5 asks for.
+
+            Entry.exemptUntilAfter(Bond.class, "trust", List.of("trust", "axis"), 9,
+                    "Session 09, the residency threshold: DESIGN.md §5 grants residency on a known "
+                            + "band with three residents or one significant deed, and residency is "
+                            + "a persisted state change — prices, office eligibility, and being a "
+                            + "valid subject of gossip — not a line of dialogue. Naming the pool "
+                            + "selection instead would be naming a display."),
+
+            Entry.exemptUntilAfter(Bond.class, "warmth", List.of("warmth", "axis"), 9,
+                    "Session 09, with trust: the same residency threshold reads both. Warmth is "
+                            + "also the only axis that decays, toward four tenths of its own high "
+                            + "water mark, which is why peakWarmth exists at all."),
+
+            Entry.exemptUntilAfter(Bond.class, "respect", List.of("respect", "axis"), 12,
+                    "Session 12, the standing bands: the trade price multiplier and whether one "
+                            + "recipe is taught. Both are mechanics rather than lines, and the "
+                            + "ledger names session 12 as having exactly three consumers."),
+
+            Entry.exemptUntilAfter(Bond.class, "fear", List.of("fear", "axis"), 16,
+                    "Sessions 16-20, the grievance ladder: DESIGN.md §3 says fear earns its slot "
+                            + "because it makes force-resolutions representable — intimidation "
+                            + "works and the settlement remembers that it worked — and §6 is where "
+                            + "that is read. This and debt are the two longest exemptions here. "
+                            + "Fear is at least written already: a strike and a killing both raise "
+                            + "it, so the field is live rather than dormant."),
+
+            Entry.exemptUntilAfter(Bond.class, "debt", List.of("debt"), 16,
+                    "Sessions 16-20: a favour or a gift is what resolves a stage-2 grievance, and "
+                            + "inheritance at 21-23 rules that debts die with the NPC. THE WEAKEST "
+                            + "ENTRY IN THIS FILE, and weaker than professionId's: nothing in the "
+                            + "sixteen-session slice writes it, let alone reads it. It ships "
+                            + "because DESIGN.md §2 locks 'four signed axes plus a debt scalar'. "
+                            + "If that is not worth a schema field for eleven sessions, delete it "
+                            + "now rather than moving this number later."),
+
+            Entry.consumedBy(Bond.class, "lastSeenDay", List.of("lastSeenDay"),
+                    Bond.class, "decayedTo",
+                    "How many days of warmth to give back, and whether the daily allowance has "
+                            + "reset. A bond read on a later day is a different bond, which is the "
+                            + "whole of what 'lazy decay' means."),
+
+            Entry.consumedBy(Bond.class, "gainedToday", List.of("gainedToday"),
+                    Bond.class, "apply",
+                    "Four counters in four bits each. Bond.apply spends a positive delta against "
+                            + "what is left of the axis's allowance and drops the rest, which is "
+                            + "the difference between a relationship and a number you can grind."),
+
+            Entry.consumedBy(Bond.class, "peakWarmth", List.of("peakWarmth"),
+                    Bond.class, "decayedTo",
+                    "The floor decay falls to, at four tenths of it. Somebody who mattered to you "
+                            + "and then went away for a year is cooler when they come back, not a "
+                            + "stranger — and that is a different number for every bond.")
     );
 
     /**

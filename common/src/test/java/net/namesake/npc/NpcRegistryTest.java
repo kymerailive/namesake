@@ -9,6 +9,7 @@ import net.namesake.settlement.Need;
 import net.namesake.settlement.Settlement;
 import net.namesake.settlement.Settlements;
 import net.namesake.settlement.Specialty;
+import net.namesake.social.Bond;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -310,6 +311,89 @@ class NpcRegistryTest {
         assertTrue(reloaded.isReadOnly(),
                 "every persona in the lost settlement now points at an id nothing answers to, so "
                         + "the file must not be written back");
+    }
+
+    // --- bonds, new in session 05 -----------------------------------------------------------------
+
+    private static final UUID A_PLAYER = UUID.fromString("0a0a0a0a-1111-2222-3333-444444444444");
+
+    @Test
+    @DisplayName("a bond about a player is stored, marks the registry dirty, and survives a reload")
+    void bondsRoundTripAndMarkTheRegistryDirty() {
+        NpcRegistry registry = new NpcRegistry();
+        UUID personaId = UUID.randomUUID();
+        registry.put(stamped(personaId, 3, 1L, (byte) 0));
+        assertTrue(registry.isDirty());
+        registry.setDirty(false);
+
+        Bond bond = Bond.fresh(40).apply(new int[]{3, 3, 0, 0}, 40);
+        registry.putBond(personaId, A_PLAYER, bond);
+
+        // CLAUDE.md's note for this session: a SavedData is only written when it is dirty, so a
+        // bond updated without setDirty is a bond that exists until the world reloads.
+        assertTrue(registry.isDirty(), "a bond written into a clean registry never reaches the file");
+
+        NpcRegistry reloaded = reload(registry.save(new CompoundTag(), null));
+        assertEquals(1, reloaded.bonds().size());
+        assertEquals(Optional.of(bond), reloaded.bonds().stored(personaId, A_PLAYER));
+    }
+
+    @Test
+    @DisplayName("a bond about another NPC is refused, and refused loudly enough to leave no trace")
+    void npcToNpcBondsAreRefused() {
+        NpcRegistry registry = new NpcRegistry();
+        UUID anna = UUID.randomUUID();
+        UUID bram = UUID.randomUUID();
+        registry.put(stamped(anna, 3, 1L, (byte) 0));
+        registry.put(stamped(bram, 3, 1L, (byte) 0));
+        registry.setDirty(false);
+
+        registry.putBond(anna, bram, Bond.fresh(1).apply(new int[]{5, 0, 0, 0}, 1));
+
+        // Session 05 decision 1: the key is general so session 16 needs no migration, and the
+        // population is restricted because an NPC-to-NPC bond has no consumer until then. Twelve
+        // witnesses per deed across four hundred personas is 160,000 rows of DESIGN.md §1's
+        // forbidden shape, so the guard is not tidiness.
+        assertEquals(0, registry.bonds().size(), "nothing may be written");
+        assertFalse(registry.isDirty(), "and a refusal must not dirty the file either");
+
+        // The same bond about somebody the registry has never heard of — a player — goes through.
+        registry.putBond(anna, A_PLAYER, Bond.fresh(1).apply(new int[]{5, 0, 0, 0}, 1));
+        assertEquals(1, registry.bonds().size());
+    }
+
+    @Test
+    @DisplayName("removing a persona takes its bonds with it, and says the file changed")
+    void removingAPersonaDropsItsBonds() {
+        NpcRegistry registry = new NpcRegistry();
+        UUID personaId = UUID.randomUUID();
+        registry.put(stamped(personaId, 3, 1L, (byte) 0));
+        registry.putBond(personaId, A_PLAYER, Bond.fresh(1).apply(new int[]{5, 0, 0, 0}, 1));
+        registry.setDirty(false);
+
+        assertTrue(registry.remove(personaId));
+        assertEquals(0, registry.bonds().size(),
+                "a bond keyed on a persona nothing can name is a row nothing will ever look up");
+        assertTrue(registry.isDirty());
+    }
+
+    @Test
+    @DisplayName("an unreadable bond makes the whole registry read-only, like an unreadable persona")
+    void oneCorruptBondProtectsTheFile() {
+        NpcRegistry good = new NpcRegistry();
+        UUID personaId = UUID.randomUUID();
+        good.put(stamped(personaId, 3, 1L, (byte) 0));
+        good.putBond(personaId, A_PLAYER, Bond.fresh(1).apply(new int[]{5, 0, 0, 0}, 1));
+        CompoundTag tag = good.save(new CompoundTag(), null);
+
+        tag.getList("bonds", Tag.TAG_COMPOUND).add(new CompoundTag());
+
+        NpcRegistry reloaded = reload(tag);
+
+        assertEquals(1, reloaded.bonds().size(), "the readable bond still loads");
+        assertTrue(reloaded.isReadOnly(),
+                "a villager who has quietly forgotten somebody is exactly as unsafe to write back "
+                        + "as a village that has lost its bell");
     }
 
     @Test

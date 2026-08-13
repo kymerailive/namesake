@@ -36,6 +36,10 @@ import net.namesake.platform.PersonaLink;
 import net.namesake.settlement.Need;
 import net.namesake.settlement.Settlement;
 import net.namesake.settlement.Specialty;
+import net.namesake.social.Bond;
+import net.namesake.social.Deed;
+import net.namesake.social.DeedBus;
+import net.namesake.social.DeedType;
 import net.namesake.verb.ClientInteractionState;
 import net.namesake.verb.ClientPacketSink;
 import net.namesake.verb.GreetPayload;
@@ -127,6 +131,26 @@ public final class AttachBetHarness {
     private static final List<Resident> RESIDENTS = new ArrayList<>();
     private static BlockPos villageSite;
     private static Settlement registeredSettlement;
+
+    /** Session 05: the six roles of the witness leg, and the bonds it produced. */
+    private static UUID deedSubject;
+    private static final List<UUID> WITNESSES_IN_SIGHT = new ArrayList<>();
+    private static UUID witnessBehindAWall;
+    private static UUID witnessOutOfRange;
+    private static final List<BondRow> BONDS = new ArrayList<>();
+
+    /**
+     * One bond as the setup phase left it, so {@code verify} compares against what was actually
+     * written rather than against a constant.
+     *
+     * <p>{@code about} is recorded rather than assumed: the dev client picks a fresh player name —
+     * and therefore a fresh offline UUID — on every launch, so the player who ran {@code setup} is
+     * not the player who runs {@code verify}. A check keyed on the live player would read every
+     * bond as absent and call it a pass.
+     */
+    private record BondRow(UUID personaId, UUID about, byte trust, byte warmth, byte respect,
+                           byte fear) {
+    }
 
     /**
      * {@code birthTick} is recorded rather than stamped, and it is the probe that survives a
@@ -365,8 +389,199 @@ public final class AttachBetHarness {
             }
             case 9, 10, 11, 12 -> runWireCheck(server, level);
             case 13, 14, 15 -> runSettlementCheck(server, level);
+            case 16, 17 -> runWitnessCheck(server, level);
             default -> finish(server, true);
         }
+    }
+
+    // --- session 05: the witness scan, in a running level ------------------------------------------
+
+    /**
+     * Feeds one villager in front of five others and reads the bonds back.
+     *
+     * <p><b>Why this earns the session's one harness leg.</b> Everything else about bonds is
+     * arithmetic over immutable values and is a ten-millisecond unit test: the cap, the floors, the
+     * decay curve, the personality weighting, the witness share. The single claim no unit test in
+     * {@code :common} can make is the one {@code DESIGN.md} §4 step 2 actually rests on — that
+     * {@code AABB.inflate(24)} and {@code hasLineOfSight} pick out the right villagers in a real
+     * level, with real blocks in the way and a real entity index underneath. So the leg is built
+     * around exactly the two facts a game is needed for:
+     *
+     * <ul>
+     *   <li>one villager is put <b>behind a stone wall</b>, well inside the box. If it records the
+     *       deed, the line-of-sight filter is not running;</li>
+     *   <li>one villager is put <b>forty blocks up</b>, in clear air with nothing in the way. If it
+     *       records the deed, the box is not bounding anything.</li>
+     * </ul>
+     *
+     * <p>The two failures are deliberately opposite: the walled one has range and no sight, the high
+     * one has sight and no range. A single mistake cannot pass both.
+     *
+     * <p><b>Traits are zeroed first, and that is the point rather than a convenience.</b>
+     * {@code WORKPLAN.md}'s exit criterion is "+3 subject, +1 each witness", which is the structural
+     * arithmetic with the personality weight standing at neutral. Left rolled, these six would each
+     * produce a different and perfectly correct number, and the leg would be asserting the weight
+     * table rather than the scan. The weight table is proven next door, in {@code DeedsTest}, where
+     * it can be asserted exactly.
+     */
+    private static void runWitnessCheck(MinecraftServer server, ServerLevel level) {
+        switch (step) {
+            case 16 -> {
+                if (RESIDENTS.size() < 6) {
+                    record(false, "WITNESS needs six residents to cast, found " + RESIDENTS.size());
+                    finish(server, false);
+                    return;
+                }
+                ServerPlayer player = player(server);
+                BlockPos stand = villageSite.offset(12, 1, 2);
+                teleport(player, level, stand.getX() + 0.5, stand.getY(), stand.getZ() + 0.5);
+
+                // A wall between the fifth villager and the player. Three blocks tall, because an
+                // eye is at 1.62 and a two-block wall is a wall you can see over. Laid on the
+                // negative-z side: everything the leg touches has to stay on the platform this
+                // harness built, or the fixture's floor is whatever terrain the seed happened to
+                // put there — and a villager standing in a hillside is a leg that fails for a
+                // reason that has nothing to do with line of sight.
+                for (int x = -3; x <= 3; x++) {
+                    for (int y = 0; y <= 2; y++) {
+                        level.setBlockAndUpdate(stand.offset(x, y, -3), Blocks.STONE.defaultBlockState());
+                    }
+                }
+
+                WITNESSES_IN_SIGHT.clear();
+                deedSubject = RESIDENTS.get(0).personaId();
+                place(server, level, deedSubject, stand.getX() + 1.5, stand.getY(), stand.getZ() + 0.5);
+                for (int i = 1; i <= 3; i++) {
+                    UUID personaId = RESIDENTS.get(i).personaId();
+                    WITNESSES_IN_SIGHT.add(personaId);
+                    place(server, level, personaId,
+                            stand.getX() + 1.5 + i, stand.getY(), stand.getZ() + 1.5);
+                }
+                witnessBehindAWall = RESIDENTS.get(4).personaId();
+                place(server, level, witnessBehindAWall, stand.getX() + 0.5, stand.getY(), stand.getZ() - 5.5);
+                witnessOutOfRange = RESIDENTS.get(5).personaId();
+                place(server, level, witnessOutOfRange, stand.getX() + 0.5, stand.getY() + 40, stand.getZ() + 0.5);
+
+                // Neutral personalities, so the numbers under test are the structural ones.
+                NpcRegistry registry = NpcRegistry.get(server);
+                for (Resident resident : RESIDENTS) {
+                    registry.persona(resident.personaId()).ifPresent(persona ->
+                            registry.put(persona.withTraits(new byte[Persona.TRAIT_COUNT])));
+                }
+                beginAwait(400);
+            }
+            case 17 -> {
+                ServerPlayer player = player(server);
+                BlockPos stand = villageSite.offset(12, 1, 2);
+                if (stillWaiting(server, () -> castIsInPlace(server, level, stand), false,
+                        "the six villagers to settle into their places")) {
+                    return;
+                }
+                record(castIsInPlace(server, level, stand),
+                        "WITNESS the cast is in place: five villagers inside the 24-block box, one "
+                                + "forty blocks up outside it");
+
+                NpcRegistry registry = NpcRegistry.get(server);
+                Villager subject = (Villager) boundEntity(server, deedSubject).orElse(null);
+                if (subject == null) {
+                    record(false, "WITNESS the subject villager is not loaded");
+                    finish(server, false);
+                    return;
+                }
+                UUID actor = player.getUUID();
+                int day = Deed.dayOf(level);
+
+                DeedBus.Result fed = DeedBus.emit(level, DeedType.FED_HUNGRY, player, subject);
+                record(fed.witnesses() == 3, "WITNESS the scan found " + fed.witnesses()
+                        + " witnesses; three could see it, one was behind a wall and one was out of range");
+
+                Bond onSubject = registry.bonds().at(deedSubject, actor, day);
+                record(onSubject.trust() == 3 && onSubject.warmth() == 3,
+                        "DEED the villager who was fed gained +3 (trust " + onSubject.trust()
+                                + ", warmth " + onSubject.warmth() + ")");
+
+                int moved = 0;
+                for (UUID witness : WITNESSES_IN_SIGHT) {
+                    Bond bond = registry.bonds().at(witness, actor, day);
+                    if (bond.trust() == 1 && bond.warmth() == 1) {
+                        moved++;
+                    } else {
+                        record(false, "DEED witness " + witness + " gained " + bond
+                                + ", expected +1/+1");
+                    }
+                }
+                record(moved == 3, "DEED " + moved + "/3 witnesses who could see it gained +1");
+
+                record(registry.bonds().stored(witnessBehindAWall, actor).isEmpty(),
+                        "CANSEE the villager behind the wall recorded nothing, though it was five "
+                                + "blocks away and well inside the box");
+                record(registry.bonds().stored(witnessOutOfRange, actor).isEmpty(),
+                        "RANGE the villager forty blocks up recorded nothing, though nothing at all "
+                                + "was in its way");
+
+                // WORKPLAN.md's second exit criterion: nine feedings in one day, and the cap holds.
+                for (int i = 0; i < 8; i++) {
+                    DeedBus.emit(level, DeedType.FED_HUNGRY, player, subject);
+                }
+                Bond capped = registry.bonds().at(deedSubject, actor, day);
+                record(capped.warmth() == Bond.DAILY_CAP && capped.trust() == Bond.DAILY_CAP,
+                        "CAP nine feedings in one day left trust " + capped.trust() + " and warmth "
+                                + capped.warmth() + ", cap " + Bond.DAILY_CAP);
+                record(Deed.dayOf(level) == day,
+                        "CAP all nine landed on the same in-game day (" + day + ")");
+
+                // The instrument the owner reads the criterion with, run where there is something in
+                // it, and through the real dispatcher so the whole command is exercised.
+                server.getCommands().performPrefixedCommand(
+                        player.createCommandSourceStack(), "namesake debug bonds");
+
+                recordBonds(registry, actor);
+                writeSubjects(level);
+                advance(server, 5);
+            }
+            default -> finish(server, true);
+        }
+    }
+
+    /** Moves one persona's villager, and stops it falling out of the sky. */
+    private static void place(MinecraftServer server, ServerLevel level, UUID personaId,
+                              double x, double y, double z) {
+        Entity entity = boundEntity(server, personaId).orElse(null);
+        if (entity == null) {
+            record(false, "WITNESS persona " + personaId + " has no loaded villager to place");
+            return;
+        }
+        entity.setNoGravity(true);
+        entity.teleportTo(x, y, z);
+    }
+
+    /**
+     * True once five of the six are inside the witness box and the sixth is not.
+     *
+     * <p>Polls the condition the leg actually depends on rather than a tick count — session 01's
+     * rule, and the sixth application of it. A scan run before the entity index has caught up with
+     * six teleports would find the wrong villagers and blame the AABB.
+     */
+    private static boolean castIsInPlace(MinecraftServer server, ServerLevel level, BlockPos stand) {
+        Entity subject = boundEntity(server, deedSubject).orElse(null);
+        if (subject == null) {
+            return false;
+        }
+        AABB box = new AABB(subject.position(), subject.position()).inflate(DeedBus.WITNESS_RADIUS);
+        long inside = level.getEntitiesOfClass(Villager.class, box).size();
+        Entity far = boundEntity(server, witnessOutOfRange).orElse(null);
+        return inside == 5 && far != null && !box.contains(far.position());
+    }
+
+    /** Snapshots every bond the leg produced, for {@code verify} to look for after a reload. */
+    private static void recordBonds(NpcRegistry registry, UUID actor) {
+        BONDS.clear();
+        for (Resident resident : RESIDENTS) {
+            registry.bonds().stored(resident.personaId(), actor).ifPresent(bond ->
+                    BONDS.add(new BondRow(resident.personaId(), actor, bond.trust(), bond.warmth(),
+                            bond.respect(), bond.fear())));
+        }
+        Namesake.LOGGER.info("[harness] recorded {} bond(s) for the verify phase", BONDS.size());
     }
 
     // --- session 03: a settlement detected from real POI blocks ------------------------------------
@@ -750,12 +965,16 @@ public final class AttachBetHarness {
                 beginAwait(2400);
             }
             case 1 -> {
-                boolean migrated = NpcRegistry.get(server).loadedSchemaVersion() < NpcSchema.CURRENT;
-                // A migrated save is waiting on something different: not "the values came back"
-                // but "the blank records were filled in", which needs the chunks to load and the
-                // survey to run before it is true.
-                if (stillWaiting(server, () -> migrated ? subjectsBackfilled(server) : subjectsIntact(server),
-                        false, migrated ? "the migrated personas to be backfilled"
+                // Two different questions, and conflating them is how a migration test goes green
+                // for the wrong reason. A world written before schema 3 has no cultures and no
+                // traits at all, so its personas must be *backfilled* and warmth is expected to
+                // move. A world written at schema 3 already has both, so nothing about a persona
+                // may move on the way to schema 4 — and if it did, the fixer is rewriting records
+                // it has no business touching.
+                boolean preCultures = NpcRegistry.get(server).loadedSchemaVersion() < 3;
+                if (stillWaiting(server,
+                        () -> preCultures ? subjectsBackfilled(server) : subjectsIntact(server),
+                        false, preCultures ? "the migrated personas to be backfilled"
                                 : "the subjects' chunks to load")) {
                     return;
                 }
@@ -774,9 +993,7 @@ public final class AttachBetHarness {
                                 + persona.get().birthTick() + ", expected " + subject.birthTick());
                         continue;
                     }
-                    // A cross-build load is expected to move warmth: the persona predates culture
-                    // and traits entirely, so schema 3 backfills it. Same build, same values.
-                    if (!migrated && persona.get().trait(Persona.WARMTH) != subject.warmth()) {
+                    if (!preCultures && persona.get().trait(Persona.WARMTH) != subject.warmth()) {
                         record(false, "RELOAD persona " + subject.personaId() + " warmth is "
                                 + persona.get().trait(Persona.WARMTH) + ", expected " + subject.warmth());
                         continue;
@@ -786,7 +1003,7 @@ public final class AttachBetHarness {
                 record(found == SUBJECTS.size(),
                         "RELOAD " + found + "/" + SUBJECTS.size()
                                 + " personas survived save -> quit -> reload with the same id and values");
-                if (migrated) {
+                if (preCultures) {
                     checkBackfill(registry);
                 } else {
                     record(subjectsIntact(server),
@@ -814,6 +1031,7 @@ public final class AttachBetHarness {
                     return;
                 }
                 checkSettlementSurvivedReload(registry);
+                checkBondsSurvivedReload(registry);
                 // The exit criterion's instrument, run where there is something to read: through
                 // the real dispatcher, so argument parsing and the permission gate are covered too,
                 // and into the log so a run leaves behind what a player would have seen.
@@ -886,9 +1104,59 @@ public final class AttachBetHarness {
     }
 
     /**
+     * The bonds the setup phase wrote, after a save and a full reload.
+     *
+     * <p><b>The check {@code CLAUDE.md} names for this session by name.</b> A {@code SavedData} is
+     * only written when it is dirty, so a bond updated without {@code setDirty} is a bond that
+     * exists until the world reloads and then does not — session 01 shipped exactly that in the
+     * datafixer and found it only by loading one world twice. Nothing in the setup phase would have
+     * noticed: every assertion there reads the same in-memory table it just wrote.
+     *
+     * <p>The player's UUID is read out of the subject file rather than off the live player, because
+     * the dev client picks a new name and therefore a new offline UUID on every launch. Keyed on the
+     * live player, every bond would read as absent and this would pass by finding nothing.
+     */
+    private static void checkBondsSurvivedReload(NpcRegistry registry) {
+        if (BONDS.isEmpty()) {
+            // A world written before session 05 has no bonds in it. Skipping is right; asserting
+            // would fail the cross-build migration run for a reason that is not about migration.
+            Namesake.LOGGER.info("[harness] no bonds recorded in this save; skipping the bond legs");
+            return;
+        }
+        int intact = 0;
+        for (BondRow row : BONDS) {
+            Optional<Bond> stored = registry.bonds().stored(row.personaId(), row.about());
+            if (stored.isEmpty()) {
+                record(false, "BOND RELOAD " + row.personaId() + " has forgotten " + row.about()
+                        + " entirely — a bond written without setDirty is a bond that never "
+                        + "reached the file");
+                continue;
+            }
+            Bond bond = stored.get();
+            if (bond.trust() != row.trust() || bond.warmth() != row.warmth()
+                    || bond.respect() != row.respect() || bond.fear() != row.fear()) {
+                record(false, "BOND RELOAD " + row.personaId() + " came back as " + bond
+                        + ", expected trust " + row.trust() + " warmth " + row.warmth()
+                        + " respect " + row.respect() + " fear " + row.fear());
+                continue;
+            }
+            intact++;
+        }
+        record(intact == BONDS.size(), "BOND RELOAD " + intact + "/" + BONDS.size()
+                + " bonds survived save -> quit -> reload with every axis intact");
+    }
+
+    /**
      * If the world on disk predates the current schema, prove the fixer ran <i>and</i> that the
      * data it touched actually changed. "It loaded without crashing" is not evidence of a
      * migration; a fixer that silently does nothing loads without crashing too.
+     *
+     * <p><b>Which claim is the right one depends on which version the world was written at</b>, and
+     * they are opposites. Schema 1 and 2 wrote sentinels that have to be <i>rewritten</i>, so the
+     * evidence is that records changed. Schema 3 → 4 adds a table and must rewrite nothing at all,
+     * so the evidence is that records did <i>not</i> change — plus the one thing that genuinely
+     * could go wrong, which is the absent bond table being read as damage and turning the registry
+     * read-only.
      */
     private static void checkDataFixer(NpcRegistry registry) {
         int onDisk = registry.loadedSchemaVersion();
@@ -898,6 +1166,11 @@ public final class AttachBetHarness {
         }
         record(true, "DATAFIXER world was written at schema " + onDisk
                 + ", this build understands " + NpcSchema.CURRENT);
+
+        if (onDisk >= 3) {
+            checkSchemaThreeToFour(registry);
+            return;
+        }
 
         long placement = SUBJECTS.stream()
                 .map(subject -> registry.persona(subject.personaId()))
@@ -926,6 +1199,39 @@ public final class AttachBetHarness {
     }
 
     /**
+     * The schema 3 → 4 migration, read out of a world that was genuinely written at schema 3.
+     *
+     * <p>Everything asserted here is a negative, which is unusual and is the point. This migration
+     * adds a table rather than rewriting a value, so the ways it can be wrong are: it rewrote
+     * something it should not have; the absent bond table was read as damage and the registry is
+     * now refusing to save; or the version was not stamped, in which case the world migrates again
+     * on every load for ever — session 01's defect 1, which was found only by loading one world
+     * twice.
+     */
+    private static void checkSchemaThreeToFour(NpcRegistry registry) {
+        long untouched = SUBJECTS.stream()
+                .map(subject -> registry.persona(subject.personaId()))
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .filter(Persona::isGenerated)
+                .filter(persona -> persona.settlementId() == Persona.UNASSIGNED)
+                .count();
+        record(untouched == SUBJECTS.size(), "DATAFIXER 3->4 " + untouched + "/" + SUBJECTS.size()
+                + " personas kept the culture and placement schema 3 gave them; this migration adds "
+                + "a table and must rewrite nothing");
+
+        record(registry.settlements().size() == 1,
+                "DATAFIXER 3->4 the settlement table came through the migration ("
+                        + registry.settlements().size() + ")");
+        record(registry.bonds().size() == 0,
+                "DATAFIXER 3->4 a world with no bond table loads as having no bonds, not as damaged ("
+                        + registry.bonds().size() + ")");
+        record(!registry.isReadOnly(),
+                "DATAFIXER 3->4 the registry is writable, so the migrated file will be written back "
+                        + "at schema " + NpcSchema.CURRENT + " rather than migrating again on every load");
+    }
+
+    /**
      * Runs the {@code /namesake debug} commands through the real dispatcher.
      *
      * <p>They are the instruments the rest of this session's evidence is read with, and an
@@ -948,6 +1254,10 @@ public final class AttachBetHarness {
         CommandSourceStack source = server.createCommandSourceStack();
         server.getCommands().performPrefixedCommand(source, "namesake debug registry");
         server.getCommands().performPrefixedCommand(source, "namesake debug persona " + entityId);
+        server.getCommands().performPrefixedCommand(source, "namesake debug bond " + entityId);
+        // Run from the console, so there is no viewer. Its own absence branch is the thing under
+        // test here — a section that prints nothing reads as a broken command, DESIGN.md §11.
+        server.getCommands().performPrefixedCommand(source, "namesake debug bonds");
         server.getCommands().performPrefixedCommand(source,
                 "namesake debug settrait temper 7 " + entityId);
 
@@ -1117,6 +1427,10 @@ public final class AttachBetHarness {
             }
             lines.add(line.toString());
         }
+        for (BondRow bond : BONDS) {
+            lines.add("bond " + bond.personaId() + " " + bond.about() + " " + bond.trust()
+                    + " " + bond.warmth() + " " + bond.respect() + " " + bond.fear());
+        }
         for (Resident resident : RESIDENTS) {
             // Name last on the line: it contains a space, and everything before it does not.
             lines.add("resident " + resident.personaId() + " " + resident.name());
@@ -1140,6 +1454,7 @@ public final class AttachBetHarness {
         }
         SUBJECTS.clear();
         RESIDENTS.clear();
+        BONDS.clear();
         villageSite = null;
         registeredSettlement = null;
         for (String line : lines) {
@@ -1163,13 +1478,17 @@ public final class AttachBetHarness {
                         Byte.parseByte(parts[7]),
                         new byte[]{Byte.parseByte(parts[8]), Byte.parseByte(parts[9]),
                                 Byte.parseByte(parts[10]), Byte.parseByte(parts[11])});
+                case "bond" -> BONDS.add(new BondRow(UUID.fromString(parts[1]),
+                        UUID.fromString(parts[2]), Byte.parseByte(parts[3]),
+                        Byte.parseByte(parts[4]), Byte.parseByte(parts[5]), Byte.parseByte(parts[6])));
                 case "resident" -> RESIDENTS.add(new Resident(UUID.fromString(parts[1]),
                         String.join(" ", java.util.Arrays.copyOfRange(parts, 2, parts.length))));
                 default -> Namesake.LOGGER.warn("[harness] unrecognised subject line '{}'", line);
             }
         }
-        Namesake.LOGGER.info("[harness] read {} subject(s) and {} resident(s), site {}, village {}",
-                SUBJECTS.size(), RESIDENTS.size(), testSite, villageSite);
+        Namesake.LOGGER.info("[harness] read {} subject(s), {} resident(s) and {} bond(s), "
+                + "site {}, village {}",
+                SUBJECTS.size(), RESIDENTS.size(), BONDS.size(), testSite, villageSite);
     }
 
     private static void finish(MinecraftServer server, boolean reachedTheEnd) {

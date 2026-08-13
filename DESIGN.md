@@ -1,7 +1,7 @@
 # DESIGN — Namesake
 
 What we are building and why. `WORKPLAN.md` owns *what happens next*; this owns *what it is*.
-42 decisions ruled, 0 open.
+45 decisions ruled, 0 open.
 
 **The thesis:** a deed witnessed by one villager changes what a different villager, in a different
 settlement, says to you later.
@@ -55,6 +55,9 @@ Enforce with a failing test, not intention.
 | | |
 |---|---|
 | Bonds | 4 signed axes: trust, warmth, respect, fear. Plus a debt scalar. |
+| Bond key | **(the NPC who holds it → whoever it is about), both bare UUIDs.** General in shape so session 16's NPC-to-NPC grievances need no migration; restricted in population by one guard, because an NPC-to-NPC bond has no consumer before then and 400 personas is 160,000 rows of §1's forbidden shape. |
+| Bond storage | **Inside `namesake_npcs.dat`, under one `NpcSchema` version** — same argument as settlements. Two files can be torn apart by a crash between two writes, and a bond points at a persona by id. |
+| Bond decay | **Lazy, warmth only, toward `peak × 0.4` at a point a day.** Computed on read, never ticked; one catch-up applies at most `dayDelta ≤ 64` days. Absence cools a bond; it never resets one. |
 | Bond UI | Bands + the deed ring. **Never raw integers.** |
 | Gossip | Distorts, never lies. Confidence degrades; identity blurs below 50. |
 | Grievance notification | None — you must notice. Board is the backstop. |
@@ -109,7 +112,7 @@ record Bond(
     byte  fear,      //   0..100   do they avoid crossing you
     short debt,
     int   lastSeenDay,
-    byte  gainedToday,   // cap 8/axis/day, reset lazily on write
+    short gainedToday,   // 4 nibbles, cap 8/axis/day, reset lazily on write
     byte  peakWarmth)    // decay target = peak * 0.4
 
 record Deed(                        // ~24 B; 32-entry ring per NPC ≈ 768 B
@@ -138,7 +141,17 @@ remembers that it worked.
    once per deed. *(MCA's harvest chore scans ~72,000 blocks per villager per minute. Do not.)*
 3. **Record** — each witness appends to their ring at confidence 100; the subject records it weighted
    higher.
-4. **Bond update** — deed delta × personality weight vector × remaining daily cap.
+4. **Bond update** — deed delta × witness share × place weight × severity × confidence × personality
+   weight, then against what is left of the daily cap.
+
+   The order is not decoration. The first four are **structural** — how much of this deed is yours at
+   all — and apply whichever way it cuts. The last two are **softeners**, and neither may ever make a
+   harmful axis cheaper: a personality weight below neutral is ignored on the way down, the cap
+   applies to positives only, and rounding is away from zero so a share cannot quietly shave a
+   negative to nothing. *You cannot spend the day's allowance and then hit someone for free, and a
+   placid villager does not charge less for a murder.* A weight **above** neutral still bites both
+   ways — a hot temper takes a blow harder — which is what gives the table a column for the harmful
+   deeds at all.
 5. **Settlement effect** — contributes to unrest/prosperity. One-time shocks excluded from the drift
    target, so grief fades instead of pinning the settlement forever.
 6. **Gossip queue** — enters the settlement deque, cap 32.

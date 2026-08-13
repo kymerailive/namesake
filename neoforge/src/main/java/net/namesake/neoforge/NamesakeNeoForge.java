@@ -2,6 +2,7 @@ package net.namesake.neoforge;
 
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.npc.Villager;
 import net.namesake.Namesake;
 import net.namesake.command.NamesakeCommands;
 import net.namesake.harness.AttachBetHarness;
@@ -9,6 +10,7 @@ import net.namesake.harness.ProfilerHarness;
 import net.namesake.npc.PersonaService;
 import net.namesake.platform.VerbTransport;
 import net.namesake.settlement.SettlementRegistrar;
+import net.namesake.social.SocialEvents;
 import net.namesake.verb.Interactions;
 import net.namesake.verb.VerbNetwork;
 import net.neoforged.bus.api.IEventBus;
@@ -18,6 +20,8 @@ import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.entity.living.LivingConversionEvent;
+import net.neoforged.neoforge.event.entity.living.LivingDamageEvent;
+import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
@@ -46,6 +50,10 @@ public final class NamesakeNeoForge {
         NeoForge.EVENT_BUS.addListener(NamesakeNeoForge::onConversion);
         NeoForge.EVENT_BUS.addListener(NamesakeNeoForge::onRegisterCommands);
         NeoForge.EVENT_BUS.addListener(NamesakeNeoForge::onEntityInteract);
+        // Session 05's other two deed doors. Post rather than Pre: the damage is already applied,
+        // so a killing blow reads as dead and becomes KILLED_RESIDENT rather than both.
+        NeoForge.EVENT_BUS.addListener(LivingDamageEvent.Post.class, NamesakeNeoForge::onDamaged);
+        NeoForge.EVENT_BUS.addListener(LivingDeathEvent.class, NamesakeNeoForge::onDeath);
         NeoForge.EVENT_BUS.addListener(NamesakeNeoForge::onServerStopping);
         NeoForge.EVENT_BUS.addListener(ServerTickEvent.Post.class, NamesakeNeoForge::onServerTick);
 
@@ -88,20 +96,47 @@ public final class NamesakeNeoForge {
      * handler runs once per click on each side rather than twice.
      */
     private static void onEntityInteract(PlayerInteractEvent.EntityInteract event) {
-        if (!Interactions.isConversationGesture(event.getEntity(), event.getHand(), event.getTarget())) {
+        if (Interactions.isConversationGesture(event.getEntity(), event.getHand(), event.getTarget())) {
+            if (event.getLevel().isClientSide()) {
+                // Not cancelled on the client: the vanilla interact packet still has to reach the
+                // server, or the server never learns the gesture happened.
+                Interactions.onClientGesture(event.getTarget());
+                return;
+            }
+            if (event.getEntity() instanceof ServerPlayer player) {
+                Interactions.onServerGesture(player, event.getTarget());
+            }
+            event.setCanceled(true);
+            event.setCancellationResult(InteractionResult.CONSUME);
+            return;
+        }
+        // The same gesture with the hand full — session 05's give. Same client/server split.
+        if (!SocialEvents.isGiveGesture(event.getEntity(), event.getHand(), event.getTarget())) {
             return;
         }
         if (event.getLevel().isClientSide()) {
-            // Not cancelled on the client: the vanilla interact packet still has to reach the
-            // server, or the server never learns the gesture happened.
-            Interactions.onClientGesture(event.getTarget());
             return;
         }
-        if (event.getEntity() instanceof ServerPlayer player) {
-            Interactions.onServerGesture(player, event.getTarget());
+        if (event.getEntity() instanceof ServerPlayer player
+                && event.getTarget() instanceof Villager villager) {
+            SocialEvents.onGive(player, event.getHand(), villager);
         }
         event.setCanceled(true);
         event.setCancellationResult(InteractionResult.CONSUME);
+    }
+
+    private static void onDamaged(LivingDamageEvent.Post event) {
+        if (event.getEntity().level().isClientSide()) {
+            return;
+        }
+        SocialEvents.onHurt(event.getEntity(), event.getSource(), event.getNewDamage());
+    }
+
+    private static void onDeath(LivingDeathEvent event) {
+        if (event.getEntity().level().isClientSide()) {
+            return;
+        }
+        SocialEvents.onDeath(event.getEntity(), event.getSource());
     }
 
     private static void onServerStopping(ServerStoppingEvent event) {

@@ -5,6 +5,7 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 import net.namesake.settlement.Settlements;
+import net.namesake.social.Bonds;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -124,8 +125,10 @@ class NpcSchemaTest {
         NpcSchema.Result result = NpcSchema.migrate(tag);
 
         assertEquals(2, result.foundVersion());
-        assertEquals(3, result.resultVersion());
-        assertEquals(3, result.recordsRewritten());
+        assertEquals(NpcSchema.CURRENT, result.resultVersion(),
+                "a schema 2 save must walk the whole ladder, not stop at 3");
+        assertEquals(3, result.recordsRewritten(),
+                "three records rewritten by the culture fix, and none by anything above it");
 
         ListTag after = tag.getList(NpcSchema.KEY_NPCS, Tag.TAG_COMPOUND);
         for (int i = 0; i < after.size(); i++) {
@@ -165,6 +168,49 @@ class NpcSchemaTest {
         assertEquals(0, settlements.readFrom(tag), "an absent table is not an unreadable one");
         assertEquals(0, settlements.size());
         assertEquals(0, settlements.claimId(), "ids still start at zero in a migrated world");
+    }
+
+    /**
+     * Schema 3 → 4, and the reason it looks like nothing.
+     *
+     * <p>The two fixes below this one both rewrote every record they touched, because both were the
+     * same collision: a stored {@code 0} that used to mean "none" and now means a real value. This
+     * one has no collision to fix — bonds are a table that did not exist — so the migration is the
+     * <i>assumption</i> rather than the rewrite, and the assumption is what is asserted here.
+     *
+     * <p>Session 03 established that a fixer which runs, logs and changes nothing is a defect, by
+     * breaking the 2 → 3 fix into exactly that and watching the build go red. So the distinction has
+     * to be made explicitly rather than implied by a passing test: that fix was meant to rewrite,
+     * this one is not, and what would actually break a world here is the absent key being read as
+     * damage — which turns the registry read-only and stops the world saving.
+     */
+    @Test
+    @DisplayName("a pre-schema-4 tag has no bond table, and that loads as an empty one")
+    void theBondTableIsAbsentBeforeSchemaFour() {
+        CompoundTag tag = registryTagAtVersion(3);
+        assertFalse(tag.contains("bonds"), "the fixture must not already have one");
+
+        NpcSchema.Result result = NpcSchema.migrate(tag);
+
+        assertEquals(3, result.foundVersion());
+        assertEquals(4, result.resultVersion());
+        assertEquals(0, result.recordsRewritten(), "there is nothing in a persona for bonds to fix");
+        assertTrue(result.migrated(), "the version still moved, so the file must be marked dirty "
+                + "and rewritten — otherwise every future load migrates again");
+
+        Bonds bonds = new Bonds();
+        assertEquals(0, bonds.readFrom(tag), "an absent table is not an unreadable one");
+        assertEquals(0, bonds.size());
+
+        // And the personas came through untouched. A migration that quietly rewrote a culture or a
+        // settlement here would be the schema 2 -> 3 failure happening in the other direction.
+        ListTag npcs = tag.getList(NpcSchema.KEY_NPCS, Tag.TAG_COMPOUND);
+        assertEquals(3, npcs.size());
+        for (int i = 0; i < npcs.size(); i++) {
+            Persona survivor = Persona.CODEC.parse(NbtOps.INSTANCE, npcs.getCompound(i)).getOrThrow();
+            assertEquals(new UUID(i, i), survivor.id());
+            assertEquals(100L + i, survivor.birthTick());
+        }
     }
 
     @Test

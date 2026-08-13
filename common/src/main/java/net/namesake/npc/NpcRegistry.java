@@ -13,6 +13,8 @@ import net.minecraft.world.level.saveddata.SavedData;
 import net.namesake.Namesake;
 import net.namesake.settlement.Settlement;
 import net.namesake.settlement.Settlements;
+import net.namesake.social.Bond;
+import net.namesake.social.Bonds;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -27,10 +29,12 @@ import java.util.function.Predicate;
  * Every persona in the world, keyed by persona id, plus the binding from a persona to the entity
  * currently carrying it, plus the settlements those personas belong to.
  *
- * <p><b>Settlements live here rather than in a file of their own.</b> A persona references its
- * settlement by id, so two files could be torn apart by a crash between two writes and leave every
- * villager in a village pointing at a settlement that no longer exists. One file means one schema
- * version that cannot disagree with itself and one load path to get right.
+ * <p><b>Settlements and bonds live here rather than in files of their own.</b> A persona references
+ * its settlement by id and a bond references a persona by id, so two files could be torn apart by a
+ * crash between two writes and leave every villager in a village pointing at a settlement that no
+ * longer exists, or every bond in the world pointing at people who do not. One file means one schema
+ * version that cannot disagree with itself and one load path to get right. Ruled for settlements in
+ * session 03 and re-ruled, on the same argument, for bonds in session 05 — see {@link Bonds}.
  *
  * <p>Stored once on the overworld's data storage rather than per-dimension: a persona is a person,
  * not a thing in a place, and it has to be findable from any dimension.
@@ -52,6 +56,7 @@ public final class NpcRegistry extends SavedData {
     /** Rebuilt from {@link #personaToEntity} on load; never persisted. */
     private final Map<UUID, UUID> entityToPersona = new HashMap<>();
     private final Settlements settlements = new Settlements();
+    private final Bonds bonds = new Bonds();
 
     private int loadedSchemaVersion = NpcSchema.CURRENT;
     private boolean readOnly;
@@ -106,6 +111,15 @@ public final class NpcRegistry extends SavedData {
      */
     public Settlements settlements() {
         return settlements;
+    }
+
+    /**
+     * The bond table. Read freely; write through {@link #putBond}, for the same reason settlements
+     * do — and for one more. A bond updated without {@code setDirty} is a bond that exists until the
+     * world reloads and then does not, which is session 01's migration defect in a new place.
+     */
+    public Bonds bonds() {
+        return bonds;
     }
 
     public int size() {
@@ -163,6 +177,32 @@ public final class NpcRegistry extends SavedData {
     }
 
     /**
+     * Writes a bond, and refuses one whose subject is somebody this world knows as a persona.
+     *
+     * <p><b>This is the guard that makes decision 1 of session 05 hold.</b> {@link Bonds} is keyed
+     * on two bare UUIDs and can therefore represent an NPC's feelings about another NPC; nothing
+     * reads such a bond until session 16's grievance engine, and a persisted social value with no
+     * consumer is exactly what {@code DESIGN.md} §1 forbids. Twelve witnesses per deed across four
+     * hundred personas is a table that grows toward n², so this is not a tidiness rule.
+     *
+     * <p>Session 16 deletes the {@code if} below and changes no schema, which is the whole reason
+     * the key was left general. Until then the refusal is loud rather than silent — a bond quietly
+     * not written is indistinguishable from a bond written and lost.
+     */
+    public void putBond(UUID holder, UUID about, Bond bond) {
+        if (personas.containsKey(about)) {
+            Namesake.LOGGER.error(
+                    "Refused a bond from persona {} about persona {}: NPC-to-NPC bonds have no "
+                            + "consumer until session 16's grievance engine, and DESIGN.md §1 "
+                            + "forbids persisting a social value nothing reads. Nothing was written.",
+                    holder, about);
+            return;
+        }
+        bonds.put(holder, about, bond);
+        setDirty();
+    }
+
+    /**
      * Points a persona at the entity currently carrying it. Idempotent, and deliberately silent
      * when nothing changes — this runs on every chunk load and must not mark the file dirty for
      * a rebinding that is already true.
@@ -193,7 +233,12 @@ public final class NpcRegistry extends SavedData {
         if (entity != null) {
             entityToPersona.remove(entity);
         }
-        if (removed != null || entity != null) {
+        // A persona's bonds go with it. Leaving them behind would accumulate rows keyed on people
+        // the registry can no longer name, and the ones that survive a prune are exactly the ones
+        // nothing will ever look up again.
+        boolean hadBonds = !bonds.of(personaId).isEmpty();
+        bonds.forget(personaId);
+        if (removed != null || entity != null || hadBonds) {
             setDirty();
             return true;
         }
@@ -270,6 +315,7 @@ public final class NpcRegistry extends SavedData {
         }
         tag.put(NpcSchema.KEY_NPCS, list);
         settlements.save(tag);
+        bonds.save(tag);
         return tag;
     }
 
@@ -304,10 +350,13 @@ public final class NpcRegistry extends SavedData {
             }
         }
 
-        // Settlements are read after personas and counted into the same damage figure: a file
-        // that lost a settlement is exactly as unsafe to write back as one that lost a person,
-        // because every persona in that village is now pointing at an id nothing answers to.
+        // Settlements and bonds are read after personas and counted into the same damage figure: a
+        // file that lost a settlement is exactly as unsafe to write back as one that lost a person,
+        // because every persona in that village is now pointing at an id nothing answers to. A file
+        // that lost a bond is worse in one way and better in none — nothing about the world looks
+        // wrong, a villager has simply forgotten somebody.
         unreadable += registry.settlements.readFrom(tag);
+        unreadable += registry.bonds.readFrom(tag);
 
         if (unreadable > 0) {
             // Saving now would drop those records for good. Better a world that loses nothing and
@@ -332,9 +381,10 @@ public final class NpcRegistry extends SavedData {
             registry.setDirty();
         }
 
-        Namesake.LOGGER.info("Loaded {} persona(s), {} bound to an entity, {} settlement(s) (schema {})",
+        Namesake.LOGGER.info(
+                "Loaded {} persona(s), {} bound to an entity, {} settlement(s), {} bond(s) (schema {})",
                 registry.personas.size(), registry.personaToEntity.size(),
-                registry.settlements.size(), result.resultVersion());
+                registry.settlements.size(), registry.bonds.size(), result.resultVersion());
         return registry;
     }
 }

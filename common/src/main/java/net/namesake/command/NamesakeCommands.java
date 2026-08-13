@@ -29,6 +29,10 @@ import net.namesake.platform.Platform;
 import net.namesake.platform.PersonaLink;
 import net.namesake.settlement.Need;
 import net.namesake.settlement.Settlement;
+import net.namesake.social.Bond;
+import net.namesake.social.Deed;
+import net.namesake.social.DeedType;
+import net.namesake.social.Personality;
 
 import java.util.Collection;
 import java.util.Comparator;
@@ -93,6 +97,19 @@ public final class NamesakeCommands {
                                                 IntegerArgumentType.getInteger(context, "count")))))
                         .then(Commands.literal("settlements")
                                 .executes(NamesakeCommands::dumpSettlements))
+                        // The instrument session 05's exit criterion is read with: what the
+                        // villagers around you feel about *you*, next to what a gift is worth to
+                        // each of them. Read-only.
+                        .then(Commands.literal("bonds")
+                                .executes(context -> dumpBonds(context, DEFAULT_DUMP))
+                                .then(Commands.argument("count", IntegerArgumentType.integer(1, 200))
+                                        .executes(context -> dumpBonds(context,
+                                                IntegerArgumentType.getInteger(context, "count")))))
+                        .then(Commands.literal("bond")
+                                .executes(context -> dumpBond(context, nearestCarrier(context.getSource())))
+                                .then(Commands.argument("target", EntityArgument.entity())
+                                        .executes(context -> dumpBond(context,
+                                                EntityArgument.getEntity(context, "target")))))
                         // settrait and prune both write. An op on a live server could rewrite any
                         // villager's personality, or delete personas whose entities are merely
                         // unloaded — permission level 2 is not a meaningful gate on either. They
@@ -339,6 +356,105 @@ public final class NamesakeCommands {
         source.sendSuccess(() -> Component.literal(report), false);
         Namesake.LOGGER.info("[debug settlements] {}", report.replace("\n", " |"));
         return settlements.size();
+    }
+
+    // --- bonds ---------------------------------------------------------------------------------
+
+    /**
+     * What the nearest loaded NPCs feel about <i>you</i>, and what a gift is worth to each of them.
+     *
+     * <p><b>This is what session 05's exit criterion is read with.</b> Feed one villager in front of
+     * three others and this prints the shape the criterion describes: the subject moved by three,
+     * the witnesses by one, and whoever could not see it not at all. The last column is the reason
+     * the same gift lands differently on two people — {@link Personality#scale} for a wanted gift,
+     * as a multiplier of nominal, which is the number the weight table exists to produce.
+     *
+     * <p>Bonds are printed raw here on purpose. {@code DESIGN.md} rules the <i>player-facing</i> bond
+     * UI as bands and a deed ring, never integers; this is a debug command and the whole point of it
+     * is the integers.
+     */
+    private static int dumpBonds(CommandContext<CommandSourceStack> context, int limit) {
+        CommandSourceStack source = context.getSource();
+        ServerLevel level = source.getLevel();
+        Vec3 origin = source.getPosition();
+        NpcRegistry registry = NpcRegistry.get(source.getServer());
+        UUID viewer = source.getEntity() == null ? null : source.getEntity().getUUID();
+        int day = Deed.dayOf(level);
+
+        List<Persona> nearest = registry.all().stream()
+                .map(persona -> Map.entry(persona, distanceTo(level, registry, persona, origin)))
+                .filter(entry -> entry.getValue() < Double.MAX_VALUE)
+                .sorted(Comparator.comparingDouble(Map.Entry::getValue))
+                .limit(limit)
+                .map(Map.Entry::getKey)
+                .toList();
+
+        StringBuilder out = new StringBuilder("day ").append(day).append(" — ")
+                .append(nearest.size()).append(" loaded NPC(s), nearest first; ")
+                .append(registry.bonds().size()).append(" bond(s) in the world");
+        if (viewer == null) {
+            // Every section prints its own absence. Run from the console there is no "you".
+            out.append("\n  (no viewer — run this as a player to see what they feel about you)");
+        } else {
+            out.append("\n  ").append(pad("who", 28)).append("trust warmth respect fear   cap")
+                    .append("   gift×");
+            for (Persona persona : nearest) {
+                Bond bond = registry.bonds().at(persona.id(), viewer, day);
+                out.append("\n  ").append(pad(nameOf(persona), 28))
+                        .append(String.format(Locale.ROOT, "%+5d %+6d %+7d %+4d", bond.trust(),
+                                bond.warmth(), bond.respect(), bond.fear()))
+                        .append(String.format(Locale.ROOT, "   %d/%d/%d/%d",
+                                bond.gainedToday(Bond.TRUST), bond.gainedToday(Bond.WARMTH),
+                                bond.gainedToday(Bond.RESPECT), bond.gainedToday(Bond.FEAR)))
+                        .append(String.format(Locale.ROOT, "  %.2f",
+                                Personality.scale(persona, DeedType.GIFT_WANTED)));
+            }
+            if (nearest.isEmpty()) {
+                out.append("\n  no NPC is loaded near you.");
+            }
+        }
+
+        String report = out.toString();
+        source.sendSuccess(() -> Component.literal(report), false);
+        Namesake.LOGGER.info("[debug bonds] {}", report);
+        return nearest.size();
+    }
+
+    /** One NPC's whole bond table — everyone they have feelings about, and how strong. */
+    private static int dumpBond(CommandContext<CommandSourceStack> context, Entity target)
+            throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        UUID personaId = PersonaLink.get().personaId(target).orElseThrow(NO_PERSONA::create);
+        NpcRegistry registry = NpcRegistry.get(source.getServer());
+        Persona persona = registry.persona(personaId).orElseThrow(NO_PERSONA::create);
+        int day = Deed.dayOf(source.getLevel());
+
+        Map<UUID, Bond> held = registry.bonds().of(personaId);
+        StringBuilder out = new StringBuilder(nameOf(persona) + " — " + held.size() + " bond(s), day " + day);
+        if (held.isEmpty()) {
+            out.append("\n  nobody has done anything to them. That is a real answer, not an empty table.");
+        }
+        for (Map.Entry<UUID, Bond> entry : held.entrySet()) {
+            out.append("\n  about ").append(entry.getKey())
+                    .append("\n    stored  ").append(entry.getValue())
+                    .append("\n    today   ").append(entry.getValue().decayedTo(day));
+        }
+        out.append("\n  a wanted gift is worth ×")
+                .append(String.format(Locale.ROOT, "%.2f", Personality.scale(persona, DeedType.GIFT_WANTED)))
+                .append(" to them, a blow ×")
+                .append(String.format(Locale.ROOT, "%.2f",
+                        Personality.scale(persona, DeedType.STRUCK_RESIDENT)));
+
+        String report = out.toString();
+        source.sendSuccess(() -> Component.literal(report), false);
+        Namesake.LOGGER.info("[debug bond] {}", report);
+        return held.size();
+    }
+
+    private static String nameOf(Persona persona) {
+        return persona.isGenerated()
+                ? Names.of(persona).full()
+                : "(ungenerated) " + persona.id().toString().substring(0, 8);
     }
 
     private static String needsOf(Settlement settlement) {

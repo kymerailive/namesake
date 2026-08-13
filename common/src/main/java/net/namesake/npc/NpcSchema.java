@@ -26,7 +26,7 @@ import java.util.function.ToIntFunction;
 public final class NpcSchema {
 
     /** Bump this and add a {@link Fix} in the same commit. Never one without the other. */
-    public static final int CURRENT = 3;
+    public static final int CURRENT = 4;
 
     /**
      * A registry written before {@link #KEY_VERSION} existed cannot occur — the key has been
@@ -51,7 +51,9 @@ public final class NpcSchema {
 
     private static final List<Fix> FIXES = List.of(
             new Fix(1, "settlement/household 0 now means unassigned (-1)", NpcSchema::fixUnassignedSentinel),
-            new Fix(2, "culture 0 now means unassigned (-1); settlements added", NpcSchema::fixUnassignedCulture)
+            new Fix(2, "culture 0 now means unassigned (-1); settlements added", NpcSchema::fixUnassignedCulture),
+            new Fix(3, "bonds added; nothing to rewrite, an absent table means nobody has met anyone",
+                    NpcSchema::fixBondTableAdded)
     );
 
     private NpcSchema() {
@@ -168,6 +170,34 @@ public final class NpcSchema {
      * simply has no {@code settlements} key, which reads as "no settlements have been detected
      * yet", which is exactly what was true.
      */
+    /**
+     * Schema 4 adds the bond table, and there is genuinely nothing to rewrite.
+     *
+     * <p><b>Said out loud rather than left to be inferred, because "the fixer did nothing" is a
+     * defect this project has already shipped once.</b> Session 03 deliberately broke the 2 → 3 fix
+     * to run, log and change nothing, and watched the build go red — a fixer that silently does
+     * nothing loads without crashing too. So the distinction has to be stated: that fix was *meant*
+     * to rewrite, and this one is not.
+     *
+     * <p>The two migrations before this one were both the same shape — a stored {@code 0} that used
+     * to mean "none" and now means a real value — and both had to rewrite every record that held
+     * one. This has no such collision, because bonds are a table that did not exist. An older tag
+     * simply has no {@code bonds} key, and the whole content of the migration is the assumption that
+     * its absence reads as <i>nobody has met anyone</i> rather than as damage. That is the same free
+     * migration the settlement half of schema 3 was, and it is not free by luck: it is free because
+     * {@link net.namesake.social.Bonds#readFrom} was written to return zero unreadable records for
+     * an absent list rather than to fail on one.
+     *
+     * <p>Which is exactly where the risk actually sits, so that is where the test is. Read as
+     * damage, the registry goes read-only and a world with bonds in it silently stops saving them.
+     * {@code NpcSchemaTest} pins the absence, and it has been reverted and watched to fail.
+     *
+     * @return zero, always, and the log line says so
+     */
+    private static int fixBondTableAdded(CompoundTag root) {
+        return 0;
+    }
+
     private static int fixUnassignedCulture(CompoundTag root) {
         ListTag npcs = root.getList(KEY_NPCS, Tag.TAG_COMPOUND);
         int touched = 0;
