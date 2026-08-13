@@ -1927,6 +1927,52 @@ next autosave. That number is measured and guarded above. A `-Pprofile=deeds` ph
 measured the wrong half. `Meters.count("DeedBus ring entries written")` is there for whoever writes
 it anyway.
 
+#### The playtest, and the two things it found
+
+**The owner played it at close and both exit criteria held in their hands rather than in a fixture.**
+A fresh dev client picks a fresh username, so they arrived as a player the village had never met —
+which made the evidence better than the harness's, because it separated two actors:
+
+- `debug bonds` read **+0 on every axis** for six villagers who were sitting on four bonds, because
+  those bonds are about a different player. Per-player scoping, shown rather than asserted.
+- Feeding one villager produced a ring holding **`FED_HUNGRY by beda00ca`** *next to* the harness's
+  **`FED_HUNGRY by ac813ddb`** — the same deed type, the same day, the same village, two entries,
+  because the actor is part of the id. That is the derivation working in a running game.
+- Three distinct deeds gave a ring of five. **Repeating one gave a ring of five.** The dedupe, done
+  by a person rather than by a loop.
+
+**And it found two defects, both invisible to every test in the repo, because every instrument here
+reads these commands out of a log file and a log file has no width.**
+
+1. **A carriage return in every deed row.** `String.format("%n")` is the *platform* separator, so on
+   Windows it emits `\r\n`; Minecraft has no glyph for a carriage return and draws it as a
+   missing-character box. Every row ended in a small square. Nothing in the codebase had used `%n`
+   before — this session introduced the first one.
+2. **The tables wrapped.** The deed row was ninety characters and wrapped *in the middle of a
+   table*, which reads as two rows rather than one. `debug bonds` wrapped too — and that one was
+   already over the chat width before this session, which added a `mem` column and made it worse.
+
+**This project has now shipped this exact class of defect three times**, so it is enforced rather
+than remembered: session 02's action bar took two full UUIDs and clipped, session 03's grammars
+produced `Hseingtsainhianng`, and now this. `CommandLayoutTest` measures both commands against a
+budget. The deed row lost three columns that were *noise* — severity, confidence and settlement are
+nominal on every deed anything currently emits, and a column reading `100` on every row for two
+sessions is not information — so they now print only when they carry some, which is also when they
+are the most interesting thing on the row. `debug bonds` pads its name column to the widest name in
+the report rather than to the 27 characters session 03's budget allows, which is nine characters a
+row that no real village was using; that took it from 74 back to 60.
+
+**One of the five breakages for these guards is worth its place**, because it is the number the
+owner's screenshot showed: putting the fixed padding back reports *"a bonds row is 74 characters,
+over the 66-character ratchet"*.
+
+**And the breakage script itself produced a defect worth recording.** It reverts each breakage with
+`git checkout -- common`, which on the second run wiped the uncommitted fixes along with the
+breakage — so three breakages reported "did not apply" against a tree that no longer had the guard
+in it either. The rule that already existed for this is the one that was skipped: **commit before
+breaking things.** The non-empty-diff check added earlier this session is what caught it rather than
+letting three false greens through.
+
 #### Carried into session 07
 
 - `$env:JAVA_HOME` still must be pinned to JDK 21. Kill the dev client between runs.
