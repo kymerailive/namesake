@@ -2,6 +2,8 @@ package net.namesake.harness;
 
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -15,16 +17,25 @@ import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.entity.monster.ZombieVillager;
 import net.minecraft.world.entity.npc.Villager;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.block.BedBlock;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.phys.AABB;
 import net.namesake.Namesake;
+import net.namesake.culture.Names;
 import net.namesake.npc.NpcRegistry;
 import net.namesake.npc.NpcSchema;
 import net.namesake.npc.Persona;
 import net.namesake.platform.PersonaLink;
+import net.namesake.settlement.Need;
+import net.namesake.settlement.Settlement;
+import net.namesake.settlement.Specialty;
 import net.namesake.verb.ClientInteractionState;
 import net.namesake.verb.ClientPacketSink;
 import net.namesake.verb.GreetPayload;
@@ -35,8 +46,12 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.BooleanSupplier;
 
@@ -79,6 +94,14 @@ public final class AttachBetHarness {
     /** Far enough from world spawn that the chunks are not held by the permanent spawn ticket. */
     private static final int TEST_SITE_OFFSET = 800;
 
+    /**
+     * How far the built village sits from the test site.
+     *
+     * <p>Past the 128-block survey radius and the 128-block probe cell, so the wilderness survey
+     * around the test site cannot see the village and the two never merge into one settlement.
+     */
+    private static final int VILLAGE_OFFSET = 300;
+
     /** How long to let Minecraft shut down before giving up on it. See the watchdog below. */
     private static final long SHUTDOWN_GRACE_MILLIS = 45_000L;
 
@@ -100,7 +123,21 @@ public final class AttachBetHarness {
     private static final List<Subject> SUBJECTS = new ArrayList<>();
     private static BlockPos testSite;
 
-    private record Subject(UUID personaId, byte warmth) {
+    /** Session 03: the built village, and who came out of it. Empty in a pre-session-03 save. */
+    private static final List<Resident> RESIDENTS = new ArrayList<>();
+    private static BlockPos villageSite;
+    private static Settlement registeredSettlement;
+
+    /**
+     * {@code birthTick} is recorded rather than stamped, and it is the probe that survives a
+     * migration: session 03 backfills culture, household and traits into any persona that predates
+     * it, so warmth is <i>expected</i> to move on a cross-build load while birthTick is not.
+     */
+    private record Subject(UUID personaId, byte warmth, long birthTick) {
+    }
+
+    /** A villager of the built village, and the name their persona fields derive. */
+    private record Resident(UUID personaId, String name) {
     }
 
     private AttachBetHarness() {
@@ -182,15 +219,24 @@ public final class AttachBetHarness {
                     // persona was lost" when it only means "the villager ran off".
                     villager.setNoAi(true);
                 }
-                advance(server, 20);
+                // Generation is not instant: a villager with no known settlement asks for a survey,
+                // and the survey spends a bounded number of chunks per tick. Stamping warmth before
+                // it lands would have the roll overwrite the stamp a few ticks later — which is a
+                // real ordering hazard in the mod, not just in the harness.
+                beginAwait(2400);
             }
             case 2 -> {
+                if (stillWaiting(server, () -> allGenerated(server, level), false,
+                        "the wilderness survey to finish and the personas to be generated")) {
+                    return;
+                }
                 List<Villager> villagers = villagersAt(level);
                 record(villagers.size() == 3, "ATTACH spawned 3 villagers, found " + villagers.size());
 
                 NpcRegistry registry = NpcRegistry.get(server);
                 SUBJECTS.clear();
                 byte warmth = 11;
+                int generated = 0;
                 for (Villager villager : villagers) {
                     UUID personaId = PersonaLink.get().personaId(villager).orElse(null);
                     if (personaId == null) {
@@ -199,15 +245,25 @@ public final class AttachBetHarness {
                     }
                     Persona persona = registry.persona(personaId).orElseThrow(
                             () -> new IllegalStateException("persona " + personaId + " missing from registry"));
+                    if (persona.isGenerated()) {
+                        generated++;
+                    }
                     Persona stamped = persona.withTrait(Persona.WARMTH, warmth);
                     registry.put(stamped);
-                    SUBJECTS.add(new Subject(personaId, warmth));
-                    Namesake.LOGGER.info("[harness] subject persona={} entity={} warmth={}",
-                            personaId, villager.getUUID(), warmth);
+                    SUBJECTS.add(new Subject(personaId, warmth, persona.birthTick()));
+                    Namesake.LOGGER.info("[harness] subject persona={} entity={} warmth={} culture={}",
+                            personaId, villager.getUUID(), warmth, persona.cultureId());
                     warmth += 11;
                 }
                 record(SUBJECTS.size() == 3, "ATTACH every villager carries a persona ("
                         + SUBJECTS.size() + "/3)");
+                // A villager 800 blocks from anywhere still has to be somebody. No settlement is a
+                // real answer, not a reason to leave a record blank.
+                record(generated == 3, "GENERATE " + generated
+                        + "/3 wilderness villagers were generated with a culture and no settlement");
+                record(registry.settlements().size() == 0,
+                        "GENERATE no settlement was invented for a place with no bell ("
+                                + registry.settlements().size() + ")");
                 writeSubjects(level);
                 advance(server, 20);
             }
@@ -308,8 +364,243 @@ public final class AttachBetHarness {
                 advance(server, 5);
             }
             case 9, 10, 11, 12 -> runWireCheck(server, level);
+            case 13, 14, 15 -> runSettlementCheck(server, level);
             default -> finish(server, true);
         }
+    }
+
+    // --- session 03: a settlement detected from real POI blocks ------------------------------------
+
+    /**
+     * Builds a village and watches the mod notice it.
+     *
+     * <p><b>Why this earns a harness leg when the survey's arithmetic does not.</b> Everything
+     * {@code SettlementSurvey} concludes is a pure function of counts and is unit tested. What no
+     * unit test in {@code :common} can make a claim about is the engine behaviour underneath: that
+     * placing a bell through {@code setBlockAndUpdate} actually reaches {@code ServerLevel#
+     * onBlockStateChange} and registers a {@code MEETING} point of interest, that
+     * {@code PoiManager#getInChunk} then returns it, that a bed's <i>head</i> half is the POI and
+     * its foot is not, and that a scan spread over ticks converges while the world is running.
+     * Sessions 00 and 01 both lost time to precisely that gap between "compiles" and "behaves", and
+     * {@code WORKPLAN.md} says POI cluster detection may earn a leg for exactly this reason.
+     *
+     * <p>The two households are twenty blocks apart on purpose — one household cell is sixteen — so
+     * "households are recognisably related" is checked by effect rather than assumed: same family
+     * name inside a cell, different family name across the boundary.
+     */
+    private static void runSettlementCheck(MinecraftServer server, ServerLevel level) {
+        switch (step) {
+            case 13 -> {
+                // Load the ground before asking how high it is. LevelReader#getHeight returns the
+                // world floor for a chunk that is not loaded, so reading the heightmap first put
+                // the village at y=-64 — inside the deepslate, where three of the six villagers
+                // promptly suffocated and read as "not placed in the settlement". Session 01's
+                // rule, third application: poll for the world, never assume it.
+                villageSite = testSite.offset(0, 0, VILLAGE_OFFSET);
+                teleport(player(server), level, villageSite.getX(), 200, villageSite.getZ());
+                beginAwait(2400);
+            }
+            case 14 -> {
+                ChunkPos chunk = new ChunkPos(villageSite);
+                if (stillWaiting(server, () -> level.getChunkSource().hasChunk(chunk.x, chunk.z),
+                        false, "the village site's chunks to load")) {
+                    return;
+                }
+                villageSite = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, villageSite);
+                // If this is still the world floor the chunk did not load, and every assertion
+                // below would fail for a reason that has nothing to do with settlement detection.
+                record(villageSite.getY() > level.getMinBuildHeight(),
+                        "VILLAGE site is on real ground at y=" + villageSite.getY());
+                buildVillage(level, villageSite);
+
+                ServerPlayer player = player(server);
+                teleport(player, level, villageSite.getX() + 12, villageSite.getY() + 1,
+                        villageSite.getZ() + 2);
+
+                RESIDENTS.clear();
+                for (int i = 0; i < 6; i++) {
+                    // Three in the cell at the bell, three twenty blocks east — two households.
+                    int offsetX = (i < 3 ? 1 : 21) + (i % 3);
+                    Villager villager = EntityType.VILLAGER.spawn(level,
+                            villageSite.offset(offsetX, 1, 1), MobSpawnType.COMMAND);
+                    if (villager == null) {
+                        throw new IllegalStateException("could not spawn village villager " + i);
+                    }
+                    villager.setPersistenceRequired();
+                    villager.setNoAi(true);
+                    Namesake.LOGGER.info("[harness] spawned village villager {} at {} (in level: {})",
+                            i, villager.blockPosition().toShortString(),
+                            level.getEntity(villager.getUUID()) != null);
+                }
+                Namesake.LOGGER.info("[harness] {} villager(s) within 64 of the bell right after "
+                        + "spawning", villagersNearTheBell(level).size());
+                beginAwait(2400);
+            }
+            case 15 -> {
+                NpcRegistry registry = NpcRegistry.get(server);
+                // Two conditions, not one. Waiting only for the settlement passed on Fabric and
+                // failed on NeoForge with three villagers missing, and the difference was pure
+                // timing: laying the village stalls the server for half a second, it then runs a
+                // dozen catch-up ticks, and the villagers one chunk east are briefly unloaded
+                // while the chunk tickets around the player's new position settle. Personas are
+                // never lost by that - they generate when their chunk comes back - but a check
+                // that reads loaded entities has to wait for them. Session 01's rule, fourth
+                // application: poll the condition you actually care about, with a deadline.
+                if (stillWaiting(server, () -> registry.settlements().size() > 0
+                                && villagersNearTheBell(level).size() >= 6,
+                        false, "the bell to be surveyed and all six villagers to be loaded")) {
+                    return;
+                }
+
+                record(registry.settlements().size() == 1,
+                        "SETTLEMENT exactly one settlement registered from the bell we placed ("
+                                + registry.settlements().size() + ")");
+                if (registry.settlements().size() != 1) {
+                    finish(server, false);
+                    return;
+                }
+                registeredSettlement = registry.settlements().all().iterator().next();
+
+                record(registeredSettlement.centre().equals(villageSite),
+                        "SETTLEMENT centre is the bell at " + villageSite.toShortString()
+                                + " (got " + registeredSettlement.centre().toShortString() + ")");
+                // Three composters against one of everything else: the census has to see the
+                // workstation blocks as well as the bell, and rank them.
+                record(registeredSettlement.specialtyValue() == Specialty.FARMING,
+                        "SURVEY the workstation census read a farming town (got "
+                                + registeredSettlement.specialtyValue() + ")");
+                record(registeredSettlement.need(Need.FOOD) == 0
+                                && registeredSettlement.need(Need.TOOLS) > 0,
+                        "SURVEY needs: food " + registeredSettlement.need(Need.FOOD)
+                                + ", tools " + registeredSettlement.need(Need.TOOLS)
+                                + " - a farming town feeds itself and is short of a smith");
+                record(registeredSettlement.defensibility() > 40,
+                        "SURVEY a compact village is defensible ("
+                                + registeredSettlement.defensibility() + ")");
+
+                collectResidents(server, level);
+                writeSubjects(level);
+                advance(server, 5);
+            }
+            default -> finish(server, true);
+        }
+    }
+
+    /** Checks the six villagers came out placed, related and audibly of one culture. */
+    private static void collectResidents(MinecraftServer server, ServerLevel level) {
+        NpcRegistry registry = NpcRegistry.get(server);
+        List<Villager> nearby = villagersNearTheBell(level);
+        List<Persona> placed = new ArrayList<>();
+        for (Villager villager : nearby) {
+            Optional<Persona> persona = PersonaLink.get().personaId(villager)
+                    .flatMap(registry::persona);
+            persona.ifPresent(placed::add);
+            Namesake.LOGGER.info("[harness] near the bell: entity {} at {} persona={} settlement={}",
+                    villager.getUUID(), villager.blockPosition().toShortString(),
+                    persona.map(p -> p.id().toString().substring(0, 8)).orElse("none"),
+                    persona.map(Persona::settlementId).orElse(null));
+        }
+
+        long resident = placed.stream()
+                .filter(persona -> persona.settlementId() == registeredSettlement.id())
+                .count();
+        // Says which of the three ways this can go wrong actually happened: villagers that never
+        // spawned, villagers with no persona, or personas that were never placed.
+        record(resident == 6, "RESIDENTS " + resident + "/6 villagers were placed in the settlement "
+                + "the survey registered (" + nearby.size() + " villagers near the bell, "
+                + placed.size() + " with a persona)");
+        if (resident != 6) {
+            return;
+        }
+
+        Set<Byte> cultures = new HashSet<>();
+        Set<Integer> households = new HashSet<>();
+        Map<Integer, Set<String>> surnames = new LinkedHashMap<>();
+        RESIDENTS.clear();
+        for (Persona persona : placed) {
+            cultures.add(persona.cultureId());
+            households.add(persona.householdId());
+            surnames.computeIfAbsent(persona.householdId(), key -> new HashSet<>())
+                    .add(Names.of(persona).family());
+            RESIDENTS.add(new Resident(persona.id(), Names.of(persona).full()));
+            Namesake.LOGGER.info("[harness] resident {} culture={} household={} traits={}",
+                    Names.of(persona).full(), persona.cultureId(), persona.householdId(),
+                    java.util.Arrays.toString(persona.traits()));
+        }
+
+        record(cultures.size() == 1, "CULTURE one village, one culture ("
+                + cultures.size() + " seen: " + cultures + ")");
+        record(households.size() == 2, "HOUSEHOLDS two cells twenty blocks apart made two "
+                + "households (" + households.size() + ")");
+        record(surnames.values().stream().allMatch(names -> names.size() == 1),
+                "HOUSEHOLDS everyone in a household shares one family name " + surnames.values());
+        record(surnames.values().stream().flatMap(Set::stream).distinct().count() == 2,
+                "HOUSEHOLDS the two households do not share a family name");
+    }
+
+    /**
+     * Lays a platform and places a bell, six workstations and six beds on it.
+     *
+     * <p>The platform is not cosmetic: without it the layout depends on whatever terrain the world
+     * seed put here, and a workstation that lands in water or on a slope changes what the census
+     * sees. A bed is two blocks and only the <i>head</i> is a point of interest, which is one of
+     * the engine facts this leg exists to confirm rather than assume.
+     */
+    private static void buildVillage(ServerLevel level, BlockPos origin) {
+        for (int x = -4; x <= 30; x++) {
+            for (int z = -4; z <= 8; z++) {
+                level.setBlockAndUpdate(origin.offset(x, 0, z), Blocks.STONE.defaultBlockState());
+                // A villager is 1.95 blocks tall, so two blocks of air is not two blocks of
+                // clearance. Three, or they suffocate into whatever the terrain put above them.
+                for (int y = 1; y <= 3; y++) {
+                    level.setBlockAndUpdate(origin.offset(x, y, z), Blocks.AIR.defaultBlockState());
+                }
+            }
+        }
+
+        level.setBlockAndUpdate(origin, Blocks.BELL.defaultBlockState());
+        level.setBlockAndUpdate(origin.offset(2, 1, 0), Blocks.COMPOSTER.defaultBlockState());
+        level.setBlockAndUpdate(origin.offset(4, 1, 0), Blocks.COMPOSTER.defaultBlockState());
+        level.setBlockAndUpdate(origin.offset(6, 1, 0), Blocks.COMPOSTER.defaultBlockState());
+        level.setBlockAndUpdate(origin.offset(8, 1, 0), Blocks.SMITHING_TABLE.defaultBlockState());
+        level.setBlockAndUpdate(origin.offset(10, 1, 0), Blocks.CARTOGRAPHY_TABLE.defaultBlockState());
+        level.setBlockAndUpdate(origin.offset(12, 1, 0), Blocks.LOOM.defaultBlockState());
+
+        for (int i = 0; i < 6; i++) {
+            BlockPos foot = origin.offset(1 + i * 5, 1, 5);
+            level.setBlockAndUpdate(foot, Blocks.RED_BED.defaultBlockState()
+                    .setValue(BedBlock.FACING, Direction.SOUTH)
+                    .setValue(BedBlock.PART, BedPart.FOOT));
+            level.setBlockAndUpdate(foot.relative(Direction.SOUTH), Blocks.RED_BED.defaultBlockState()
+                    .setValue(BedBlock.FACING, Direction.SOUTH)
+                    .setValue(BedBlock.PART, BedPart.HEAD));
+        }
+        Namesake.LOGGER.info("[harness] built a village at {}: bell, 6 workstations, 6 beds",
+                origin.toShortString());
+    }
+
+    private static List<Villager> villagersNearTheBell(ServerLevel level) {
+        return level.getEntitiesOfClass(Villager.class, new AABB(villageSite).inflate(64));
+    }
+
+    /** True once every migrated subject has been given a culture on load. */
+    private static boolean subjectsBackfilled(MinecraftServer server) {
+        NpcRegistry registry = NpcRegistry.get(server);
+        return !SUBJECTS.isEmpty() && SUBJECTS.stream()
+                .allMatch(subject -> registry.persona(subject.personaId())
+                        .filter(Persona::isGenerated).isPresent());
+    }
+
+    /** True once every villager at the test site has been generated. */
+    private static boolean allGenerated(MinecraftServer server, ServerLevel level) {
+        NpcRegistry registry = NpcRegistry.get(server);
+        List<Villager> villagers = villagersAt(level);
+        if (villagers.size() < 3) {
+            return false;
+        }
+        return villagers.stream()
+                .map(villager -> PersonaLink.get().personaId(villager).flatMap(registry::persona))
+                .allMatch(persona -> persona.filter(Persona::isGenerated).isPresent());
     }
 
     // --- session 02: the verb wire ---------------------------------------------------------------
@@ -410,7 +701,7 @@ public final class AttachBetHarness {
                 record(expiryNow > wireExpiryBefore,
                         "GATE the real token was accepted (interaction expiry moved "
                                 + wireExpiryBefore + " -> " + expiryNow + ")");
-                finish(server, true);
+                advance(server, 5);
             }
             default -> finish(server, true);
         }
@@ -459,8 +750,13 @@ public final class AttachBetHarness {
                 beginAwait(2400);
             }
             case 1 -> {
-                if (stillWaiting(server, () -> subjectsIntact(server), false,
-                        "the subjects' chunks to load")) {
+                boolean migrated = NpcRegistry.get(server).loadedSchemaVersion() < NpcSchema.CURRENT;
+                // A migrated save is waiting on something different: not "the values came back"
+                // but "the blank records were filled in", which needs the chunks to load and the
+                // survey to run before it is true.
+                if (stillWaiting(server, () -> migrated ? subjectsBackfilled(server) : subjectsIntact(server),
+                        false, migrated ? "the migrated personas to be backfilled"
+                                : "the subjects' chunks to load")) {
                     return;
                 }
                 NpcRegistry registry = NpcRegistry.get(server);
@@ -471,7 +767,16 @@ public final class AttachBetHarness {
                         record(false, "RELOAD persona " + subject.personaId() + " is gone");
                         continue;
                     }
-                    if (persona.get().trait(Persona.WARMTH) != subject.warmth()) {
+                    // A subject file written before session 03 has no birthTick column; it reads
+                    // as -1 and this check stands down rather than failing the whole run.
+                    if (subject.birthTick() >= 0 && persona.get().birthTick() != subject.birthTick()) {
+                        record(false, "RELOAD persona " + subject.personaId() + " birthTick is "
+                                + persona.get().birthTick() + ", expected " + subject.birthTick());
+                        continue;
+                    }
+                    // A cross-build load is expected to move warmth: the persona predates culture
+                    // and traits entirely, so schema 3 backfills it. Same build, same values.
+                    if (!migrated && persona.get().trait(Persona.WARMTH) != subject.warmth()) {
                         record(false, "RELOAD persona " + subject.personaId() + " warmth is "
                                 + persona.get().trait(Persona.WARMTH) + ", expected " + subject.warmth());
                         continue;
@@ -481,13 +786,103 @@ public final class AttachBetHarness {
                 record(found == SUBJECTS.size(),
                         "RELOAD " + found + "/" + SUBJECTS.size()
                                 + " personas survived save -> quit -> reload with the same id and values");
-                record(subjectsIntact(server),
-                        "RELOAD every persona is still attached to a live entity that agrees");
+                if (migrated) {
+                    checkBackfill(registry);
+                } else {
+                    record(subjectsIntact(server),
+                            "RELOAD every persona is still attached to a live entity that agrees");
+                }
                 exerciseDebugCommands(server);
+
+                if (RESIDENTS.isEmpty()) {
+                    // A world written before session 03 has no village in it. Skipping is right;
+                    // pretending otherwise would fail the cross-build migration run for a reason
+                    // that has nothing to do with migration.
+                    Namesake.LOGGER.info("[harness] no village recorded in this save; "
+                            + "skipping the settlement legs");
+                    finish(server, true);
+                    return;
+                }
+                teleport(player(server), level, villageSite.getX() + 12, villageSite.getY() + 2,
+                        villageSite.getZ() + 2);
+                beginAwait(2400);
+            }
+            case 2 -> {
+                NpcRegistry registry = NpcRegistry.get(server);
+                if (stillWaiting(server, () -> registry.settlements().size() > 0, false,
+                        "the settlement table to come back")) {
+                    return;
+                }
+                checkSettlementSurvivedReload(registry);
+                // The exit criterion's instrument, run where there is something to read: through
+                // the real dispatcher, so argument parsing and the permission gate are covered too,
+                // and into the log so a run leaves behind what a player would have seen.
+                CommandSourceStack source = server.createCommandSourceStack()
+                        .withPosition(net.minecraft.world.phys.Vec3.atCenterOf(villageSite));
+                server.getCommands().performPrefixedCommand(source, "namesake debug settlements");
+                server.getCommands().performPrefixedCommand(source, "namesake debug dump");
                 finish(server, true);
             }
             default -> finish(server, true);
         }
+    }
+
+    /**
+     * A persona written before session 03 has no culture, no household and zeroed traits. Loading
+     * it has to <i>make</i> it somebody rather than leaving it blank or, worse, letting culture 0
+     * read as the first culture.
+     */
+    private static void checkBackfill(NpcRegistry registry) {
+        long backfilled = SUBJECTS.stream()
+                .map(subject -> registry.persona(subject.personaId()))
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .filter(Persona::isGenerated)
+                .filter(persona -> !java.util.Arrays.equals(persona.traits(), new byte[Persona.TRAIT_COUNT]))
+                .count();
+        record(backfilled == SUBJECTS.size(),
+                "BACKFILL " + backfilled + "/" + SUBJECTS.size() + " migrated personas were given a "
+                        + "culture and rolled traits on load, rather than staying blank");
+    }
+
+    /**
+     * The settlement, and the names it produced, after a save and a reload.
+     *
+     * <p>Names are <i>derived</i> from the persona id, the household id and the culture id, so
+     * "the same name came back" is a stronger claim than any single field comparison: all three
+     * have to have persisted, and the settlement they were rolled against has to still be there.
+     */
+    private static void checkSettlementSurvivedReload(NpcRegistry registry) {
+        record(registry.settlements().size() == 1,
+                "SETTLEMENT RELOAD one settlement came back (" + registry.settlements().size() + ")");
+        Settlement settlement = registry.settlements().all().stream().findFirst().orElse(null);
+        if (settlement == null) {
+            return;
+        }
+        record(settlement.equals(registeredSettlement),
+                "SETTLEMENT RELOAD every field survived: " + settlement);
+
+        int intact = 0;
+        for (Resident resident : RESIDENTS) {
+            Optional<Persona> persona = registry.persona(resident.personaId());
+            if (persona.isEmpty()) {
+                record(false, "SETTLEMENT RELOAD resident " + resident.name() + " is gone");
+                continue;
+            }
+            String name = Names.of(persona.get()).full();
+            if (!name.equals(resident.name())) {
+                record(false, "SETTLEMENT RELOAD resident was " + resident.name()
+                        + " and came back as " + name);
+                continue;
+            }
+            if (persona.get().settlementId() != settlement.id()) {
+                record(false, "SETTLEMENT RELOAD " + name + " is no longer a resident");
+                continue;
+            }
+            intact++;
+        }
+        record(intact == RESIDENTS.size(), "SETTLEMENT RELOAD " + intact + "/" + RESIDENTS.size()
+                + " residents came back with the same name, household and settlement");
     }
 
     /**
@@ -504,17 +899,30 @@ public final class AttachBetHarness {
         record(true, "DATAFIXER world was written at schema " + onDisk
                 + ", this build understands " + NpcSchema.CURRENT);
 
-        long migrated = SUBJECTS.stream()
+        long placement = SUBJECTS.stream()
                 .map(subject -> registry.persona(subject.personaId()))
                 .filter(Optional::isPresent)
                 .map(Optional::get)
                 .filter(persona -> persona.settlementId() == Persona.UNASSIGNED
                         && persona.householdId() == Persona.UNASSIGNED)
                 .count();
-        record(migrated == SUBJECTS.size(),
-                "DATAFIXER " + migrated + "/" + SUBJECTS.size() + " records now carry the schema-"
-                        + NpcSchema.CURRENT + " unassigned sentinel (" + Persona.UNASSIGNED
-                        + "); schema 1 wrote 0");
+        record(placement == SUBJECTS.size(),
+                "DATAFIXER " + placement + "/" + SUBJECTS.size() + " records carry the schema-2 "
+                        + "unassigned sentinel (" + Persona.UNASSIGNED + "); schema 1 wrote 0");
+
+        // The schema 2 -> 3 fix, and the one that would be invisible without an assertion: schema 2
+        // wrote culture 0 for "none" and culture 0 is now Vale. Read before any of these villagers
+        // has loaded, so it is the fixer's output rather than a backfill's.
+        long culture = SUBJECTS.stream()
+                .map(subject -> registry.persona(subject.personaId()))
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .filter(persona -> persona.cultureId() == Persona.UNASSIGNED_CULTURE)
+                .count();
+        record(culture == SUBJECTS.size(),
+                "DATAFIXER " + culture + "/" + SUBJECTS.size() + " records now read as having no "
+                        + "culture (" + Persona.UNASSIGNED_CULTURE + ") rather than as Vale; "
+                        + "schema 2 wrote 0");
     }
 
     /**
@@ -688,7 +1096,30 @@ public final class AttachBetHarness {
         List<String> lines = new ArrayList<>();
         lines.add("site " + testSite.getX() + " " + testSite.getY() + " " + testSite.getZ());
         for (Subject subject : SUBJECTS) {
-            lines.add("subject " + subject.personaId() + " " + subject.warmth());
+            lines.add("subject " + subject.personaId() + " " + subject.warmth()
+                    + " " + subject.birthTick());
+        }
+        if (villageSite != null) {
+            lines.add("village " + villageSite.getX() + " " + villageSite.getY()
+                    + " " + villageSite.getZ());
+        }
+        if (registeredSettlement != null) {
+            StringBuilder line = new StringBuilder("settlement ")
+                    .append(registeredSettlement.id()).append(' ')
+                    .append(registeredSettlement.dimension()).append(' ')
+                    .append(registeredSettlement.centre().getX()).append(' ')
+                    .append(registeredSettlement.centre().getY()).append(' ')
+                    .append(registeredSettlement.centre().getZ()).append(' ')
+                    .append(registeredSettlement.specialty()).append(' ')
+                    .append(registeredSettlement.defensibility());
+            for (byte need : registeredSettlement.needs()) {
+                line.append(' ').append(need);
+            }
+            lines.add(line.toString());
+        }
+        for (Resident resident : RESIDENTS) {
+            // Name last on the line: it contains a space, and everything before it does not.
+            lines.add("resident " + resident.personaId() + " " + resident.name());
         }
         try {
             Files.write(SUBJECT_FILE, lines);
@@ -708,16 +1139,37 @@ public final class AttachBetHarness {
                     + "; run the setup phase first", e);
         }
         SUBJECTS.clear();
+        RESIDENTS.clear();
+        villageSite = null;
+        registeredSettlement = null;
         for (String line : lines) {
             String[] parts = line.split(" ");
-            if (parts[0].equals("site")) {
-                testSite = new BlockPos(
-                        Integer.parseInt(parts[1]), Integer.parseInt(parts[2]), Integer.parseInt(parts[3]));
-            } else if (parts[0].equals("subject")) {
-                SUBJECTS.add(new Subject(UUID.fromString(parts[1]), Byte.parseByte(parts[2])));
+            switch (parts[0]) {
+                case "site" -> testSite = new BlockPos(Integer.parseInt(parts[1]),
+                        Integer.parseInt(parts[2]), Integer.parseInt(parts[3]));
+                case "subject" -> SUBJECTS.add(new Subject(UUID.fromString(parts[1]),
+                        Byte.parseByte(parts[2]),
+                        // A pre-session-03 file has no birthTick column. Read it as "do not check"
+                        // rather than failing to parse, so the cross-build run still gets to run.
+                        parts.length > 3 ? Long.parseLong(parts[3]) : -1L));
+                case "village" -> villageSite = new BlockPos(Integer.parseInt(parts[1]),
+                        Integer.parseInt(parts[2]), Integer.parseInt(parts[3]));
+                case "settlement" -> registeredSettlement = new Settlement(
+                        Integer.parseInt(parts[1]),
+                        ResourceLocation.parse(parts[2]),
+                        new BlockPos(Integer.parseInt(parts[3]), Integer.parseInt(parts[4]),
+                                Integer.parseInt(parts[5])),
+                        Byte.parseByte(parts[6]),
+                        Byte.parseByte(parts[7]),
+                        new byte[]{Byte.parseByte(parts[8]), Byte.parseByte(parts[9]),
+                                Byte.parseByte(parts[10]), Byte.parseByte(parts[11])});
+                case "resident" -> RESIDENTS.add(new Resident(UUID.fromString(parts[1]),
+                        String.join(" ", java.util.Arrays.copyOfRange(parts, 2, parts.length))));
+                default -> Namesake.LOGGER.warn("[harness] unrecognised subject line '{}'", line);
             }
         }
-        Namesake.LOGGER.info("[harness] read {} subject(s), site {}", SUBJECTS.size(), testSite);
+        Namesake.LOGGER.info("[harness] read {} subject(s) and {} resident(s), site {}, village {}",
+                SUBJECTS.size(), RESIDENTS.size(), testSite, villageSite);
     }
 
     private static void finish(MinecraftServer server, boolean reachedTheEnd) {
