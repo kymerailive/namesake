@@ -3,12 +3,15 @@
 **The ledger.** What happens next, in order, with exit criteria. Read first, update last.
 Where any other document disagrees on sequence, this wins.
 
-- **Status:** session 04 complete, **and the budget is real**. Four hundred loaded vanilla villagers
-  cost **14.75 ms of server tick** and `DESIGN.md`'s ~18 ms turns out to be a tail of that
-  distribution rather than its middle; ours does not appear in a whole-tick measurement at all, and
-  the record sweep it hides — 400 records at one bucket of twenty a tick — costs **1.2–3.3 µs**.
-  Before that: **the attach bet holds**, **the authorization gate is real**, and **a villager is
-  from somewhere**. Repo live at https://github.com/kymerailive/namesake
+- **Status:** session 05 complete, **and a village now notices what you do in front of it**. Feed a
+  hungry villager with three watching and the one you fed gains +3 while each witness gains +1; the
+  one behind a wall and the one out of range gain nothing; nine feedings in a day stop at eight. The
+  same gift is worth **+2 warmth to a suspicious smith and +5 to a warm innkeeper**, which is the
+  static `float[8][6]` weight table paying off `Persona.traits` — the exemption standing risk 4 has
+  carried since session 01. Before that: **the attach bet holds**, **the authorization gate is
+  real**, **a villager is from somewhere**, and **the budget is real** — 400 loaded vanilla
+  villagers cost **14.75 ms of server tick** against our **1.2–3.3 µs** sweep. Repo live at
+  https://github.com/kymerailive/namesake
 - **Target:** 16 sessions to the ship-or-kill test (session 10), playable slice at 15.
 - **Companion:** `DESIGN.md` owns *what* we build. This owns *what happens next*.
 
@@ -23,8 +26,8 @@ Where any other document disagrees on sequence, this wins.
 | 02 | Authorization layer | **done** — 2026-08-13 |
 | 03 | Traits, cultures, settlement detection | **done** — 2026-08-13 |
 | 04 | Profiler spike | **done** — 2026-08-14 |
-| 05 | Bonds and deeds | **NEXT** |
-| 06 | Episodic memory | pending |
+| 05 | Bonds and deeds | **done** — 2026-08-14 |
+| 06 | Episodic memory | **NEXT** |
 | 07 | Headless simulation harness | pending |
 | 08 | Gossip and distortion | pending |
 | 09 | Dialogue pools and residency | pending |
@@ -291,20 +294,29 @@ generations and keeps latency out of the interaction path entirely.
    distinguishes two settlements *of the same culture* beyond their survey and a ±10 jitter.
    Playtest again at session 15, and again before era 4–5, specifically for whether it is still
    working at the far end of a session rather than at the start of one.
-4. **Traits have no consumer yet.** `Persona.traits` is written, persisted and displayed, and
-   nothing branches on it — precisely the failure `DESIGN.md` §1 forbids. The first real consumer is
-   the personality weight table in session 05. **No longer carried by memory as of 2026-08-13:**
-   `SocialValueLedgerTest` grants `traits` an exemption that expires after session 05 and compares
-   it against this ledger's own status board, so the build goes red at the close of session 05 if
-   the weight table is not there. The risk stays listed because the field is still unconsumed — but
-   it now fails loudly rather than quietly. Every other `Persona` field is classified the same way;
-   the expiry sessions are in the session 02 log and can be ruled differently.
+4. ~~**Traits have no consumer yet.**~~ **Retired 2026-08-14 — the weight table landed.**
+   `Personality.scale` reads all eight axes and multiplies what a deed is worth by them; the same
+   loaf is +2 warmth to a suspicious smith and +5 to a warm innkeeper, and `PersonalityTest` fails
+   the build if any axis's row goes to zero. Nothing in the generation chain still terminates in a
+   renderer. The forcing function that carried this since session 01 was never called upon to fire.
+5. **A bond's four axes have no consumer yet, and neither does its debt.** Session 05's own version
+   of risk 4, and it is listed because it is the same shape: five persisted social values written
+   this session and read by none of it. The exemptions are honest ones — trust and warmth expire at
+   **09** (the residency threshold, a persisted state change rather than a line of dialogue),
+   respect at **12** (the trade price band), and fear and debt at **16** (force-resolution and the
+   favour that settles a stage-2 grievance).
 
-   **Session 03 raised the stakes rather than lowering them.** Traits are no longer eight zeroes; a
-   villager now carries eight rolled values that took a settlement survey, a culture table and three
-   layers of arithmetic to produce. Every one of those inputs is now consumed, which means the
-   *only* thing in that chain still terminating in a renderer is the output. If session 05 does not
-   land the weight table, the honest response is to delete more than one field.
+   **The count is the point, so it is stated rather than buried: session 05 paid off one exemption
+   and opened five.** Session 03 shipped `Settlement` with none, and the difference is not care — it
+   is that a settlement's fields were read by the trait roll in the same session and a bond's axes
+   genuinely are not read by anything until 09. The temptation was to name `Bond.apply`, which reads
+   all four, is not a display, and would have passed every check in `SocialValueLedgerTest`. It is
+   also the writer looking at its own work, which is the exact lie `cultureId` told in session 03.
+
+   **Armed the same way risk 4 was**, against this ledger's own status board, so it fails loudly at
+   the close of the owing session rather than quietly. `debt` is the weakest of the five and weaker
+   than `professionId`: nothing in the sixteen-session slice writes it, let alone reads it. If it is
+   not worth a schema field for eleven sessions, delete it now rather than moving the number later.
 
 ## How a session is verified — ruled 2026-08-13
 
@@ -1198,3 +1210,261 @@ within 2.1%. The population-and-costs phase ran on **Fabric only** — the censu
 `onPersonaLoaded` numbers above are one-loader evidence. Nothing in that path is loader-specific,
 which is exactly the reasoning that has been wrong three times in this project, so treat those two
 tables as Fabric's until somebody runs `-Pprofile=world` on NeoForge.
+
+### Session 05 — 2026-08-14 — bonds and deeds
+
+**Shipped.** `6847700` plus this ledger commit, pushed to `origin/main`. CI green on all three jobs.
+
+**A village now notices what you do in front of it.** Feed a hungry villager with three others
+watching and the one you fed gains +3 while each witness gains +1 — and the one behind a wall and
+the one forty blocks up gain nothing at all, which is the witness scan doing exactly the two things
+only a running game could prove it does.
+
+**What shipped.**
+
+- **`Bond`** — four signed axes, a debt scalar, and three fields of bookkeeping that make the axes
+  behave like a relationship rather than a score. Immutable; every write goes through `apply`,
+  because the cap, the two floors, the ceiling and the high-water mark are five invariants and a
+  mutable field with five setters is five places to forget one.
+- **`Bonds`** — the table, and `NpcRegistry.putBond`, the only door that marks the file dirty.
+- **`Deed`** and **`DeedType`** — six types, each with four nominal deltas and a witness share.
+- **`Deeds`** — what a deed is worth to one person. Four weights, two structural and two softening.
+- **`Personality`** — the static `float[8][6]`. **Standing risk 4, paid.**
+- **`DeedBus`** — emit, witness scan, record, bond update. Steps 1–4 of `DESIGN.md` §4 and nothing
+  else; the settlement effect and the gossip deque were deliberately not built early.
+- **`SocialEvents`** — the three engine doors deeds actually come from: the **give gesture** (sneak,
+  hand full, right-click — session 02's conversation gesture with something in your hand), the
+  damage hook and the death hook. No new packet, no new tick loop.
+- **Schema 4**, with a fixer watched to run against worlds written by the previous build on both
+  loaders — and then watched *not* to run on the second load of the same world.
+- **`/namesake debug bonds`** and **`bond`**.
+- **A fifth harness leg**, and only one, for the two claims a unit test cannot make.
+
+**One departure from the session brief, flagged rather than quietly taken.** The brief said "`Bond`
+and `Deed` are persisted records"; only `Bond` is. `Deed` has no codec and nothing stores one,
+because its store is session 06's 32-entry ring and giving it one now meant either an unbounded
+per-NPC list — a leak, not a feature — or building the ring early against a bond system nobody had
+watched work yet. Hard rule 1 fires on `Bond` alone, so the instruction's purpose is met in full:
+schema 4, a fixer, and a load test against a save written before the change. See the carried note
+below, and overrule this if the reasoning does not hold.
+
+**The two decisions the session opened with, and what each costs.**
+
+1. **A bond is keyed on `(the NPC who holds it → whoever it is about)`, both bare UUIDs.** The shape
+   is general and the population is not: `NpcRegistry.putBond` refuses a bond whose subject is a
+   persona this world knows about. Both obvious answers are worse. Keying strictly on (npc → player)
+   makes session 16's grievance engine a migration of every bond ever written. Letting NPC-to-NPC
+   bonds fall out for free is worse than that: twelve witnesses per deed means a village going about
+   its business accumulates bonds toward n² of itself, and at four hundred personas that is 160,000
+   persisted social values that no `if` statement reads before session 16 — the precise thing
+   `DESIGN.md` §1 forbids.
+
+   **What it costs, plainly.** A bare UUID cannot say whether it is a player or a persona by looking
+   at it; today that is free because everything stored is a player, and at session 16 something will
+   have to ask the registry — which is what the guard already does, in the other direction. And
+   because the format allows what the guard forbids, that one method is the only thing standing
+   between here and the n² table. It has been reverted and watched to fail.
+
+2. **Bonds live in `namesake_npcs.dat`, under the same `NpcSchema` version**, on session 03's
+   argument and with more force. A bond references a persona by id. Two files torn apart by a crash
+   between two writes do not produce a missing file — they produce a save that loads, in which every
+   villager in a village has forgotten one particular player. The size counter-argument does not
+   hold: the table is bounded by (personas × players who have done something), which at §8's four
+   hundred records and one player is four hundred rows of about fifty bytes.
+
+**Five decisions worth recording besides.**
+
+1. **Nothing may soften a harmful deed — not the cap, not personality, not rounding.** A weight
+   *above* neutral still sharpens one, which is what gives the table a column for the harmful deeds
+   at all and what makes `temper` mean temper. Stated as one invariant so it can be tested three
+   ways: you cannot spend the day's allowance and then hit someone for free, a placid villager does
+   not charge less for a killing, and a structural weight cannot round −0.45 away to nothing.
+2. **Which of the three kindnesses a gift is, is decided by vanilla.** `Villager#wantsMoreFood` is
+   the engine's own hunger threshold and `Villager#wantsToPickUp` is its own answer to "would this
+   villager pick this up off the ground", which already folds in the profession's requested items.
+   Writing a wanted-items table here would have been a second source of truth for a question the
+   game already answers; the addon API is where a modpack gets to extend it.
+3. **A deed is only emitted if the item actually changed hands.** Not politeness. An offer a
+   villager cannot accept, emitting `GIFT_UNWANTED`, makes a full-inventory villager eight free
+   points of trust a day for ever. Every deed costs a real item out of a real inventory.
+4. **The witness scan sorts before it casts rays.** `DESIGN.md` says "filtered by `canSee()`, capped
+   at 12 nearest"; walking the candidates nearest-first and stopping at twelve is the same set for
+   twelve rays instead of one per villager in a 48-block cube.
+5. **`LivingEntity#hasLineOfSight`, not `Sensing`.** `Sensing` caches per entity id and is cleared
+   only from the mob's own AI step, so any villager that is loaded and not running its brain — every
+   fixture in this harness, which sets `setNoAi` — would answer from a cache populated before there
+   was a wall in the way. A cached instrument reporting yesterday's answer is this project's
+   commonest defect wearing a new hat.
+
+**What the exit criteria actually showed.** Both loaders, in two launches each, every leg green:
+
+| Leg | Evidence |
+|---|---|
+| witness | the scan found **3** witnesses: three could see it, one was behind a wall, one was out of range |
+| deed | the villager who was fed gained **+3** on trust and warmth |
+| deed | **3/3** witnesses who could see it gained **+1** |
+| canSee | the villager behind the wall recorded **nothing**, five blocks away and well inside the box |
+| range | the villager forty blocks up recorded **nothing**, with nothing at all in its way |
+| cap | nine feedings in one day left trust 8 and warmth 8 — and all nine landed on one in-game day |
+| bond reload | **4/4** bonds survived save → quit → reload with every axis intact |
+
+The two negatives are deliberately opposite: the walled villager has range and no sight, the high
+one has sight and no range. **A single mistake cannot pass both.**
+
+And the instrument, read out of a running game after the nine feedings:
+
+```
+day 0 — 6 loaded NPC(s), nearest first; 4 bond(s) in the world
+  who                         trust warmth respect fear   cap   gift×
+  Vlizgyrn Gvirnsk               +8     +8      +0   +0   8/8/0/0  1.00
+  Gatisgit Gvirnsk               +8     +8      +0   +0   8/8/0/0  1.00
+  Gykvur Gvirnsk                 +8     +8      +0   +0   8/8/0/0  1.00
+  Svakvysverk Stuksk             +8     +8      +0   +0   8/8/0/0  1.00
+  Stiznysmyar Stuksk             +0     +0      +0   +0   0/0/0/0  1.00
+  Trusmyrmest Stuksk             +0     +0      +0   +0   0/0/0/0  1.00
+```
+
+**The second half of the criterion is machine-checked and its ruling is the owner's.** The same
+wanted gift is `{trust +1, warmth +2}` to a suspicious smith and `{trust +3, warmth +5}` to a warm
+innkeeper — a personality multiplier of **0.72 against 1.51**. `DeedsTest` asserts both numbers, and
+`/namesake debug bonds` prints the multiplier in its last column next to the name, which is where to
+look. **Whether that difference is *legible* — whether a player notices two villagers reacting
+differently to the same loaf rather than merely measuring it — is not something any test in this
+repo can have an opinion about. Handed over rather than decided.**
+
+**Hard rule 1 followed as written, and the pre-change half was done first.** The attach-bet harness
+`setup` phase was run on commit `5921797` — schema 3 — on **both loaders before a line of session 05
+was written**, and those saves were kept. The schema-4 build then loaded them:
+
+```
+NPC registry datafixer: schema 3 -> 4 (bonds added; nothing to rewrite, an absent
+table means nobody has met anyone) rewrote 0 record(s)
+Loaded 9 persona(s), 9 bound to an entity, 1 settlement(s), 0 bond(s) (schema 4)
+```
+
+**This migration is the additive kind, and saying so out loud is the point.** The two fixes below it
+were both the same collision — a stored `0` that used to mean "none" and now means a real value —
+and both had to rewrite every record holding one. This has no collision: bonds are a table that did
+not exist. The whole content of the migration is the *assumption* that an absent `bonds` key reads
+as "nobody has met anyone" rather than as damage, which is the same free migration the settlement
+half of schema 3 was.
+
+So the evidence had to be inverted. Session 03 caught a fixer made to run, log and change nothing
+and turned the build red for it; that fix was *meant* to rewrite. Here the assertions are all
+negatives — three personas kept the culture and placement schema 3 gave them, the settlement table
+came through, the bond table read as empty rather than damaged, and the registry stayed writable —
+plus the one thing that is a real hazard rather than a bookkeeping one. **Read as damage, the
+registry goes read-only and a world that has bonds in it silently stops saving them.** Breaking
+`Bonds.readFrom` to do exactly that turns four tests red, two of which are about personas.
+
+**Then the same world was loaded a second time**, which is the only way session 01's defect 1 is
+ever caught: `no migration expected: world is already at schema 4`. The fix reached disk.
+
+**172 unit tests**, real JUnit XML, `failures=0 errors=0 skipped=0` — 46 new, and every one of them
+a claim `WORKPLAN.md` says belongs in a unit test rather than in six minutes of CI.
+
+**Four defects, and three of them were found by applying a rule rather than by a red test.**
+
+1. **A record consuming its own field is invisible to the rule 5 ledger.** `SocialValueLedgerTest`
+   proves a consumer by reading its bytecode for a *call*, and `Bond.decayedTo` touching
+   `this.lastSeenDay` compiles to a `getfield` that no such check can see. Three fields —
+   `lastSeenDay`, `gainedToday`, `peakWarmth` — are genuinely consumed by the rule they implement
+   and by nothing else, so the fix was to read them through their accessors and say why in a comment
+   next to each. Worth recording as a property of the enforcement mechanism rather than of this
+   record: **an invariant enforced by bytecode has a shape, and code has to be written to fit it.**
+2. **`Deed.subject` was written and never read.** The subject share was being passed into
+   `Deeds.deltaFor` as a boolean by every caller, so the field on the record fed nothing. Caught by
+   applying rule 5 while writing the record — session 03's lesson, applied on purpose. The fix is
+   better than the defect: `deltaFor` now compares the holder's persona id against the deed's own
+   subject, so a deed can no longer be *told* who it happened to and told wrong.
+3. **`DESIGN.md` §3 said `byte gainedToday`, and a byte cannot hold it.** Four axes each counting to
+   eight need four bits apiece, which is sixteen bits and not eight. Corrected to `short`, four
+   nibbles, with a test that fails if the cap is ever raised past fifteen — because a cap of sixteen
+   would wrap into the neighbouring axis's counter and read as a bond that had already spent an
+   allowance on something nobody did.
+4. **A harness fixture standing on terrain nobody had checked.** The walled villager was first
+   placed two blocks past the edge of the platform this harness builds, on whatever the world seed
+   put there. It passed — on this seed, at this y. Session 03 lost a whole leg to exactly that
+   (`getHeight` on an unloaded chunk putting a village at y = −64), so it was moved back onto the
+   platform and the leg re-run. **Found by reading the coordinates, not by a red test**, which is the
+   only way this class of defect is ever found before it costs an afternoon.
+
+**Rule 3 applied to every new guard. Ten deliberate breakages, each watched to fail and removed:**
+
+| Breakage | Result |
+|---|---|
+| The daily cap removed | **4 red.** *"the positive axis stopped at the cap — expected: &lt;8&gt; but was: &lt;12&gt;"* |
+| Negatives sent through the cap like everything else | **5 red.** *"four blows is four blows, whatever day it is — expected: &lt;-24&gt; but was: &lt;0&gt;"* |
+| A personality weight below neutral allowed to soften a blow | **Red.** *"a weight below neutral must be ignored on the way down — expected: &lt;-6&gt; but was: &lt;-4&gt;"* |
+| A harmful axis allowed to round to nothing | **Red.** *"expected: &lt;-1&gt; but was: &lt;0&gt;"* |
+| Rounding toward positive infinity, as `Math.round` does | **Red.** *"Math.round would give -4 and lose the half"* |
+| The decay floor dropped to zero | **3 red.** *"the view is up to date — expected: &lt;20&gt; but was: &lt;0&gt;"* |
+| The `dayDelta ≤ 64` clamp removed | **Red.** *"an in-game decade must catch up by the clamp, not by ten thousand"* |
+| An absent bond table read as damage | **4 red**, two of them about personas: *"a migrated registry must be written back, or it migrates again on every load"* |
+| The NPC-to-NPC bond guard removed | **Red.** *"nothing may be written — expected: &lt;0&gt; but was: &lt;1&gt;"* |
+| The `industry` row of the weight table zeroed | **Red.** *"industry changes nothing about any deed. It is persisted on every villager in the world and feeds no `if` statement"* |
+
+The last one is worth its place: it is rule 5 in miniature, one level below the ledger. A ledger
+entry can name `Personality` truthfully while one of its eight rows quietly does nothing, and the
+whole point of an eight-axis personality is that all eight of them are load-bearing.
+
+**And an eleventh, which is the forcing function itself.** With the status board already moved to
+session 06, `Persona.traits`' exemption was restored exactly as session 02 wrote it:
+
+```
+WORKPLAN.md says session 06 is next, so these exemptions have expired:
+  Persona.traits (exempt only through session 5)
+```
+
+That is the mechanism firing on the session it was aimed at, four sessions after it was armed and
+against a date nobody had to remember. It did not have to fire for real, because the table landed —
+but it was watched to fire, which is the only way to know it would have.
+
+**One recurrence worth recording, and it is session 01's.** On the final NeoForge `verify` run the
+integrated server wedged after logging "Saving worlds" and the shutdown watchdog hard-exited it 45
+seconds later, exactly as designed. Session 01 saw this only on a CI runner and recorded it as
+*bounded, not diagnosed*; this is its first appearance on the owner's machine, once in eleven client
+launches today. The verdict was already on disk and reads `PASS`, and the `verify` phase had already
+reloaded everything from disk. **The thing to know is that the hard exit makes Gradle report the
+task as failed** — a green harness inside a red build — so a CI job that watched the exit code
+rather than the verdict file would fail on it. This one reads the verdict file, which is why that
+was ruled in session 01.
+
+**One thing is instrumented and not measured, and it is named rather than glossed.**
+`DeedBus.witnessScan` and `DeedBus.emit` have meters of their own and two counters beside them,
+costing nothing when the profiler is off, exactly as session 04's carried note asked. They have not
+been *pointed at anything*: measuring the scan honestly needs a player standing in a crowd emitting
+into it, which is a new profiler phase rather than a new cell, and a number from nine emits on a
+cold JIT would be the confident wrong kind. What is known without measuring bounds it usefully: the
+scan is one entity query over a 48-block cube plus **at most twelve** ray casts of ≤24 blocks, it
+runs on emit and never on a tick where nothing happened, and it therefore **cannot appear in a
+steady-state budget at all**. Session 04's 125–225 ns per record visit is untouched — the bond
+system adds **zero** per-tick work, because the decay is lazy and nothing else ticks. If the scan is
+ever suspected, the phase is the first thing to write.
+
+**Carried into session 06.**
+
+- `$env:JAVA_HOME` still must be pinned to JDK 21. Kill the dev client between runs.
+- **The deed ring is session 06's, and `Deed` has been left un-persisted for it.** It declares no
+  codec and nothing stores a deed; giving it one now would have meant either an unbounded per-NPC
+  list, which is a leak, or building the ring early. Its store, its 32-entry bound, its dedupe key
+  and its schema bump are all one session's work and they belong together. Every field is already
+  held to rule 5 — the ledger lists `Deed` by name rather than by whether it declares a codec.
+- **`Bond.DAILY_CAP = 8` and the one-point-a-day decay are provisional and due for calibration
+  against session 07's earn-rate histogram**, not against anyone's intuition. That is the mistake
+  LNK made when it set skill gates at 35–205 against an observed maximum of 32.
+- The give gesture takes the click a villager would have used to open a trade screen while sneaking.
+  It takes nothing away — vanilla already routes a sneaking right-click on a villager to
+  `Villager#mobInteract` — but it is the first place to look if a playtest reports trading feeling
+  odd.
+
+**Ledger change.** Session 05 → done, session 06 → NEXT. **Risk 4 retired**: the weight table landed
+and nothing in the generation chain still terminates in a renderer. **Risk 5 added** in its place
+and armed the same way, for the five social values this session persisted and did not read. Three
+decisions added to `DESIGN.md` §2 (the bond key, bond storage, bond decay) taking the count 42 → 45,
+one correction to §3's `gainedToday`, and §4 step 4 rewritten to state all six weights and which two
+of them may never soften a harmful deed. No changes to the 16-session shape.
+
+**Ruled at close, by the owner.** *(pending — the legibility half of the exit criterion is the
+owner's to rule, along with anything above they disagree with. The five new exemptions and `debt` in
+particular are offered for a different ruling.)*

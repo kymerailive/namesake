@@ -13,15 +13,18 @@ in a different settlement, says to you later.
 
 ## Status
 
-**Pre-alpha. Not playable.** Session 04 of a planned 16-session build to a vertical slice.
-Villagers carry a persistent identity that survives save, chunk unload and zombification, and they
-now come from somewhere: a settlement detected from a real bell gives its residents a culture, a
-household and eight rolled personality axes. Nothing branches on those axes yet — that is session
-05. See [`WORKPLAN.md`](WORKPLAN.md) for what is built and what is next.
+**Pre-alpha. Not playable.** Session 05 of a planned 16-session build to a vertical slice.
+Villagers carry a persistent identity that survives save, chunk unload and zombification; they come
+from somewhere, with a culture, a household and eight rolled personality axes taken from a
+settlement detected out of a real bell; and those axes now change what happens. Feed a hungry
+villager and everyone who could see you do it thinks a little better of you — by a different amount
+each, because the same loaf is worth more to some people than to others. Nothing is told to anyone
+yet: that is session 08's gossip and session 09's dialogue. See [`WORKPLAN.md`](WORKPLAN.md) for
+what is built and what is next.
 
 ## Design
 
-- [`DESIGN.md`](DESIGN.md) — what we are building and why. 41 ruled decisions.
+- [`DESIGN.md`](DESIGN.md) — what we are building and why. 45 ruled decisions.
 - [`WORKPLAN.md`](WORKPLAN.md) — the ledger. What happens next, with exit criteria.
 - [`CLAUDE.md`](CLAUDE.md) — orientation and hard rules for anyone working on this.
 

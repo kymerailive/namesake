@@ -74,6 +74,12 @@ public final class DeedBus {
      *                and everyone who saw it is a witness.
      */
     public static Result emit(ServerLevel level, DeedType type, LivingEntity actor, Villager subject) {
+        if (Profiling.MOD_INERT) {
+            // Checked here as well as in the full form below: hard rule 4's baseline is "the same
+            // world with none of our code in it", and reaching the registry to work out where the
+            // deed happened is our code running.
+            return Result.NOTHING;
+        }
         Vec3 where = subject != null ? subject.position() : actor.position();
         UUID subjectId = subject != null
                 ? PersonaService.personaOf(subject).map(Persona::id).orElse(actor.getUUID())
