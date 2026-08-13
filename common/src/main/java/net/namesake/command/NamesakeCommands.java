@@ -406,11 +406,12 @@ public final class NamesakeCommands {
             // Every section prints its own absence. Run from the console there is no "you".
             out.append("\n  (no viewer — run this as a player to see what they feel about you)");
         } else {
-            out.append("\n  ").append(pad("who", 28)).append("trust warmth respect fear   cap")
+            int nameColumn = nameColumnFor(nearest);
+            out.append("\n  ").append(pad("who", nameColumn)).append("trust warmth respect fear   cap")
                     .append("   gift×  mem");
             for (Persona persona : nearest) {
                 Bond bond = registry.bonds().at(persona.id(), viewer, day);
-                out.append("\n  ").append(pad(nameOf(persona), 28))
+                out.append("\n  ").append(pad(nameOf(persona), nameColumn))
                         .append(String.format(Locale.ROOT, "%+5d %+6d %+7d %+4d", bond.trust(),
                                 bond.warmth(), bond.respect(), bond.fear()))
                         .append(String.format(Locale.ROOT, "   %d/%d/%d/%d",
@@ -493,32 +494,87 @@ public final class NamesakeCommands {
         List<Deed> ring = registry.memories().of(personaId);
         StringBuilder out = new StringBuilder(nameOf(persona))
                 .append(" — ").append(ring.size()).append(" of ").append(Memories.RING_CAPACITY)
-                .append(" remembered, newest first; today is day ").append(today);
+                .append(" remembered, newest first (day ").append(today).append(')');
         if (ring.isEmpty()) {
             // Every section prints its own absence — DESIGN.md §11. A ring that prints nothing at
             // all reads as a broken command rather than as a villager who has seen nothing.
             out.append("\n  they have not seen anything happen. That is a real answer, not an "
                     + "empty table.");
+        } else {
+            out.append("\n  day  age  ").append(pad("deed", DEED_COLUMN))
+                    .append(pad("how", 8)).append("by");
         }
         for (int slot = ring.size() - 1; slot >= 0; slot--) {
-            Deed deed = ring.get(slot);
-            int ago = today - deed.gameDay();
-            out.append(String.format(Locale.ROOT, "%n  day %-6d %-4s %-16s %-10s by %s  "
-                            + "settlement %-4d severity %3d  confidence %3d",
-                    deed.gameDay(),
-                    ago == 0 ? "" : "-" + ago + "d",
-                    deed.type(),
-                    personaId.equals(deed.subject()) ? "to them" : "witnessed",
-                    deed.actor().toString().substring(0, 8),
-                    deed.settlementId(),
-                    deed.severity(),
-                    deed.confidence()));
+            out.append('\n').append(describeDeed(ring.get(slot), persona, today));
         }
 
         String report = out.toString();
         source.sendSuccess(() -> Component.literal(report), false);
         Namesake.LOGGER.info("[debug deeds] {}", report);
         return ring.size();
+    }
+
+    /** Widest {@link DeedType} name — {@code STRUCK_RESIDENT} and {@code KILLED_RESIDENT}. */
+    static final int DEED_COLUMN = 17;
+
+    /** Narrowest a name column may be, so a header of "who" still has a space after it. */
+    private static final int MIN_NAME_COLUMN = 4;
+
+    /**
+     * One remembered deed, as a row under a header rather than as labelled prose.
+     *
+     * <p><b>Laid out against a width budget, because the first version was not.</b> It repeated
+     * {@code day}, {@code settlement}, {@code severity} and {@code confidence} on every row, came to
+     * ninety characters, and wrapped in the middle of a table — which reads as two rows rather than
+     * one. Session 02 lost its placeholder greeting to the same thing and session 03 lost two name
+     * grammars to it: <b>a string nobody has measured against the space it has to sit in.</b>
+     * {@code CommandLayoutTest} now measures this one.
+     *
+     * <p>What paid for the width is that <b>three of those columns were noise</b>. Severity and
+     * confidence are nominal on every deed anything currently emits, and a column reading
+     * {@code 100} on every row for the whole of sessions 06 and 07 is not information. They appear
+     * only when they are carrying some — which is also the moment they become the most interesting
+     * thing on the row, so it is the right way round rather than a saving.
+     */
+    private static String describeDeed(Deed deed, Persona holder, int today) {
+        int ago = today - deed.gameDay();
+        // Three ways to hold a deed, and they are exclusive rather than three columns: a thing that
+        // happened *to* you is never something you heard about. Session 08 turns the third one on.
+        String how = holder.id().equals(deed.subject()) ? "to them"
+                : deed.confidence() == Deed.FIRST_HAND ? "saw it" : "heard";
+
+        StringBuilder row = new StringBuilder(String.format(Locale.ROOT, "  %3d %4s  %s%s%s",
+                deed.gameDay(),
+                ago == 0 ? "" : "-" + ago + "d",
+                pad(deed.type().name(), DEED_COLUMN),
+                pad(how, 8),
+                deed.actor().toString().substring(0, 8)));
+
+        if (deed.severity() != Deed.NOMINAL) {
+            row.append(" s").append(deed.severity());
+        }
+        if (deed.confidence() != Deed.FIRST_HAND) {
+            row.append(" c").append(deed.confidence());
+        }
+        if (deed.settlementId() != holder.settlementId()) {
+            row.append(" @s").append(deed.settlementId());
+        }
+        return row.toString();
+    }
+
+    /**
+     * How wide the name column has to be for <i>this</i> report, rather than for the widest name a
+     * generator can produce.
+     *
+     * <p>Session 03's layout budget allows a full name of 27 characters — fourteen given plus twelve
+     * family plus a space — and the bonds table was padding every row to 28 to allow for it. A real
+     * village runs about nineteen, so nine characters of every row were being spent on nobody.
+     * Nine columns of numbers beside a name is intrinsically wide and will wrap at some GUI scale
+     * whatever is done here; this is the part that was free to stop paying for.
+     */
+    static int nameColumnFor(List<Persona> personas) {
+        int widest = personas.stream().mapToInt(persona -> nameOf(persona).length()).max().orElse(0);
+        return Math.max(MIN_NAME_COLUMN, widest + 1);
     }
 
     private static String nameOf(Persona persona) {
