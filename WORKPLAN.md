@@ -1942,6 +1942,46 @@ it anyway.
 - The derived deed id is why a ring fills slowly. If session 07's data shows rings full of one deed
   type, that is a signal about the deed types rather than about the ring.
 
+**Ruled at close, by the owner — and it is a direction rather than a correction.**
+
+- **"I still want the NPCs to have in-depth memories."** Recorded as a standing goal, not a defect
+  report against this session: the ring works, and it is thin *by design so far*, because nothing
+  reads it until session 09. The four ways to make it deeper cost wildly different things and only
+  one of them is capacity — see the note below. **Nothing was changed on the strength of this
+  ruling**, because changing it now would persist detail no `if` statement reads, which is the
+  failure `DESIGN.md` §1 exists to refuse and the one both reference codebases died of.
+- **32 is not to be judged against a two-entry fixture.** The owner declined to rule on ring depth
+  or on the eviction policy until they have seen **what a villager's ring actually looks like after
+  a hundred in-game days**. Both questions are therefore parked, deliberately and with their reasons
+  recorded, rather than answered from a harness that has emitted ten deeds.
+- **So session 07 gains one output it did not have.** The headless harness already has to dump a
+  chronicle and an earn-rate histogram; it must also **print a real ring** — the deepest and the
+  median one in the settlement, with the deed-type mix and how many slots are actually in use. That
+  is the artefact the two parked rulings get made against. It is a report, not a mechanic, and it
+  costs session 07 almost nothing because the run that produces it is the run it was already going
+  to make.
+
+#### The four meanings of "in-depth", and what each one costs
+
+Parked here so session 07 has the shape of the question when the data arrives, and so the answer is
+not re-derived from scratch. **Only the first is about capacity, and capacity is the least
+interesting of the four.**
+
+| | What it means | What it costs |
+|---|---|---|
+| **More slots** | 32 → 128 or 256 memories each | Linear. 128 slots × 400 personas is 6.3 MB of NBT a save at the current encoding, which is past what a readable codec should carry — it needs the packed fixed-width ring (44 B a deed against 122 B) that `Memories` currently declines. Tractable, and the least felt per byte. |
+| **Richer per memory** | *which* item, not just "a gift" | A few bytes. **The largest felt gain per byte available** — it is the difference between "you were kind to me" and "you gave me bread when I was hungry". Blocked only by having no reader. |
+| **A repeat count** | "you fed me — nine times, that day" | ~2 bytes on the ring slot, not on `Deed`. Keeps the ring ungrindable *and* restores the magnitude content-addressing collapses. Offered at the close of 06 and left unruled. |
+| **Consolidation** | thirty gifts last month become *"you were kind to me, often, around day 40"* | Real design work, and the only one that makes a ring feel deep without growing. It is also how episodic memory actually decays into semantic memory, and it is what would make the eviction question stop mattering — a forgotten memory becomes a summary rather than a hole. Post-slice at the earliest; `DESIGN.md`'s chronicle rows at 21-23 are the nearest existing hook. |
+
+**The constraint that produced 32 was never storage.** It is that a deed ring has *no consumer yet* —
+session 09's dialogue pools are the first thing to read one and session 11's board is the first thing
+to show one. Making a memory richer before either exists persists detail no `if` statement reads,
+which is precisely what `DESIGN.md` §1 forbids and what MCA's 22 traits and LNK's affinity score both
+were. **So the sequence is the answer: 07 measures it, 09 reads it, 11 shows it — and the depth
+decisions are cheapest to make at 09, when there is finally a line of dialogue whose quality depends
+on them.**
+
 **Ledger change.** Session 06 → done, session 07 → NEXT. **No risk changes**: risk 5's five
 exemptions are untouched and none fell due this session, so for the first time since session 02 the
 forcing function was not the thing keeping rule 5 honest — the discipline was applied while the
