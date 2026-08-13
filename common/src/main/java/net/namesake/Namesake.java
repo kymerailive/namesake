@@ -1,5 +1,6 @@
 package net.namesake;
 
+import net.minecraft.SharedConstants;
 import net.namesake.platform.Platform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,7 +25,9 @@ public final class Namesake {
 
     /** Idempotent by contract — a loader must call this exactly once. */
     public static void init() {
-        LOGGER.info("Namesake initialising on {} (Minecraft {})",
-                Platform.get().loaderName(), Platform.get().minecraftVersion());
+        LOGGER.info("Namesake initialising on {} (Minecraft {}{})",
+                Platform.get().loaderName(),
+                SharedConstants.getCurrentVersion().getName(),
+                Platform.get().isDevelopmentEnvironment() ? ", dev" : "");
     }
 }

@@ -12,14 +12,6 @@ public final class FabricPlatform implements Platform {
     }
 
     @Override
-    public String minecraftVersion() {
-        return FabricLoader.getInstance()
-                .getModContainer("minecraft")
-                .map(c -> c.getMetadata().getVersion().getFriendlyString())
-                .orElse("unknown");
-    }
-
-    @Override
     public boolean isDevelopmentEnvironment() {
         return FabricLoader.getInstance().isDevelopmentEnvironment();
     }

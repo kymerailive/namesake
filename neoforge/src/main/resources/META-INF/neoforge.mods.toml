@@ -9,13 +9,12 @@ version = "${mod_version}"
 displayName = "${mod_name}"
 description = '''${mod_description}'''
 authors = "${mod_author}"
-logoFile = "assets/${mod_id}/icon.png"
 displayURL = "${mod_homepage}"
 
 [[dependencies.${mod_id}]]
 modId = "neoforge"
 type = "required"
-versionRange = "${neoforge_loader_version_range}"
+versionRange = "${neoforge_version_range}"
 ordering = "NONE"
 side = "BOTH"
 

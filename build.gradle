@@ -11,6 +11,10 @@ allprojects {
 subprojects {
     apply plugin: 'java'
 
+    // Without this every module ships as `<subproject>-<version>.jar` — i.e. a file literally
+    // called `fabric-1.21.1-SNAPSHOT.jar`, which is indistinguishable from any other mod's.
+    base.archivesName = "${rootProject.mod_id}-${project.name}"
+
     java {
         toolchain.languageVersion = JavaLanguageVersion.of(rootProject.java_version as int)
         withSourcesJar()

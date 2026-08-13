@@ -40,11 +40,29 @@ tasks.named('processResources', ProcessResources) {
             mod_sources           : rootProject.mod_sources,
             mod_issues            : rootProject.mod_issues,
             license               : rootProject.license,
-            minecraft_version_range: rootProject.minecraft_version_range,
+            // Fabric parses semver predicates, NOT Maven ranges. Using the NeoForge property here
+            // builds cleanly and then fails at load with an unsatisfiable-range error.
+            fabric_minecraft_version_range: rootProject.fabric_minecraft_version_range,
             fabric_loader_version : rootProject.fabric_loader_version,
             java_version          : rootProject.java_version
     ]
     inputs.properties(props)
+
+    // Guard against the Maven-vs-semver trap. A Maven range here builds perfectly and then makes
+    // Fabric refuse to load the mod at runtime with "unsatisfiable version range". Cheap to check,
+    // invisible to catch any other way.
+    doFirst {
+        props.findAll { k, v -> k.toString().startsWith('fabric_') && k.toString().endsWith('_version_range') }
+                .each { k, v ->
+                    if (v.toString() ==~ /^\s*[\[(].*[\])]\s*$/) {
+                        throw new GradleException(
+                                "gradle.properties '${k}' is a Maven range ('${v}'). Fabric needs a " +
+                                "semver predicate such as '>=1.21 <1.22'. Maven ranges build fine and " +
+                                "then fail at mod load.")
+                    }
+                }
+    }
+
     filesMatching('fabric.mod.json') {
         expand(props)
     }

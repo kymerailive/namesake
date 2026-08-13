@@ -18,11 +18,13 @@ public interface Platform {
     /** Human-readable loader name, e.g. {@code "Fabric"} or {@code "NeoForge"}. */
     String loaderName();
 
-    /** The running Minecraft version, as reported by the loader. */
-    String minecraftVersion();
-
     /** True in a development environment — used to gate expensive assertions and debug commands. */
     boolean isDevelopmentEnvironment();
+
+    // Deliberately NOT here: the Minecraft version. It is available from vanilla via
+    // SharedConstants.getCurrentVersion(), so putting it on this interface would mean writing and
+    // maintaining the same answer twice for no benefit. Before adding a method here, check whether
+    // vanilla already answers it in common.
 
     /**
      * Resolves the loader's implementation.
