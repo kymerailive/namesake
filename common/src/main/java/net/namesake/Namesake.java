@@ -4,6 +4,7 @@ import net.minecraft.SharedConstants;
 import net.namesake.harness.AttachBetHarness;
 import net.namesake.platform.PersonaLink;
 import net.namesake.platform.Platform;
+import net.namesake.verb.VerbNetwork;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,6 +38,10 @@ public final class Namesake {
         // this to a lazy ServiceLoader lookup on first use would drop every persona link on the
         // first world load — and would look exactly like the attachment never worked.
         PersonaLink.get();
+
+        // Registers every verb and hands them to the loader's networking, each wrapped in its own
+        // authorization gate. Hard rule 6.
+        VerbNetwork.bootstrap();
 
         if (AttachBetHarness.enabled()) {
             LOGGER.warn("Attach-bet harness ARMED, phase '{}'. This rewrites game rules, moves the "

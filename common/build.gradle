@@ -24,6 +24,18 @@ dependencies {
     testImplementation platform("org.junit:junit-bom:${rootProject.junit_version}")
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    // Test-only. See the note on asm_version in gradle.properties.
+    testImplementation "org.ow2.asm:asm:${rootProject.asm_version}"
+}
+
+// The classpath-scanning tests walk the compiled main classes rather than the source tree, because
+// a payload declared but never compiled is not a payload. Handing them the directory explicitly
+// beats guessing at it from a classloader.
+tasks.named('test', Test) {
+    systemProperty 'namesake.mainClasses',
+            sourceSets.main.output.classesDirs.singleFile.absolutePath
+    systemProperty 'namesake.repoRoot', rootProject.projectDir.absolutePath
 }
 
 // Expose the raw sources so the loader modules can compile them against their own remapped

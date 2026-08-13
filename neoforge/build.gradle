@@ -42,8 +42,40 @@ neoForge {
     }
 }
 
+// --- hard rule 6, on the far side of the seam ------------------------------------------------
+//
+// See the twin of this block in fabric/build.gradle. A unit test in :common cannot see this
+// module, and this is exactly where an unguarded handler would be registered.
+//
+// The forbidden names are PayloadRegistrar's registration methods, not RegisterPayloadHandlersEvent
+// itself: the transport is flushed from a listener the mod class installs, so naming the event is
+// legitimate. Calling playToServer is not.
+def networkRegistrationAllowlist = ['NeoForgeVerbTransport.java']
+def networkRegistrationCalls = ~/playToServer|playToClient|playBidirectional|commonToServer|commonToClient|commonBidirectional|configurationToServer|configurationToClient|configurationBidirectional/
+
+def verifyPacketRegistration = tasks.register('verifyPacketRegistration') {
+    description = 'Fails if any file but the transport registers a NeoForge payload (CLAUDE.md hard rule 6).'
+    def sources = fileTree('src/main/java') { include '**/*.java' }
+    inputs.files(sources).withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.upToDateWhen { true }
+
+    doLast {
+        def offenders = sources.files.findAll { file ->
+            !(file.name in networkRegistrationAllowlist) && file.text =~ networkRegistrationCalls
+        }
+        if (!offenders.isEmpty()) {
+            throw new GradleException(
+                    "NeoForge payload registration outside the transport seam:\n" +
+                    offenders.collect { "  - ${it}" }.join('\n') +
+                    "\nEvery serverbound packet must arrive through ServerboundVerb's gate. Add a " +
+                    "verb to VerbCatalog instead of registering a handler here. CLAUDE.md hard rule 6.")
+        }
+    }
+}
+
 tasks.named('compileJava', JavaCompile) {
     dependsOn(configurations.commonJava)
+    dependsOn(verifyPacketRegistration)
     source(configurations.commonJava)
 }
 

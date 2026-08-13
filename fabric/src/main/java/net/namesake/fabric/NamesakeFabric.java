@@ -4,15 +4,21 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.fabricmc.fabric.api.event.player.UseEntityCallback;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionResult;
 import net.namesake.Namesake;
 import net.namesake.command.NamesakeCommands;
 import net.namesake.harness.AttachBetHarness;
 import net.namesake.npc.PersonaService;
+import net.namesake.verb.Interactions;
+import net.namesake.verb.VerbNetwork;
 
 /**
- * Fabric bootstrap. Subscribes the two lifecycle hooks the attach bet rests on and hands everything
- * else to {@code common}.
+ * Fabric bootstrap. Subscribes the lifecycle hooks the attach bet rests on, the conversation
+ * gesture, and hands everything else to {@code common}.
  */
 public final class NamesakeFabric implements ModInitializer {
 
@@ -30,6 +36,27 @@ public final class NamesakeFabric implements ModInitializer {
 
         CommandRegistrationCallback.EVENT.register(
                 (dispatcher, registryAccess, environment) -> NamesakeCommands.register(dispatcher));
+
+        UseEntityCallback.EVENT.register((player, level, hand, entity, hitResult) -> {
+            if (!Interactions.isConversationGesture(player, hand, entity)) {
+                return InteractionResult.PASS;
+            }
+            if (level.isClientSide()) {
+                // PASS, not CONSUME: the vanilla interact packet still has to reach the server, or
+                // the server never learns the gesture happened and never opens the interaction.
+                // Cancelling the trade is the server's job — see Interactions.
+                Interactions.onClientGesture(entity);
+                return InteractionResult.PASS;
+            }
+            if (player instanceof ServerPlayer serverPlayer) {
+                Interactions.onServerGesture(serverPlayer, entity);
+            }
+            return InteractionResult.CONSUME;
+        });
+
+        // Tokens and rate buckets do not outlive a server. In single player, leaving one world and
+        // opening another reuses the process.
+        ServerLifecycleEvents.SERVER_STOPPING.register(server -> VerbNetwork.onServerStopping());
 
         if (AttachBetHarness.enabled()) {
             ServerTickEvents.END_SERVER_TICK.register(AttachBetHarness::onServerTick);

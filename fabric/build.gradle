@@ -35,8 +35,41 @@ loom {
     }
 }
 
+// --- hard rule 6, on the far side of the seam ------------------------------------------------
+//
+// Every serverbound packet arrives through ServerboundVerb's gate, and VerbGateTest proves that
+// for everything in :common. It cannot prove it here: a unit test in :common cannot see this
+// module, and this is precisely where someone would call Fabric's networking API directly and get
+// an unguarded handler. So the build reads the sources instead.
+//
+// Deliberately a source scan and not a bytecode one: it must fire before compilation, and the
+// message has to name the file a person can go and fix.
+def networkRegistrationAllowlist = ['FabricVerbTransport.java', 'FabricClientReceivers.java']
+def networkRegistrationCalls = ~/PayloadTypeRegistry|registerGlobalReceiver|ServerPlayNetworking\s*\.\s*registerReceiver/
+
+def verifyPacketRegistration = tasks.register('verifyPacketRegistration') {
+    description = 'Fails if any file but the transport registers a Fabric payload (CLAUDE.md hard rule 6).'
+    def sources = fileTree('src/main/java') { include '**/*.java' }
+    inputs.files(sources).withPathSensitivity(PathSensitivity.RELATIVE)
+    outputs.upToDateWhen { true }
+
+    doLast {
+        def offenders = sources.files.findAll { file ->
+            !(file.name in networkRegistrationAllowlist) && file.text =~ networkRegistrationCalls
+        }
+        if (!offenders.isEmpty()) {
+            throw new GradleException(
+                    "Fabric payload registration outside the transport seam:\n" +
+                    offenders.collect { "  - ${it}" }.join('\n') +
+                    "\nEvery serverbound packet must arrive through ServerboundVerb's gate. Add a " +
+                    "verb to VerbCatalog instead of registering a receiver here. CLAUDE.md hard rule 6.")
+        }
+    }
+}
+
 tasks.named('compileJava', JavaCompile) {
     dependsOn(configurations.commonJava)
+    dependsOn(verifyPacketRegistration)
     source(configurations.commonJava)
 }
 
