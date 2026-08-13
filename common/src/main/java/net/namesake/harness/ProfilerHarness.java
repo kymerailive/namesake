@@ -17,13 +17,13 @@ import net.minecraft.util.profiling.ResultField;
 import net.minecraft.world.Difficulty;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobSpawnType;
+import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.entity.npc.VillagerProfession;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.storage.LevelResource;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -31,6 +31,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.level.dimension.DimensionType;
 import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.level.storage.LevelResource;
 import net.minecraft.world.phys.AABB;
 import net.namesake.Namesake;
 import net.namesake.npc.NpcRegistry;
@@ -105,8 +106,16 @@ public final class ProfilerHarness {
     public static final Path REPORT_FILE = Path.of("namesake-profile-report.txt");
     private static final Path VANILLA_TREE_FILE = Path.of("namesake-profile-vanilla-sections.txt");
 
-    /** Far enough from spawn that the permanent spawn ticket is not holding the chunks. */
-    private static final int SITE_OFFSET = 1200;
+    /**
+     * Where the measurement grid is tried, in order, as offsets from world spawn.
+     *
+     * <p>Far enough out that the permanent spawn ticket is not holding the chunks — and a list
+     * rather than one place because the first version used a single offset and landed the whole
+     * grid in an ocean. Sixteen stone rafts is a measurement of villagers on rafts.
+     */
+    private static final int[][] CANDIDATES = {
+            {1200, 1200}, {-1200, 1200}, {1200, -1200}, {-1200, -1200},
+            {1800, 0}, {0, 1800}, {-1800, 0}, {0, -1800}};
 
     private static final int SITE_GRID = 4;
     private static final int SITE_SPACING = 56;
@@ -144,6 +153,7 @@ public final class ProfilerHarness {
     private static final List<String> REPORT = new ArrayList<>();
 
     private static BlockPos gridCentre;
+    private static int siteCandidate;
     private static final List<BlockPos> SITES = new ArrayList<>();
     private static int builtSites;
 
@@ -163,6 +173,9 @@ public final class ProfilerHarness {
     private static volatile ProfileResults vanillaResults;
 
     /** Population phase. */
+    private static final int[][] SEARCH_ORIGINS = {{0, 0}, {1600, 0}, {0, 1600}, {-1600, 0},
+            {0, -1600}, {1600, 1600}, {-1600, 1600}, {1600, -1600}};
+    private static int searchOrigin;
     private static final List<BlockPos> VILLAGES = new ArrayList<>();
     private static int villageIndex;
     private static final List<String> VILLAGE_ROWS = new ArrayList<>();
@@ -269,8 +282,9 @@ public final class ProfilerHarness {
                 }
                 configure(server, level, player);
                 BlockPos spawn = level.getSharedSpawnPos();
-                gridCentre = new BlockPos(spawn.getX() + SITE_OFFSET, spawn.getY(),
-                        spawn.getZ() + SITE_OFFSET);
+                int[] candidate = CANDIDATES[siteCandidate];
+                gridCentre = new BlockPos(spawn.getX() + candidate[0], spawn.getY(),
+                        spawn.getZ() + candidate[1]);
                 teleport(player, level, gridCentre.getX(), 200, gridCentre.getZ());
                 await(4000);
             }
@@ -281,7 +295,20 @@ public final class ProfilerHarness {
                 if (waiting(server, () -> chunksReady(level), "the site chunks to load")) {
                     return;
                 }
+                if (!isLand(level) && siteCandidate + 1 < CANDIDATES.length) {
+                    // The first run of this landed the whole grid in an ocean — sixteen stone rafts
+                    // and three elder guardians in the profile. Villagers on a raft path differently
+                    // from villagers on ground, which is the one thing this site has to get right.
+                    Namesake.LOGGER.info("[profile] candidate {} at {} is water; trying the next",
+                            siteCandidate, gridCentre.toShortString());
+                    siteCandidate++;
+                    stage = 0;
+                    deadline = tick + 100;
+                    lastReport = tick;
+                    return;
+                }
                 record(chunksReady(level), "SITE every chunk of the measurement grid is loaded");
+                record(isLand(level), "SITE all sixteen sites are on land above sea level");
                 gridCentre = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, gridCentre);
                 record(gridCentre.getY() > level.getMinBuildHeight() + 8,
                         "SITE the measurement grid is on real ground at y=" + gridCentre.getY());
@@ -441,6 +468,13 @@ public final class ProfilerHarness {
     /** Rebuilds the world to match a cell: this many villagers at these sites, these records. */
     private static void populate(MinecraftServer server, ServerLevel level, Cell target) {
         for (Villager villager : villagersInGrid(level)) {
+            // Vanilla releases a villager's points of interest in Villager#die and nowhere else, so
+            // a discarded villager keeps its workstation and its bed claimed forever. Tearing a
+            // cell down without this leaks a ticket per employed villager into the world's POI
+            // file, and the next cell finds those workstations occupied by nobody: employment fell
+            // from 95/96 to 52/200 across a run and every tick time after that was measuring a
+            // village of the unemployed. Nothing threw. Found by reading the employment column.
+            releasePois(villager);
             villager.discard();
         }
         SUBJECTS.clear();
@@ -625,7 +659,10 @@ public final class ProfilerHarness {
      */
     private static void walk(ProfileResults results, String path, int depth, long nanos, int ticks,
                              Map<String, ResultField> wanted) {
-        if (depth > 6) {
+        // Nine, not six. A villager's own sections sit at root.tick.levels.<level>.tick.entities.
+        // tick.minecraft:villager.sensing — eight deep — and the first run of this cut the tree off
+        // one level above them and printed "not reported" for every section the session is about.
+        if (depth > 9) {
             return;
         }
         List<ResultField> fields = results.getTimes(path);
@@ -670,21 +707,27 @@ public final class ProfilerHarness {
                     return;
                 }
                 BlockPos spawn = level.getSharedSpawnPos();
-                VILLAGES.clear();
                 // Searched from a ring of origins rather than one, because the locator run twice
-                // from the same point returns the same village twice.
-                int[][] offsets = {{0, 0}, {1600, 0}, {0, 1600}, {-1600, 0}, {0, -1600},
-                        {1600, 1600}, {-1600, 1600}, {1600, -1600}};
-                for (int[] offset : offsets) {
-                    BlockPos from = spawn.offset(offset[0], 0, offset[1]);
-                    BlockPos found = level.findNearestMapStructure(StructureTags.VILLAGE, from, 40, false);
-                    if (found != null && VILLAGES.stream().noneMatch(v -> v.closerThan(found, 192))) {
-                        VILLAGES.add(found);
-                    }
+                // from the same point returns the same village twice — and one origin per tick,
+                // because a forty-chunk structure search blocks the server thread for seconds and
+                // eight of them in one tick is a stall the game reports as a crash-shaped hang.
+                int[] from = SEARCH_ORIGINS[searchOrigin];
+                BlockPos found = level.findNearestMapStructure(StructureTags.VILLAGE,
+                        spawn.offset(from[0], 0, from[1]), 40, false);
+                if (found != null && VILLAGES.stream().noneMatch(v -> v.closerThan(found, 192))) {
+                    VILLAGES.add(found);
+                    Namesake.LOGGER.info("[profile] village {} at {}",
+                            VILLAGES.size() - 1, found.toShortString());
+                }
+                if (++searchOrigin < SEARCH_ORIGINS.length) {
+                    return;
                 }
                 record(!VILLAGES.isEmpty(), "POPULATION vanilla's locator found " + VILLAGES.size()
                         + " distinct village(s)");
-                Namesake.LOGGER.info("[profile] villages: {}", VILLAGES);
+                if (VILLAGES.isEmpty()) {
+                    finish(server, false);
+                    return;
+                }
                 villageIndex = 0;
                 next();
             }
@@ -807,7 +850,13 @@ public final class ProfilerHarness {
                         server.getWorldPath(LevelResource.ROOT))
                 .resolve("data").resolve(NpcRegistry.FILE_ID + ".dat");
         if (!Files.isRegularFile(file)) {
-            record(false, "CLEAN " + file + " does not exist, so nothing on disk was checked");
+            // A registry that was never made dirty is never written, which is the normal shape of
+            // the vanilla phase: our hooks are inert, nothing was minted, and there is no file. A
+            // missing file is only a pass while the registry is also empty — otherwise records
+            // exist and something failed to save them.
+            record(registry.size() == 0, "CLEAN no registry file exists at " + file.getFileName()
+                    + " and the registry holds " + registry.size() + " persona(s), so nothing "
+                    + "reached disk at all");
             return;
         }
         try {
@@ -874,6 +923,14 @@ public final class ProfilerHarness {
         }
     }
 
+    /** Everything {@code Villager#releaseAllPois} releases, which is private and only runs on death. */
+    private static void releasePois(Villager villager) {
+        villager.releasePoi(MemoryModuleType.HOME);
+        villager.releasePoi(MemoryModuleType.JOB_SITE);
+        villager.releasePoi(MemoryModuleType.POTENTIAL_JOB_SITE);
+        villager.releasePoi(MemoryModuleType.MEETING_POINT);
+    }
+
     private static BlockPos surfaceAt(ServerLevel level, BlockPos site, int x, int z) {
         return level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, site.offset(x, 0, z));
     }
@@ -893,6 +950,29 @@ public final class ProfilerHarness {
         for (int x = -radius; x <= radius; x++) {
             for (int z = -radius; z <= radius; z++) {
                 if (!level.getChunkSource().hasChunk(centre.x + x, centre.z + z)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
+     * True when every one of the sixteen site centres is dry land above sea level.
+     *
+     * <p>Sampled at the site centres rather than at the grid centre, because a coastline puts one
+     * on the beach and the other under twelve blocks of water — and the grid centre being fine is
+     * exactly the reassuring reading that hides it.
+     */
+    private static boolean isLand(ServerLevel level) {
+        for (int gz = 0; gz < SITE_GRID; gz++) {
+            for (int gx = 0; gx < SITE_GRID; gx++) {
+                BlockPos probe = gridCentre.offset(
+                        (2 * gx - (SITE_GRID - 1)) * SITE_SPACING / 2, 0,
+                        (2 * gz - (SITE_GRID - 1)) * SITE_SPACING / 2);
+                BlockPos surface = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, probe);
+                if (surface.getY() <= level.getSeaLevel()
+                        || !level.getBlockState(surface.below()).getFluidState().isEmpty()) {
                     return false;
                 }
             }

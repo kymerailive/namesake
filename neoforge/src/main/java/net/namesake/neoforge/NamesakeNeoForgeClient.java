@@ -4,6 +4,7 @@ import net.minecraft.client.Minecraft;
 import net.namesake.Namesake;
 import net.namesake.harness.AttachBetHarness;
 import net.namesake.harness.HarnessClient;
+import net.namesake.harness.ProfilerHarness;
 import net.namesake.verb.ClientPacketSink;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.common.NeoForge;
@@ -19,7 +20,9 @@ public final class NamesakeNeoForgeClient {
         // Shared code sends packets through this sink so it never names a loader's client API.
         ClientPacketSink.install(PacketDistributor::sendToServer);
 
-        if (AttachBetHarness.enabled()) {
+        // Either scripted run needs a client that walks itself into a world. Registering this for
+        // only one of them is how the profiler sat at the title screen saying nothing.
+        if (AttachBetHarness.enabled() || ProfilerHarness.enabled()) {
             // A named method rather than a lambda: NeoForge's bus resolves the event type from the
             // handler's signature, and a method reference makes that unambiguous.
             NeoForge.EVENT_BUS.addListener(ClientTickEvent.Post.class, NamesakeNeoForgeClient::onClientTick);
