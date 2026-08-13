@@ -623,7 +623,8 @@ changes to the 16-session shape.
 
 ### Session 03 — 2026-08-13 — traits, cultures, settlement detection
 
-**Shipped.** `6f054f8..27ecdb7` plus this ledger commit, pushed to `origin/main`.
+**Shipped.** `6f054f8..781fa26` plus this correction, pushed to `origin/main`. CI green on all three
+jobs — build and test, and the harness on each loader.
 
 **A villager is now from somewhere, and it shows in their name and in their numbers.** A settlement
 detected from a real bell gives its residents a culture, a household and eight rolled axes, and all
