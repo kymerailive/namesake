@@ -61,6 +61,24 @@ class PersonasTest {
                 Personas.householdAt(3, other, other.offset(20, 0, 20)) != Personas.householdAt(3, other, other.offset(4, 0, 4)));
     }
 
+    /**
+     * Villagers with no settlement have no bell to anchor the grid to, so it is anchored at the
+     * world origin. Anchoring it at the villager's own feet — which the first version did — puts
+     * every unsettled villager in the world into cell (0,0), and the debug dump showed three
+     * wilderness villagers and a player's base villager a thousand blocks away all named Sterbrook.
+     */
+    @Test
+    @DisplayName("unsettled villagers a long way apart are not one family")
+    void theWildernessStillHasHouseholds() {
+        BlockPos origin = BlockPos.ZERO;
+        int here = Personas.householdAt(Persona.UNASSIGNED, origin, new BlockPos(4, 64, 4));
+        int overThere = Personas.householdAt(Persona.UNASSIGNED, origin, new BlockPos(5000, 64, -3000));
+
+        assertNotEquals(here, overThere);
+        assertEquals(here, Personas.householdAt(Persona.UNASSIGNED, origin, new BlockPos(9, 64, 9)),
+                "two villagers sharing a cell in the wilderness are still family");
+    }
+
     @Test
     @DisplayName("the same cell in two settlements is two different families")
     void householdsDoNotRhymeAcrossSettlements() {

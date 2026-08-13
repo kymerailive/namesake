@@ -93,10 +93,16 @@ public final class Personas {
         // Culture is a property of the place, so it is sampled at the settlement's bell rather
         // than at the villager's feet — otherwise two residents on opposite sides of a culture
         // border would grow up in different cultures in the same village.
-        BlockPos origin = home.map(Settlement::centre).orElse(pos);
-        byte cultureId = Cultures.at(level, origin).id();
+        byte cultureId = Cultures.at(level, home.map(Settlement::centre).orElse(pos)).id();
         int settlementId = home.map(Settlement::id).orElse(Persona.UNASSIGNED);
-        int householdId = householdAt(settlementId, origin, pos);
+
+        // The household grid is anchored at the bell so it is aligned to the village. With no
+        // village there is no bell to anchor to, and anchoring it at the villager's own feet would
+        // put every unsettled villager in the world in cell (0,0) — one household, one surname,
+        // shared by strangers a thousand blocks apart. The world origin is the only stable anchor
+        // left, and it gives the wilderness real spatial households too.
+        BlockPos anchor = home.map(Settlement::centre).orElse(BlockPos.ZERO);
+        int householdId = householdAt(settlementId, anchor, pos);
 
         Persona placed = persona.placed(settlementId, householdId, cultureId);
         Persona generated = placed.withTraits(TraitRoll.roll(placed, registry.settlements()));
