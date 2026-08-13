@@ -21,6 +21,20 @@ dependencies {
     modImplementation "net.fabricmc.fabric-api:fabric-api:${rootProject.fabric_api_version}"
 }
 
+// The attach-bet harness (session 01) drives a real client through the persona lifecycle. It is
+// inert unless this property is set, and it must stay that way — it rewrites game rules, moves the
+// player and kills a villager.
+//   .\gradlew.bat :fabric:runClient -Pharness=setup
+loom {
+    runs {
+        client {
+            if (project.hasProperty('harness')) {
+                property('namesake.harness', project.property('harness').toString())
+            }
+        }
+    }
+}
+
 tasks.named('compileJava', JavaCompile) {
     dependsOn(configurations.commonJava)
     source(configurations.commonJava)

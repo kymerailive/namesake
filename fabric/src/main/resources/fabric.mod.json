@@ -17,6 +17,9 @@
   "entrypoints": {
     "main": [
       "net.namesake.fabric.NamesakeFabric"
+    ],
+    "client": [
+      "net.namesake.fabric.NamesakeFabricClient"
     ]
   },
   "depends": {

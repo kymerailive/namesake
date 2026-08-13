@@ -1,6 +1,8 @@
 package net.namesake;
 
 import net.minecraft.SharedConstants;
+import net.namesake.harness.AttachBetHarness;
+import net.namesake.platform.PersonaLink;
 import net.namesake.platform.Platform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,5 +31,17 @@ public final class Namesake {
                 Platform.get().loaderName(),
                 SharedConstants.getCurrentVersion().getName(),
                 Platform.get().isDevelopmentEnvironment() ? ", dev" : "");
+
+        // Force the loader's persona attachment to register NOW, during mod init. Both loaders
+        // discard attachment data whose id is unknown at the moment entity NBT is read, so leaving
+        // this to a lazy ServiceLoader lookup on first use would drop every persona link on the
+        // first world load — and would look exactly like the attachment never worked.
+        PersonaLink.get();
+
+        if (AttachBetHarness.enabled()) {
+            LOGGER.warn("Attach-bet harness ARMED, phase '{}'. This rewrites game rules, moves the "
+                    + "player and kills a villager. Unset -D{} to disable.",
+                    AttachBetHarness.phase(), AttachBetHarness.PROPERTY);
+        }
     }
 }

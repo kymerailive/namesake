@@ -24,6 +24,11 @@ neoForge {
     runs {
         client {
             client()
+            // See fabric/build.gradle: the attach-bet harness only runs when asked for.
+            //   .\gradlew.bat :neoforge:runClient -Pharness=setup
+            if (project.hasProperty('harness')) {
+                systemProperty('namesake.harness', project.property('harness').toString())
+            }
         }
         server {
             server()

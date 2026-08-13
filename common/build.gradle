@@ -11,6 +11,13 @@ neoForge {
         minecraftVersion = rootProject.parchment_minecraft
         mappingsVersion = rootProject.parchment_version
     }
+
+    // Put vanilla Minecraft on the test compile classpath as well as main. Without it the test
+    // source set cannot see net.minecraft at all, which would quietly restrict unit tests to code
+    // that touches no Minecraft type — i.e. away from persistence, which is the part most worth
+    // testing. testImplementation extends implementation, but modding dependencies are not added
+    // through implementation, so this is not automatic.
+    addModdingDependenciesTo(sourceSets.test)
 }
 
 dependencies {
