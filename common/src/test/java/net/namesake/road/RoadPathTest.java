@@ -160,4 +160,36 @@ class RoadPathTest {
                 () -> "a 64-chunk road expanded " + route.expanded() + " nodes; the tie-break on the "
                         + "open queue is what keeps that from fanning out across the whole box");
     }
+
+    /**
+     * <b>The fixture the breakage pass found missing, and the two ways it was missing.</b>
+     *
+     * <p>Removing the tie-break on the open queue turned <i>nothing</i> red. The rolling-terrain
+     * route above has few ties to break, so it never reached the guard — and the <b>first</b> fixture
+     * written for that ran flat ground due east, where every deviation costs more and the cheapest
+     * path is therefore unique. There were no ties to break there either.
+     *
+     * <p>The case that matters is flat ground on a <b>bearing that is neither straight nor a perfect
+     * diagonal</b>: every ordering of the diagonal and the straight steps costs exactly the same, so
+     * the whole staircase between the two villages carries one cost-plus-estimate and the queue has
+     * no opinion at all. Measured: <b>120 nodes with the tie-break and 1,100 without</b> — which is
+     * also why the budget here is three hundred rather than the fifteen hundred the second attempt
+     * used. <b>A threshold above the broken number is a guard that is still not reached.</b>
+     *
+     * <p>Two villages a hundred and twenty chunks apart across a plain is not an exotic world, and
+     * hitting {@link RoadPath#MAX_EXPANSIONS} there is a road that silently does not get built.
+     */
+    @Test
+    @DisplayName("a long road over flat ground walks to the goal instead of searching the whole box")
+    void flatGroundDoesNotFanOut() {
+        RoadPath.Route route = RoadPath.between(new ChunkPos(0, 0), new ChunkPos(120, 60), FLAT);
+
+        assertTrue(route.complete(), "a plain has to be crossable");
+        assertEquals(route.flatCost(), route.cost(), "and at exactly the cost of flat ground");
+        assertTrue(route.expanded() < 300,
+                () -> "a 120-chunk road across flat ground expanded " + route.expanded()
+                        + " nodes against a budget of 300. Every ordering of its steps costs the "
+                        + "same, so without the tie-break on the open queue the search expands the "
+                        + "whole staircase — measured at 1,100.");
+    }
 }

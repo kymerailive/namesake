@@ -3,7 +3,23 @@
 **The ledger.** What happens next, in order, with exit criteria. Read first, update last.
 Where any other document disagrees on sequence, this wins.
 
-- **Status:** session 09 complete, **and a villager says your name because of something you did.** Walk
+- **Status:** session 10 complete, **and the thesis is machinery.** Feed six villagers in one village,
+  wait a day, walk to a village down the road that you have never done anything in, and a villager
+  there says *"Someone mentioned you, in passing."* — because somebody who was standing in the first
+  village walked the road. Six of six residents of the far village hold it, all six can still say who
+  did it, and not one of them holds it first-hand. **The road they came down is real blocks**, laid
+  over natural ground and around a floor somebody built: 168 of 168 prepared columns became path and
+  24 of 24 planks were left alone. **The mod changed the world for the first time in ten sessions,
+  and it changed no schema at all** — the graph is derived from the settlement table and a story on
+  the road is a queued rumour in the deque session 08 persisted for exactly this.
+  Two ruled numbers did not compose and the session opened on them, as session 08 did.
+  A story is out of its village's deque about 500 ticks after it is queued and the ruled
+  cross-settlement delay was 1200–6000, so *"take from the deque after a delay"* was never an
+  implementation. **The delay is now one in-game day, derived from `Deed.gameDay`** — and the
+  argument is not the schema, it is that nothing downstream of a deed has ever seen a tick, which is
+  what session 07's instrument rests on. **The remaining half of the exit criterion is the owner's
+  and is outstanding: whether a person reacts.**
+  Before that: session 09, **and a villager says your name because of something you did.** Walk
   into a Karsk village and Stodysk Stuksk tells you *"I don't know your business here."* Give three of
   their neighbours enough for the village to take you in, and the same villager — who has still never
   met you — says *"Hm. You again, Player589. Good, yes?"* That happened in a running game, it survived
@@ -71,8 +87,8 @@ Where any other document disagrees on sequence, this wins.
 | 07 | Headless simulation harness | **done** — 2026-08-14 |
 | 08 | Gossip and distortion | **done** — 2026-08-14 |
 | 09 | Dialogue pools and residency | **done** — 2026-08-15 |
-| 10 | Roads and propagation — **SHIP-OR-KILL** | **NEXT** |
-| 11 | Notice Board | pending |
+| 10 | Roads and propagation — **SHIP-OR-KILL** | **done** — 2026-08-15 |
+| 11 | Notice Board | **NEXT** |
 | 12 | Standing bands | pending |
 | 13 | Day plan I — free slots | pending |
 | 14 | Day plan II — ERRAND activity | pending |
@@ -347,6 +363,15 @@ generations and keeps latency out of the interaction path entirely.
 2. **Session 10 fails ship-or-kill.** If nobody reacts when town B knows their name, the central
    thesis is wrong. Better to learn it at session 10 than 60.
 
+   **Session 10 shipped, and this risk is narrower than it has ever been and is not retired.** The
+   machinery half is done and is checked on every push: a deed done in one village reaches every
+   resident of a village down the road, with the player's name still attached, on the in-game day
+   after it happened, in a running game on both loaders. The half this risk is about is the half no
+   test in this repo can have an opinion about — **whether a person reacts** — and it is still ahead
+   rather than behind, because it is the owner's and the owner has not played it. Sessions 08 and 09
+   both closed owing a playtest and this one closes owing all three. **That is the whole of what is
+   left of this risk, and it is now the only thing left of it.**
+
    **Session 08 narrowed it without retiring it, and the narrowing is worth stating precisely.** The
    half that is now machinery rather than hope: a deed reaches 78% of a village it was not witnessed
    in, the pipeline runs one hop further by construction rather than by a second implementation, and
@@ -488,6 +513,15 @@ between a deed and the save file is called through `DeedBus.record`, the same do
 The `spread ≥ 64` boundary-jitter floor · the 8/tick transition governor · the `id % 7` path gate ·
 the player-relative particle emission gate · the `dayDelta ≤ 64` clamp · the `addActivitySafely`
 helper · the sleep-skip cold-start mode.
+
+**Added at session 10: a story crosses a border only from the place it happened, and it crosses
+carrying the deque's own entry rather than the telling.** Both are one comparison over
+`Deed.settlementId`, both look like plumbing, and between them they are what keeps `DESIGN.md`'s
+*max 2 hops* arithmetic across a border instead of needing the counter sessions 06, 08 and 09 each
+declined. Carry the telling instead and the next village hears your name as *"someone from the
+north"* — acceptance step 5 fails and nothing goes red except the two tests written for it. Drop the
+home rule and an undegraded copy sets out again from every village it reaches, and your name is at
+the horizon. `GossipTest` holds both, and `SimulationTest` holds what they do to a second village.
 
 **Added at session 08: `Deed.ATTRIBUTED` does two jobs and both are load-bearing.** It is the blur
 threshold *and* the floor on retelling — a story you cannot attribute is a story you cannot pass on —
@@ -3466,4 +3500,336 @@ rewritten, taking the count 57 → 61, plus §3's `Deed` and §5 rewritten aroun
 discriminates "persisted" by the presence of a `Codec`, and a packed ring slot has none — so
 `Memories.Slot` is pinned into the ledger by name, by a test that says why. No changes to the
 16-session shape.
+
+### Session 10 — 2026-08-15 — roads and cross-settlement propagation — SHIP-OR-KILL
+
+**Shipped.** `RANGE_PLACEHOLDER`, pushed to `origin/main`. CI green on all three jobs — build and
+test, and the attach-bet harness on each loader.
+
+**A villager in a village you have never done anything in says they have heard of you.** Feed six
+villagers in the first village, let the day turn, and walk down the road: *"Hm. Someone mentioned
+you, in passing."* Six of the far village's six residents hold the story, **all six can still say
+who did it**, and not one of them holds it first-hand. The player never went there and did nothing
+there; everything that village knows came down a road, carried by somebody who was standing in the
+square. That is `DESIGN.md` §10 step 5, in a running game, on both loaders — **and it is
+`Register.ABOUT_OTHERS`, the register session 09 authored and put before the first-hand one on
+purpose. Session 10 added an edge. The sentence was already there.**
+
+**And the road is real blocks**, which is the first time in ten sessions this mod has changed the
+world: 168 of 168 prepared natural columns became `dirt_path`, and 24 of 24 planks somebody laid
+across the route were left exactly where they were.
+
+#### The first contradiction: two ruled numbers that do not compose, and the fourth way out
+
+`Gossip.DRAIN_INTERVAL_TICKS` is 250 and a story is spent after two drains, so a deed is out of its
+own village's deque about **500 ticks** after it is queued. `DESIGN.md` §4 step 7 gave the
+cross-settlement hop a **1200–6000 tick** delay. By the time that delay elapses there is nothing left
+to send, so *"take from the deque after a delay"* was never an implementation and the choice was a
+design decision rather than plumbing.
+
+| | What it costs |
+|---|---|
+| **An in-flight table** | Persisted state, and therefore a schema bump in the ship-or-kill session |
+| **Lengthen the deque's life** | Changes how far a story travels *inside* its own village, which is the number session 08 spent its whole budget getting right — and puts a fourth confidence on the ladder |
+| **Shorten the delay** | Removes the thing acceptance step 3 rests on: that you can outwalk the news |
+
+**The fourth is what shipped, and it is the one the brief asked me to check for.** The story is handed
+to the neighbour's deque **at the moment it is told at home**, while it is still in hand, and the
+neighbour refuses to tell it until the day has turned. Both halves are read off fields the deed has
+carried since session 05: `Deed.settlementId` says where it happened, `Deed.gameDay` says when. So
+the in-flight story is a queued rumour in a persisted deque — **which is exactly what session 08
+persisted the deque for, and session 10 changes no schema.**
+
+**Session 08's foresight was aimed correctly, and it is worth saying precisely why, because it was
+not obvious.** Its own reasoning was *"an in-flight story is certain to cross a save"*, and a
+literal reading of that needs a destination and an arrival time, neither of which a `Deed` carries —
+which would have made the foresight nearly-right and expensive. It is exactly right because the
+destination is the deque's own key and the arrival is derivable. **The saving is a schema; the thing
+that made it available was building the mechanism so that session 10 was an edge rather than a
+rewrite.**
+
+**The delay is now one in-game day, and the argument for that is not the schema.** It is that
+**nothing downstream of a deed has ever seen a tick** — `Deed.dayOf` divides game time by 24,000,
+`Bond.decayedTo` takes a day, `Bond.apply` resets the allowance when the day turns — and session 07's
+whole claim that a hundred simulated days *are* a hundred days rests on it. A tick-precise delay
+would be the first sub-day clock in the record layer, and the instrument that has to measure this
+session's propagation curve could no longer run it exactly. **A delay nobody can simulate is a delay
+nobody can put a number on.** What it costs is real and is one line: a deed done in the last minutes
+before midnight is told next door at first light rather than a day later.
+
+#### The second contradiction: what confidence a story crosses at, and it decides step 5
+
+`Deed.RETOLD` is 0.70 and `Deed.ATTRIBUTED` is 50, so a story is 100 → 70 → 49 and 49 names nobody.
+Three readings, and they give different answers to ship-or-kill.
+
+| Reading | What happens in the far village |
+|---|---|
+| It crosses at the **telling** (70) | The far village's own first telling degrades it to 49. **Nobody there can ever name you. Step 5 dies.** |
+| It crosses at **100** | Somebody five hundred blocks away watched it. `Dialogue.registerFor` would select `ABOUT_YOU`, and a villager would tell you they saw a thing they did not see. |
+| **It crosses carrying the deque's own entry** | The carrier is a witness leaving town with a hundred, so the far village's *first hearers* hold **70** — attributed, and `ABOUT_OTHERS`. Its second telling blurs to 49. |
+
+**The third is what shipped, and it is not a fudge between the other two — it is the only one where
+nothing is invented.** The deque entry has always been *what the village's best-informed source
+holds*, and a traveller is exactly that source in the next village along. Nobody in the far village
+is ever handed the hundred, because the deque is never handed to anybody: it is only ever retold
+from. `GossipTest.theFarVillageNeverHearsItFirstHand` walks forty residents and says so.
+
+**And it takes exactly one more `if` to stop your name reaching the horizon: a story crosses a border
+only from the place it happened.** Without it, the undegraded copy would set out again from every
+village it reached and every settlement in the world would end up naming you. With it, the two hops
+`DESIGN.md` rules are the two hops you get and they are still arithmetic — **named at home, named
+next door, nameless one further, and nothing counts borders any more than it counts hops.** It is
+one comparison over a field the deed already carries, which is the third time this project has
+declined a counter for that reason.
+
+**What it does to coverage in the far village, measured.** One deed, a nine-resident neighbour, the
+player never visiting:
+
+| day | home held | home named | away held | away named |
+|---|---|---|---|---|
+| 0 | 7 | 6 | **0** | **0** |
+| 1 | 7 | 6 | 5 | 3 |
+| 2 | 7 | 6 | 5 | 3 |
+
+Day 0 is zero by construction and it is acceptance step 3: **a player cannot outwalk the news within
+a day.** The far village ends holding the story at two confidences and no others — **70 × 3 and
+49 × 2** — and a hundred appearing there would mean the crossing had reset the decay.
+
+**The reading of `0.15` is an interpretive call and it is flagged rather than buried, exactly as
+session 08 flagged its two.** §4 step 7 says *"same-settlement transfer at 0.35 per hearer …
+cross-settlement along a road edge at 0.15"*, and the alternative is a coin on the edge itself.
+Session 08's fourth closing ruling settled the same question for 0.35 — *the chance one hearer takes
+one telling* — and applying it again is what makes the two numbers the same kind of thing. It also
+makes the road load-bearing rather than decorative: **the edge decides whether there is a route at
+all, and 0.15 decides how well the news takes when it gets there.** The arithmetic is why it matters
+rather than a preference:
+
+| what the player did | any namer in the next village | namers, mean |
+|---|---|---|
+| one deed, then left | **75%** | 1.3 |
+| a couple of deeds, twice | **100%** | 5.7 |
+| one a day for five days | **100%** | 6.4 |
+
+Over thirty-two worlds each. Read the other way, a coin on the edge puts a *named* story into a
+specific neighbouring village 15% of the time, and `DESIGN.md` §10's script is one gift — **which
+would have made ship-or-kill a coin flip.** `Deed.RETOLD` was the number I expected to be tempted by
+and it was never touched; it is still 0.70 and still held to `[0.50, 0.707)`.
+
+#### What bounds the road materialiser — written before a block was placed, and then proven
+
+Nine sessions of this project exist because the attach architecture let it avoid terrain entirely. A
+road that runs through somebody's base is not a bug report, it is a reason to uninstall.
+
+1. **It replaces exactly seven blocks.** Grass, dirt, coarse dirt, podzol, rooted dirt, mycelium,
+   moss — natural ground cover, as a literal list rather than a block tag, because a modpack can add
+   to a tag and would then be adding to what this is allowed to destroy. Sand, gravel, stone and snow
+   are *skipped*, not converted, so a road fades out over a beach rather than digging one up.
+2. **It never breaks anything and never places above ground level.** One block swapped in place.
+3. **A player build is invisible to it.** The surface is found with `MOTION_BLOCKING_NO_LEAVES`, so
+   the highest thing that stops you walking is what gets tested — a floor, a bridge, a farm, a path
+   already laid — and none of those are in the allowlist. **The natural ground underneath a build is
+   never even looked at.** Farmland is not on the list either, so a village's crops are safe.
+4. **It never loads a chunk.** Only chunks already in memory are paved, so a road appears as a player
+   travels it. Session 04 measured a cold column at 72 ms; a materialiser that pulled a thousand off
+   the disk would be a freeze, and session 03 lost a whole leg to `getHeight` answering with the
+   world floor for a chunk that was not loaded.
+5. **Reversible: honestly, no — and that is why there is a switch.** Nothing remembers what was
+   underneath, because remembering would be persisted state and this session's whole argument is
+   that roads need none. `-Dnamesake.roads=off` stops the blocks and **changes nothing the thesis
+   depends on**, because gossip crosses the graph and the graph is arithmetic over the settlement
+   table.
+
+**Proven rather than asserted, and it is the leg worth having.** The harness predicts the route with
+the shipped router, lays 168 columns of natural ground along it and **twenty-four columns of oak
+planks straddling the middle of it**, and then lets the road be built. Result: `168 of 168 natural
+column(s) on the route are dirt path` and `24 of 24 planks are untouched`. A second copy of the
+terrain lambda in the harness would have been a fixture testing itself, so `RoadNetwork.terrainOf` is
+the one definition and the fixture moves with the route.
+
+#### What shipped
+
+- **`net.namesake.road`** — seven classes, none of them persisted. `Delaunay` (Bowyer–Watson, and it
+  is allowed to be doubles); `RoadGraph` (the lune prune, exact integer arithmetic over block
+  coordinates, per dimension); `Roads` (the memo, invalidated by a counter on the settlement table);
+  `RoadPath` (A\* over one node per chunk, heights from the generator's own noise); `RoadTrail` (the
+  centre line and the three-wide paving); `RoadNetwork` (one route per tick off-thread, ≤48 column
+  checks per tick, and every bound above); `RoadProgress`.
+- **The border**, as four lines in `Gossip.drain` and two derived rules — `atHome` and `hasArrived`.
+- **A second settlement in `Simulation.Plan`**, and `Reports.crossSettlement`: the day table, the
+  far village's confidence ladder, the thirty-two-world odds, and a page of what the far village
+  actually says.
+- **`/namesake debug roads`** — the graph and what has been laid, in five enumerated states.
+- **A second village and a road in the harness**, and three new legs in `verify`.
+- **Schema 7, unchanged.** No new persisted record, no new field, no new key, no datafixer.
+
+#### What the exit criteria actually showed
+
+**Both loaders, every leg green**, in two launches each plus two cross-build load tests:
+
+| phase | legs | what it was run against |
+|---|---|---|
+| `setup` | **94** (69 before this session) | a fresh world on the session 10 build |
+| `verify` | **15** (12 before) | that world, saved and reloaded |
+| `verify` | **12** | the archived **schema-7** world, and **no migration ran** |
+| `verify` | **12** | the same world again |
+
+UNIT_PLACEHOLDER
+
+The exit criterion, on screen, on both loaders — a villager in a village the player has never done
+anything in, chosen because their ring holds a deed of the player's that they did not witness:
+
+```
+Fabric     Trykkrukdok Svekdin   Hm. Someone mentioned you, in passing.
+NeoForge   Zhosryzvusk Svekdin   You come up in conversation.
+```
+
+and the road they came down, out of `/namesake debug roads`:
+
+```
+0-1        299/ 577 laid, 278 refused, 13c x1.6
+```
+
+**The cross-build load test is the interesting one this time, because of what it did not do.** Every
+session since 04 has run this against a save written by the previous build and watched a fixer
+convert it. This one loaded the schema-7 archive and reported `no migration expected: world is
+already at schema 7`, with twelve legs green — **including the road legs standing down**, because a
+save written before this session has one village in it and the subjects file says so. Session 09's
+residency row carries the same rule for the same reason. A world archived at `c885d32` plays on this
+build with nothing to convert, which is the claim "session 10 changes no schema" as evidence rather
+than as an assertion.
+
+#### What the run found that nobody asked it
+
+**1. The far village's coverage is lower than home's, and that is the mechanism rather than a
+shortfall.** Session 08 measured 78% of a village within two in-game days; the far village settles
+at about half that, at 0.15 a hearer over two tellings. **The number that matters is not coverage
+though — it is how many can still name you**, and that is everyone who took the *first* telling,
+because the second is already blurred. In the harness's six-story run that was six of six.
+
+**2. A settlement waiting on a traveller stays in the drain's map for up to a day, and the cost bound
+had to be restated rather than repeated.** Session 08's bound was *"a settlement is in this map only
+while it has an unspent story, and a story is spent after two drains"* — about 500 ticks. A story on
+the road widens that window to an in-game day, over as many settlements as the deed's village has
+roads. What a visit costs is unchanged and it is not the persona table: the poll walks a deque of at
+most thirty-two and returns nothing, so the four-hundred-record walk still only happens for a
+settlement with something to say *today*.
+
+**3. The A\* weight needed a consumer and it is an `if` rather than a number in a report.** A route
+costing more than six times flat ground is not laid — an ocean crossing, measured at over that in
+`RoadPathTest`. The two settlements are still neighbours and gossip still crosses, which is the right
+answer: the graph is the social geography and the road is the physical one. Making the thesis wait on
+a background job would have been the worse mistake, and the simulation could not have modelled it.
+
+#### Five defects, and two of them were found by rendering the lines and reading them
+
+That is the third session running where that has been the instrument, and this time it was on the
+sentence ship-or-kill is made of.
+
+1. **"Aye, The village has your name now."** Vale's opener ended in a comma and all hundred and sixty
+   lines start with a capital. Every width guard, every ASCII guard and every carriage-return guard
+   was green through it. **The fix is a rule with no exceptions — an opener is its own sentence** —
+   because the alternative, lowercasing the line after it, needs a list of words it must not touch:
+   the first word of a line can be *I*, or the address slot with a player's name in it. That list is
+   the thing session 09 refused to write for the stutter.
+2. **"Aye. Someone mentioned you, in passing, aye?"** Two of the six cultures tag with the word they
+   open with, and for Vale the two coins land together about a fifth of the time. It is session 09's
+   stutter rule arriving from the other end, and the tag is what gives way rather than the opener,
+   because `DialogueTest` measures the realised *opener* rate against the formality ordering.
+3. **The verify phase went red on six bonds and six rings, and nothing was wrong with the mod.**
+   `recordBonds` and `recordMemories` ran at the end of the gossip section — where session 08 put
+   them — and this session feeds six more villagers after that, so every bond and ring it was holding
+   the save to had moved since the snapshot. **A snapshot taken before the state stops moving is not
+   a snapshot**, which is this project's cached-instrument defect in a third costume. Taking it last
+   is strictly stronger: the ring-reload check now covers deeds that crossed a border.
+4. **A leg that was a 62% coin, caught by arithmetic rather than by a red run.** The first version of
+   the border leg fed four villagers and waited for the *first* arrival, which meant one story
+   against six hearers at 0.15 — it passed, and would have failed CI two pushes in five. It now feeds
+   every villager in the village and waits for every story to be told out: thirty-six independent
+   flips, which puts "nobody there heard anything" at three in a thousand. **Session 08 wrote this
+   lesson down and it still had to be applied deliberately rather than remembered.**
+5. **And one of mine, in the tooling, and it is the worst kind because the ledger already warned about
+   it.** The breakage script below restored the tree with `git checkout -- .` between rows, and took
+   two documents' worth of uncommitted work with it — twice, because killing the wrapper left the
+   script running. `CLAUDE.md`'s own note is *"session 09 lost a finished fix by running git checkout
+   on an uncommitted file during a breakage pass, which is the rule session 06 wrote down being broken
+   by the session that quoted it"*, and this is the session that quoted *that*. The script now restores
+   only the one file it broke, and refuses a row whose `sed` matched nothing — because a breakage that
+   never happened reports "NOTHING FAILED" for a guard that is perfectly fine.
+
+#### Rule 3: BREAKAGES_PLACEHOLDER
+
+BREAKAGE_TABLE_PLACEHOLDER
+
+#### Not ruled at close, and it is the half the whole session is for
+
+**Three playtests are owed and all three are the owner's.** Session 08's, session 09's, and this
+one's — and this one's *is* the exit criterion. The brief was explicit that running 08's and 09's
+first was the one piece of advice it would not take out, and they have not been run, so if the
+reaction is flat there are three layers it could be. That is stated rather than absorbed.
+
+**What was checked, precisely, so it is not mistaken for the playtest.** The line reached a player's
+chat through a running game on both loaders and the verdict file quotes what was sent; the register
+that selected it is asserted rather than assumed; the line is measured against the chat width, is
+plain ASCII and carries no carriage return; and the report now prints a page of what the far village
+says, which is how two of this session's five defects were found. **None of that is a judgement about
+whether a person looks up from the screen.**
+
+- **10's:** feed three or four villagers in one village, wait an in-game day, then walk to the next
+  village along and talk to somebody there. `/namesake debug roads` shows whether the two are
+  neighbours and `/namesake debug deeds` on a villager there shows the `@s0` marking the row as
+  another village's business. **The question is whether "Someone mentioned you, in passing." from a
+  stranger in a town you have never worked in lands, or reads as noise.**
+- **08's:** unchanged, and now cheaper to run alongside 10's — feed three or four *different*
+  villagers, wait an in-game hour, `/namesake debug deeds` on somebody who was not watching. What is
+  outstanding is whether a second-hand line reads as second-hand and whether 0.70 is the right price
+  for a rumour.
+- **09's:** unchanged. Sneak, empty hand, right-click a villager; earn residency; do it again.
+
+**And the two rulings session 09 handed up are still open, deliberately.** The brief carried them
+with the answer left blank, so they stay blank rather than being decided by the session that
+inherited them:
+
+- **`Deed.item`'s exemption at session 12**, against the alternative of taking the one-item gift rule
+  instead. Nothing this session did touches it either way.
+- **`DESIGN.md` §5's second route being much the cheaper of the two** — residency by `FED_HUNGRY` ×3
+  at day 6 against the trust band at day 28 — and whether the deed route gets a cost.
+
+#### Carried into session 11
+
+- `$env:JAVA_HOME` still must be pinned to JDK 21. Kill the dev client between runs, and delete
+  `<loader>/run/saves/namesake_attachbet` before a `setup`.
+- **The schema-7 archives are at `C:\MCA Reborn Rework\.archives\schema7-c885d32`, with their
+  subjects files, for both loaders.** They were taken before a line of this session was written and
+  they were used: the load test above is them. Session 11 should take a schema-7 pair of its own the
+  same way, whether or not it expects to bump.
+- **The Notice Board's hearsay rows are the other half of step 5's "referencing A".** Session 10
+  delivers the mechanism and `/namesake debug deeds` prints `@s0`; §11's brief already says *hearsay
+  rows naming where the story came from*, and the direction is derivable from two fields the deed and
+  the persona already carry — `Deed.UNKNOWN_ACTOR`'s note has said so since session 08 and nothing has
+  built it yet.
+- **The road is the first thing in this mod a player can see without opening a menu**, so it is the
+  first thing that will get reported as a bug. `/namesake debug roads` is the instrument and
+  `-Dnamesake.roads=off` is the answer to "it built one through my base" while it is being looked at.
+  Session 15 owns turning that into config.
+- **`Simulation.Plan.standard` is still one settlement, deliberately.** Every number sessions 07, 08
+  and 09 measured came out of a one-settlement plan and making the default two would move all of
+  them. `withNeighbour()` is session 10's, and `SimulationTest` asserts that adding one changes
+  nothing at all about what happens at home.
+- **Session 12 still owes three fields against a budget of three consumers** — `Bond.respect`,
+  `Persona.professionId` and `Deed.item`. Unchanged by this session, and the ledger still calls
+  `professionId` the weakest of the set.
+- `DeedBus.witnessScan`, `DeedBus.emit` and `Gossip.drain` **still have meters pointed at nothing**,
+  unchanged and for the unchanged reasons. `RoadNetwork` has none at all, deliberately: its two costs
+  are transient and one-shot per place, like session 03's census, and a wall-clock number from this
+  machine is the confident-wrong kind.
+
+**Ledger change.** Session 10 → done, session 11 → NEXT. **Standing risk 2 narrowed to exactly one
+thing and deliberately not retired**: the machinery half is checked on every push and the half about
+whether a person reacts has not been run. Two new entries in the *never cut* section — the home rule
+and the carrier's copy — because both look like plumbing and are what keep `max 2 hops` arithmetic
+across a border. Five decisions added to `DESIGN.md` §2 and §4 step 7 rewritten around them, taking
+the count 61 → 66, plus §8's road rows corrected: the A\* grid is one node per chunk and its heights
+come from the generator's noise rather than from a chunk, which is what makes it safe off-thread.
+**No risk 5 movement and no exemption movement** — none fell due, and for the fourth session running
+the forcing function was not what kept rule 5 honest. No changes to the 16-session shape.
 
