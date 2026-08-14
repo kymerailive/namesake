@@ -16,7 +16,7 @@ Where any other document disagrees on sequence, this wins.
   routes, which cost a **schema 7 that rewrites every ring on disk** into a fixed-width packed record
   behind two palettes. That worst case measures **1.30 MB of NBT** where the readable encoding would
   have been 6.26, so the 2 MB ceiling stood untouched and only the compressed one was re-ruled, with
-  the measurement in hand. **336 unit tests, 69 harness legs in `setup` and 12 in `verify`.**
+  the measurement in hand. **339 unit tests, 69 harness legs in `setup` and 12 in `verify`.**
   Before that: session 08, **and a deed now reaches people who were not standing there.** Feed
   a villager in a square and within two in-game days **78% of the village holds it** — at three
   descending confidences, and at least one of them can no longer say who did it. The villager behind
@@ -3348,7 +3348,7 @@ refused by a package name added before the first line of dialogue was written.
 | `verify` | **13** | the archived **schema-6** world, migrating 6 → 7 |
 | `verify` | **9** | the same world again — `no migration expected: world is already at schema 7` |
 
-**336 unit tests**, up from 285, real JUnit XML, `failures=0 errors=0 skipped=0`.
+**339 unit tests**, up from 285, real JUnit XML, `failures=0 errors=0 skipped=0`.
 
 The exit criterion, on screen, on both loaders — the same villager before and after, and one who
 never met the player either time:

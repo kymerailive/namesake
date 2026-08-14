@@ -97,13 +97,13 @@ public final class Reports {
         lines.add("--- what a villager actually says ---");
         lines.add("  160 authored lines: four pools x five registers x eight. Selected by bond state");
         lines.add("  and by what their ring holds; never generated. One line of each, from two");
-        lines.add("  cultures, with the address slot filled both ways — the swap is the whole pitch.");
+        lines.add("  cultures, with the address slot filled both ways - the swap is the whole pitch.");
 
         for (Culture culture : List.of(own, other)) {
             Voice voice = Voice.of(culture);
             lines.add("");
             lines.add(String.format(Locale.ROOT,
-                    "  %s — opens '%s', tags '%s', calls a stranger '%s', formality %.2f",
+                    "  %s - opens '%s', tags '%s', calls a stranger '%s', formality %.2f",
                     culture.displayName(), voice.opener(), voice.tag(), voice.strangerAddress(),
                     voice.formality()));
             for (Pool pool : Pool.values()) {
