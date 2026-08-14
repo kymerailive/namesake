@@ -208,13 +208,18 @@ class DeedsTest {
         int[] toSmith = Deeds.deltaFor(doneTo(DeedType.GIFT_WANTED, 1, smith), smith);
         int[] toInnkeeper = Deeds.deltaFor(doneTo(DeedType.GIFT_WANTED, 1, innkeeper), innkeeper);
 
-        assertArrayEquals(new int[]{1, 2, 0, 0}, toSmith);
-        assertArrayEquals(new int[]{3, 4, 0, 0}, toInnkeeper);
+        // Session 05 shipped these as {1,2} and {3,4}; session 07 widened Personality.SPREAD from
+        // 1.0 to 1.6 to close the week-apart gap the owner ruled at that session's close, and this
+        // is the same two fixtures re-measured through it. The loaf is now worth four times as much
+        // to the innkeeper as to the smith rather than twice.
+        assertArrayEquals(new int[]{1, 1, 0, 0}, toSmith);
+        assertArrayEquals(new int[]{4, 5, 0, 0}, toInnkeeper);
         assertTrue(toInnkeeper[Bond.WARMTH] - toSmith[Bond.WARMTH] >= 2,
                 "the difference has to be big enough for a person to notice, not just for a test");
         // And the fixtures are extremes I chose. PersonalityDistributionTest is what says whether
         // the villagers a real world generates differ by anything like this much — a playtest at
         // the close of session 05 found they span about half of it, which is what moved personality
-        // onto the daily ceiling as well as the step.
+        // onto the daily ceiling as well as the step, and session 07's harness is what set the
+        // magnitude against a hundred simulated days rather than against anyone's eye.
     }
 }

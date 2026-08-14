@@ -139,6 +139,9 @@ class PersonalityDistributionTest {
         // What the owner's ruling is measured against, so session 07 has the number rather than
         // the adjective. Warmth only: it is the axis a gift moves most and the one that decays.
         report.append(theWeekApart(population));
+        report.append(String.format(Locale.ROOT,
+                "  the clamp [%.2f, %.2f] engages on %.2f%% of (persona x deed type) pairs%n",
+                Personality.MIN, Personality.MAX, clampRate(population) * 100.0));
         report.append(perCulture(population));
         report.append("  population mean traits (Personality.TYPICAL must equal this):\n    ");
         byte[] mean = meanTraits(population);
@@ -160,8 +163,10 @@ class PersonalityDistributionTest {
      * one who keeps going until the day's allowance is spent. The second column is the one the
      * ceiling change exists for, and it read exactly zero before it.
      *
-     * <p>Printed rather than asserted, because it is a tuning target and session 07 owns the
-     * tuning. A full standing band is roughly 25 points on a 0–100 axis.
+     * <p><b>Printed here and asserted in {@link #theWeekApartMeetsTheRuling()}.</b> It was printed
+     * and not asserted at the close of session 05, because it was then a tuning target nobody had
+     * hit; session 07 hit it, and a target that has been met and is not held is a target that will
+     * be flattened by the next person who retunes the table for some other reason.
      */
     private static String theWeekApart(List<Sample> population) {
         List<Float> casual = new ArrayList<>();
@@ -243,6 +248,58 @@ class PersonalityDistributionTest {
 
     // --- the guards ---------------------------------------------------------------------------
 
+    /**
+     * <b>The close-of-session-05 ruling, held rather than remembered.</b>
+     *
+     * <p><i>Two villagers a week apart on identical treatment should end up a full standing band
+     * apart</i> — about 25 points. Session 05 measured a median of 14 and handed the magnitude to
+     * session 07, which closed it by widening {@link Personality#SPREAD} from 1.0 to 1.6.
+     *
+     * <p><b>The number is quantised to multiples of seven, and 25 is therefore not reachable.</b>
+     * A daily allowance is an integer — {@code Bond.gainedToday} counts it in four bits — so seven
+     * days of two villagers' allowances differ by exactly seven times an integer. The reachable
+     * values either side of the ruling are 21 and 28; {@code SPREAD} 1.2 reaches 21 and 1.6 is the
+     * smallest that reaches 28. Asserting ≥ 25 therefore means "28 or better", which is the honest
+     * reading of the ruling rather than a number that flatters it.
+     */
+    @Test
+    @DisplayName("a week apart still leaves a settlement's two extremes a full band apart")
+    void theWeekApartMeetsTheRuling() {
+        float median = saturatingWeekApart(population(20260814L), 50);
+
+        assertTrue(median >= 25.0F, () -> "the median settlement's two extremes end a week of "
+                + "identical treatment " + median + " points apart. The owner ruled at the close of "
+                + "session 05 that it should be a full standing band, ~25, and session 07 set "
+                + "Personality.SPREAD to 1.6 to reach 28. Widen SPREAD — never Bond.DAILY_CAP, "
+                + "which is what stops a village being ground out and is the same number session "
+                + "12's band thresholds are set against.");
+    }
+
+    /** The saturating column of {@link #theWeekApart}, as a number rather than as a line of a report. */
+    private static float saturatingWeekApart(List<Sample> population, int percent) {
+        List<Float> gaps = new ArrayList<>();
+        for (int settlement : settlements(population)) {
+            for (byte culture = 0; culture < Culture.COUNT; culture++) {
+                List<Sample> town = inTown(population, culture, settlement);
+                if (town.isEmpty()) {
+                    continue;
+                }
+                Sample low = town.get(0);
+                Sample high = town.get(0);
+                for (Sample resident : town) {
+                    if (resident.gift() < low.gift()) {
+                        low = resident;
+                    }
+                    if (resident.gift() > high.gift()) {
+                        high = resident;
+                    }
+                }
+                gaps.add((float) (weekOfGifts(high, 12) - weekOfGifts(low, 12)));
+            }
+        }
+        return percentile(sorted(gaps), percent);
+    }
+
     @Test
     @DisplayName("two villagers of one settlement differ, not only two villagers of one world")
     void withinOneSettlementPeopleStillDiffer() {
@@ -316,6 +373,48 @@ class PersonalityDistributionTest {
                     () -> "a rolled persona's daily allowance came out at " + sample.allowance()
                             + ", which does not fit the four bits gainedToday stores it against");
         }
+    }
+
+    /**
+     * <b>What makes {@code Personality.MIN} and {@code MAX} measured numbers rather than chosen
+     * ones, and the guard that has to move whenever {@code SPREAD} does.</b>
+     *
+     * <p>The clamp's stated job is to stop one lucky roll producing a villager for whom a loaf of
+     * bread is worth a rescue — a guard against <i>absurd</i> variation. A clamp that engages in
+     * ordinary play is doing something else entirely: it is compressing the distribution, and the
+     * villagers it compresses are exactly the interesting ones at either end of a village. That
+     * failure is silent, because every other test here reads the clamped value and finds it in
+     * range by construction.
+     *
+     * <p>So the property is stated as a rate. Session 07 widened {@code SPREAD} from 1.0 to 1.6 and
+     * widened the clamp from [0.4, 1.6] to [0.3, 1.8] in the same breath, precisely so this number
+     * did not move; it reads about 0.7%, against a ceiling of 2%. Raise {@code SPREAD} again without
+     * widening the clamp and this is what says so.
+     */
+    @Test
+    @DisplayName("the clamp binds only at the corners, and that is a measured rate")
+    void theClampBindsOnlyAtTheCorners() {
+        double rate = clampRate(population(20260814L));
+        assertTrue(rate < 0.02, () -> "the clamp engages on " + String.format(Locale.ROOT, "%.2f%%",
+                rate * 100.0) + " of (persona x deed type) pairs. It exists to stop absurd "
+                + "variation at the corners of the trait space, not to flatten the real variation "
+                + "the generator produces — and the villagers it is flattening are the ones at "
+                + "either end of a village, which is where the whole mechanic is visible. Widen "
+                + "Personality.MIN and MAX to match Personality.SPREAD.");
+    }
+
+    private static double clampRate(List<Sample> population) {
+        int clamped = 0;
+        int total = 0;
+        for (Sample sample : population) {
+            for (float scale : sample.scaleByType()) {
+                total++;
+                if (scale <= Personality.MIN || scale >= Personality.MAX) {
+                    clamped++;
+                }
+            }
+        }
+        return (double) clamped / total;
     }
 
     @Test
