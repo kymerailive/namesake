@@ -129,6 +129,50 @@ public final class DeedBus {
         long begun = Meters.now();
         NpcRegistry registry = NpcRegistry.get(level);
 
+        List<Villager> witnesses = witnesses(level, where, actorEntity, subjectEntity);
+
+        // Everyone this deed reached, subject first. One list rather than two loops, because steps 3
+        // and 4 ask the same question of the same people and splitting them would look up every
+        // persona twice.
+        List<Persona> reached = new ArrayList<>(witnesses.size() + 1);
+        if (subjectEntity != null) {
+            PersonaService.personaOf(subjectEntity).ifPresent(reached::add);
+        }
+        for (Villager villager : witnesses) {
+            PersonaService.personaOf(villager).ifPresent(reached::add);
+        }
+
+        Result result = record(registry, deed, reached, witnesses.size());
+
+        if (Profiling.ENABLED) {
+            EMIT.end(begun);
+            Meters.count("DeedBus deeds emitted");
+            Meters.count("DeedBus witnesses recorded", witnesses.size());
+            Meters.count("DeedBus ring entries written", result.remembered());
+        }
+        Namesake.LOGGER.debug("{} witnessed by {}, remembered by {}, {} bond(s) moved",
+                deed, witnesses.size(), result.remembered(), result.bondsMoved());
+        return result;
+    }
+
+    /**
+     * Steps 3 and 4 for a deed whose audience is already decided: remember it, then move the bonds.
+     *
+     * <p><b>This is the seam session 07's headless simulation runs through, and pulling it out is
+     * the single decision that makes that simulation evidence rather than arithmetic.</b> Everything
+     * above this line is the engine — an entity query over a 48-block cube and a dozen ray casts.
+     * Everything below it is the record layer that {@code DESIGN.md} §8 rules the authority, and it
+     * needs no level, no entities and no server. So the simulation replaces exactly two things — who
+     * was standing close enough to see it, and what the player chose to do — and calls the shipped
+     * pipeline for the rest, through the same door {@link #emit} uses rather than through a copy of
+     * it. A number produced by re-implementing this loop in a test would be a test of the test.
+     *
+     * @param reached everyone the deed reached, <b>subject first</b>. May be empty.
+     * @param witnesses how many of {@code reached} are bystanders rather than the subject. Reported
+     *                  back rather than derived, because "the subject was not a persona" and "there
+     *                  was no subject" are different and neither is a witness count.
+     */
+    public static Result record(NpcRegistry registry, Deed deed, List<Persona> reached, int witnesses) {
         // The population guard for session 05's decision 1, checked once here rather than thirteen
         // times inside putBond. An NPC-to-NPC bond has no consumer until session 16's grievance
         // engine, and a persisted social value with no consumer is what DESIGN.md §1 forbids. The
@@ -141,24 +185,9 @@ public final class DeedBus {
             return new Result(deed, 0, 0, 0);
         }
 
-        List<Villager> witnesses = witnesses(level, where, actorEntity, subjectEntity);
-
-        // Everyone this deed reached, subject first. One loop rather than two, because steps 3 and 4
-        // ask the same question of the same people and splitting them would look up every persona
-        // twice.
-        List<Villager> reached = new ArrayList<>(witnesses.size() + 1);
-        if (subjectEntity != null) {
-            reached.add(subjectEntity);
-        }
-        reached.addAll(witnesses);
-
         int remembered = 0;
         int moved = 0;
-        for (Villager villager : reached) {
-            Persona persona = PersonaService.personaOf(villager).orElse(null);
-            if (persona == null) {
-                continue;
-            }
+        for (Persona persona : reached) {
             // Step 3 before step 4, and unconditionally. The bond is the tally of how much and the
             // ring is the record of what, so a witness whose daily allowance is already spent — or
             // whose share rounds to nothing — has still *seen* it. Coupling the two would mean a
@@ -168,16 +197,7 @@ public final class DeedBus {
             }
             moved += applyTo(registry, deed, persona);
         }
-
-        if (Profiling.ENABLED) {
-            EMIT.end(begun);
-            Meters.count("DeedBus deeds emitted");
-            Meters.count("DeedBus witnesses recorded", witnesses.size());
-            Meters.count("DeedBus ring entries written", remembered);
-        }
-        Namesake.LOGGER.debug("{} witnessed by {}, remembered by {}, {} bond(s) moved",
-                deed, witnesses.size(), remembered, moved);
-        return new Result(deed, witnesses.size(), remembered, moved);
+        return new Result(deed, witnesses, remembered, moved);
     }
 
     /**

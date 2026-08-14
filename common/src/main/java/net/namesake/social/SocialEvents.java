@@ -156,8 +156,15 @@ public final class SocialEvents {
         }
     }
 
-    /** Damage in one blow, as a percentage of a deed's nominal weight. Two hearts is half of it. */
-    static byte severityOf(float damage) {
+    /**
+     * Damage in one blow, as a percentage of a deed's nominal weight. Two hearts is half of it.
+     *
+     * <p>Public rather than package-visible from session 07, so the headless simulation strikes with
+     * the severity the game would actually produce rather than with a number chosen in the
+     * simulation. It is the same reason the simulation calls {@code DeedBus.record}: a report built
+     * on a second copy of the arithmetic is a report about the copy.
+     */
+    public static byte severityOf(float damage) {
         int scaled = Math.round(damage * SEVERITY_PER_DAMAGE);
         return (byte) Math.max(MIN_SEVERITY, Math.min(Deed.NOMINAL, scaled));
     }
