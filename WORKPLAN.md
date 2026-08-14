@@ -3299,7 +3299,33 @@ eviction hid it. It is a second reason a live save's rate reads high, in the opp
 the first, and `SimulationTest` now measures both halves separately rather than asserting one
 inequality that happened to hold.
 
-#### Rule 3: twenty-two deliberate breakages, each watched to fail and then removed
+#### Four defects, and where each came from is the interesting part
+
+**Two were found by rendering the lines and reading them**, which is why the simulation report now
+carries a page of them: every width guard, every carriage-return guard and every ASCII guard was
+green through both of these.
+
+1. **A tag question hung on an instruction.** *"Go, aye?"*, *"On your way, aye?"*, *"You, yes?"* —
+   all correct string concatenation, none of them a sentence anybody would say. A tag turns a
+   statement into a question, so it needs a statement: not a parting, and not one word.
+2. **A villager with a stutter.** Meridian's opener is *Ah!* and the known pool greets with
+   *"Ah, {you}."*, which concatenates to **"Ah! Ah, friend."** Fixed as a rule rather than a
+   rewritten line — a hundred and sixty lines against six openers is a grid nobody re-checks by hand
+   when a seventh culture arrives, and the collision exists only in the concatenation.
+
+**Two were fixtures of mine that were quietly testing nothing**, and both are the shape this project
+keeps finding rather than anything new.
+
+3. **Every bond fixture built through `Bond.apply` was silently capped at fifteen**, because `apply`
+   clamps its allowance to what the four-bit `gainedToday` counters can hold. Three tests were
+   asserting against a threshold of twenty that their own fixture could not reach. Found because they
+   went red on the real code; had the thresholds been lower they would have been green and hollow.
+4. **The dialogue seed folded only the high half of a persona id**, so a village whose ids share a
+   high half greeted the player with one sentence between nine of them. Found by the test that asks
+   whether nine villagers say nine things — which existed because session 03 had already learned that
+   a generator has to be measured on its realised output rather than on its table.
+
+#### Rule 3: twenty-five deliberate breakages, each watched to fail and then removed
 
 Every one was checked for a **non-empty diff** before the tests ran, and the failing test's *name* was
 captured rather than the build's exit status — a breakage that turns the build red by failing some
@@ -3330,6 +3356,9 @@ other test is not evidence for the guard it was aimed at, and the first pass of 
 | A count of one printed on every deed row | **Red.** The column reading the same thing over and over |
 | **`Bond.warmth` names the dialogue pool selection as its consumer** | **Red.** *"names net.namesake.dialogue.Dialogue, but that package exists to show things to a person"* |
 | `Bond.warmth`'s session-05 exemption restored, at the close | **Red.** The forcing function, on the field this session was about |
+| A tag question allowed onto a parting | **2 red.** *"a goodbye became a question"* |
+| A tag question allowed onto a one-word line | **2 red** |
+| The stutter rule removed | **Red.** *"a culture never opens with a word the sentence already opens with"* |
 
 **The eleventh and the twenty-first rows are the two worth reading.** The eleventh is the rule 5 ledger
 catching a *mechanic that stopped being one*: removing the warmth test from `GiftPolicy` does not
