@@ -1,7 +1,7 @@
 # DESIGN — Namesake
 
 What we are building and why. `WORKPLAN.md` owns *what happens next*; this owns *what it is*.
-49 decisions ruled, 0 open.
+52 decisions ruled, 0 open.
 
 **The thesis:** a deed witnessed by one villager changes what a different villager, in a different
 settlement, says to you later.

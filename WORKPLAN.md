@@ -3,7 +3,15 @@
 **The ledger.** What happens next, in order, with exit criteria. Read first, update last.
 Where any other document disagrees on sequence, this wins.
 
-- **Status:** session 06 complete, **and a village now remembers**. Feed a villager in front of three
+- **Status:** session 07 complete, **and time runs forward**. A settlement of nine can be advanced a
+  hundred in-game days in **six to eight milliseconds on a live server thread**, through the shipped
+  record layer rather than a copy of it, and it dumps a chronicle, an earn-rate report and a real
+  deed ring. It immediately found a threshold nobody could ever have crossed: `DESIGN.md` §5 grants
+  residency on a *known* band with three residents, and **no three residents reach 20 warmth in a
+  hundred days, ever**, because a witness's share of a gift is one point and warmth decays one point
+  a day. Trust, which does not decay, gets there on day 29. The owner's close-of-05 ruling is also
+  paid: two villagers a week apart on identical treatment now end **28 points apart** where they
+  ended 14. Before that: session 06, **and a village remembers**. Feed a villager in front of three
   others and each of the four keeps the deed in a thirty-two entry ring that survives the disk — and
   feed them nine times and they keep it *once*, because a deed's id is derived from the deed rather
   than assigned, so a ring cannot be ground out by repetition. Before that: session 05, **and a
@@ -33,8 +41,8 @@ Where any other document disagrees on sequence, this wins.
 | 04 | Profiler spike | **done** — 2026-08-14 |
 | 05 | Bonds and deeds | **done** — 2026-08-14 |
 | 06 | Episodic memory | **done** — 2026-08-14 |
-| 07 | Headless simulation harness | **NEXT** |
-| 08 | Gossip and distortion | pending |
+| 07 | Headless simulation harness | **done** — 2026-08-14 |
+| 08 | Gossip and distortion | **NEXT** |
 | 09 | Dialogue pools and residency | pending |
 | 10 | Roads and propagation — **SHIP-OR-KILL** | pending |
 | 11 | Notice Board | pending |
@@ -354,6 +362,27 @@ property of arithmetic rather than of a machine — the histogram's layout and p
 sweep's coverage and bucket stability, and the guard that refuses to persist a profiling fixture.
 Rerun the measurement when something plausibly moved the budget, and record the machine with the
 number; a number without its conditions is the same mistake in a different unit.
+
+**A fifth, added 2026-08-14, and it *is* in CI — which is the interesting half: the simulation.**
+`net.namesake.sim` advances a settlement N in-game days through the shipped record layer and reports
+what happened. It is the opposite of the profiler in exactly the way that matters. The profiler
+measures **wall clock**, which is a property of a machine, so a number from a runner we cannot see is
+worthless. The simulation measures **arithmetic over time**, which is a property of the code, so it
+is deterministic in its plan alone and reproduces bit for bit on any machine — and a report that
+cannot be reproduced is not evidence, when every band threshold from here comes out of one.
+
+**What makes it more than a unit test, since it is made of them.** A unit test asserts an answer
+somebody already knows. This one *produces* an answer nobody knows: what a population's bonds and
+rings look like after a hundred days, which is emergent over time and over a village and has no
+expected value to assert. Its arithmetic is unit-tested; its output is a report. Both are true and
+they are different jobs.
+
+**Its honesty rests on one structural decision and it is worth restating here rather than only in the
+class.** The record layer's only input from the passage of time is an integer day, so a hundred
+simulated days are a hundred real days exactly. What is *modelled* is two things: what a player does,
+and who was standing close enough to see it. The first is five named archetypes rather than one; the
+second is the least grounded number in the instrument and is swept rather than asserted. Everything
+between a deed and the save file is called through `DeedBus.record`, the same door the game uses.
 
 ## Never cut — load-bearing walls, not tuning knobs
 
@@ -2035,3 +2064,354 @@ record was being written, and it came out as an eighth field deliberately not ad
 added to `DESIGN.md` §2, the deed id and the deed store, taking the count 47 → 49. A duplicated
 paragraph at the end of the session 05 entry was deleted; it was a copy-paste, not a disagreement.
 No changes to the 16-session shape.
+
+### Session 07 — 2026-08-14 — the headless simulation harness
+
+**Shipped.** `9169cd7..bdac6e2` plus this ledger commit, pushed to `origin/main`. CI green on all
+three jobs — build and test, and the attach-bet harness on each loader.
+
+**Time runs forward now.** A settlement of nine can be advanced a hundred in-game days in **six to
+eight milliseconds on a live server thread** — through the shipped record layer rather than a copy of
+it — and it dumps a chronicle, a bond-earn-rate report and a real deed ring. Every band threshold
+from here is set from that data.
+
+**And the first thing it measured was a threshold nobody could ever have crossed.**
+
+#### The three decisions the session opened with
+
+**1. How headless is headless, and what the number is therefore evidence of.**
+
+A hundred in-game days is 2.4 million ticks. Session 01 established that a long `/tick sprint`
+outruns the chunk loader, and `runServer` needs an EULA that is not ours, so a real world cannot be
+sprinted through it. The brief framed the choice as *simulate the records and you are testing
+arithmetic; simulate the world and you cannot do a hundred days in a minute* — and the answer is
+neither, because of a property of the record layer rather than a compromise between them.
+
+**The record layer's only input from the passage of time is an integer.** `Deed.dayOf` divides game
+time by 24,000; `Bond.decayedTo` takes a day; `Bond.apply` resets the allowance when the day turns.
+Nothing downstream of a deed ever sees a tick. So a hundred days here is **a hundred days exactly**,
+with no fidelity lost at all, for everything `DESIGN.md` §8 rules the authority.
+
+What is genuinely modelled is two things and only two: **what a player does** and **who was close
+enough to see it**. Everything between a deed and the save file is the shipped code called through
+its shipped door — `DeedBus.record` was pulled out of `DeedBus.emit` at exactly the point the level
+has finished being asked who was watching, and the simulation calls that. Nothing re-implements
+`Deeds.deltaFor`, `Personality`, `Bond.apply` or `Memories`; a report built on a second copy of that
+arithmetic would be a report about the copy.
+
+**So the earn rate is evidence of what the record layer does with a stated stream of deeds. It is
+not evidence of how many deeds an hour of play produces.** That is the model's *input*, it is an
+assumption, and it is handled as one: five player models rather than one, and the witness fraction —
+the one number nobody has measured — swept from 0% to 100% rather than asserted. Session 15's
+playtest is what measures the input, and `/namesake debug earnrate` computes the same numbers off a
+real save so the two can be held against each other rather than compared by eye.
+
+**2. Whether `DialogueStats` is persisted at all. It is not, and the ledger asked for a SavedData.**
+
+Three reasons and one trap, stated because the instruction was explicit.
+
+Every number in it is **derivable from state that is already persisted and already ledgered** — a
+bond carries what it is worth and when it was last touched, a ring carries thirty-two deeds each
+stamped with a day. Storing them as well is a cache, and session 03 deleted `Settlement.culture` for
+being exactly that. **A stored tally survives a change to the thing it counts**: retune a weight, add
+a deed type, move the cap, and a persisted histogram still describes a mod that no longer exists,
+with nothing available to notice. And **hard rule 1 would charge a schema bump, a datafixer and a
+load test** for the ability to regenerate on demand something that is already free to regenerate on
+demand.
+
+The tear argument sessions 03, 05 and 06 all made genuinely does not apply, and that is worth saying
+rather than assuming: it is about *world state that references itself by id*, and measurement data
+does not. So `DialogueStats` **could** have been its own file. That is an argument against one file,
+not an argument for persisting it.
+
+**The trap the brief named is real and the build would have been right to refuse it.** A
+`DialogueStats` whose named consumer is `/namesake debug stats` is a display, `DISPLAY_PACKAGES`
+already contains `net.namesake.command`, and both ways round it are dishonest — an exemption is a
+promise that a mechanic will read the field and no mechanic reads a histogram, and a `PRESENTATION`
+classification means *ruled in `DESIGN.md` as existing to be drawn*, which is true of
+`Persona.appearanceSeed` and would have been a lie here. The honest answer was to have nothing to
+classify. `SocialValueLedgerTest.measurementDataIsNotPersisted` is what stops that quietly reverting:
+it fails if the class ever declares a codec, and it fails if `NpcRegistry`'s save or load path so
+much as mentions it.
+
+**What it costs, plainly.** A deed evicted from a ring leaves no trace, so nothing derived can report
+what was forgotten — only how far back the ring still reaches. The simulation *can*, because it keeps
+its own chronicle, so the ring dump prints both and the gap between them is one of this session's
+artefacts.
+
+**3. What an earn rate is measured over: warmth points per in-game day of contact.**
+
+The mechanism's own clock is the in-game day. `Bond.DAILY_CAP` is per axis per day, the decay is a
+point a day, `lastSeenDay` is a day, and `Deed.dayOf` is what turns game time into one. A
+**player-hour** needs a conversion nobody will remember and differs between two players with
+identical play time. A **per-deed** rate is dominated by how hard somebody is grinding, which is
+precisely the number the daily cap exists to make meaningless. Reported beside it: the same warmth
+per day *elapsed*, which is what the decay bites into and what somebody who visits rarely actually
+experiences. Both are on the report, with the unit printed next to the number rather than living in a
+javadoc.
+
+#### What the exit criteria actually showed
+
+**A hundred days in well under a minute.** A hundred days of a nine-resident settlement runs in about
+**half a millisecond** in a JVM under test and **6 ms on Fabric / 8 ms on NeoForge** on a live
+integrated server thread, against a 50 ms tick. The largest run made this session — forty residents,
+two hundred days, a saturating player, ninety percent witnesses — is **570 ms**.
+
+**A readable chronicle.** Digested to a week, with every ladder crossing and every harmful deed
+printed in full and in place, because a hundred nearly identical rows is a log rather than a
+chronicle — the difference being that somebody reads a chronicle to find out *when things changed*.
+`Reports.chronicleInFull` is the every-deed version for when a week is not fine enough.
+
+**A bond-earn-rate report**, per resident and per player model, with days-to-reach at the best, median
+and worst observed rate — and `never` printed as `never`, because a rate of zero reported as zero days
+would say a threshold is reached immediately by somebody who will never reach it at all.
+
+#### The two numbers this session owed
+
+**The week-apart, closed from 14 to 28, on the same instrument that measured the 14.**
+
+`Personality` now separates **shape** from **magnitude**. `SHAPE` is byte-for-byte the eight-by-six
+table session 05 shipped; `SPREAD` is one constant that scales every weight, and it moved 1.0 → 1.6.
+Scaling the table scales every villager's deviation from neutral by exactly that factor and the
+centring scales with it, so *a typical villager scores exactly one* still holds by construction. The
+owner's close-of-05 ruling was **shape now, magnitude at session 07**, and this is what makes both
+sentences literally true rather than approximately.
+
+| `PersonalityDistributionTest`, 4,536 personas, seed 20260814 | before | after |
+|---|---|---|
+| week apart, filling the allowance — **median** | **14** | **28** |
+| …widest | 28 | 42 |
+| week apart, one gift a day — median | 7 | **14** |
+| …widest | 14 | 21 |
+| `gift_wanted`, p5 → p95 across the population | 0.662 → 1.338 | 0.459 → 1.540 |
+| `gift_wanted`, the median settlement's own spread | 0.361 | **0.562** |
+| the clamp | [0.40, 1.60] | [0.30, 1.80] |
+| …how often it engages | — | **0.67%** of (persona × deed type) |
+
+**The gap is quantised to multiples of seven, and 25 is not a reachable value.** An allowance is an
+integer, because `Bond.gainedToday` counts it in four bits, so seven days of two villagers'
+allowances differ by exactly seven times an integer. `SPREAD` 1.2 reaches 21 and 1.6 is the smallest
+multiplier that reaches 28. That is why the assertion reads ≥ 25 and the number is 28.
+
+**The clamp stopped being a chosen pair of numbers.** Its stated job is to refuse absurd variation at
+the corners of the trait space, so it is now held to a *measured rate* — under 2%, reading 0.67%.
+Left at [0.4, 1.6] the same widening would have clamped **2.4%**, flattening exactly the villagers at
+either end of a village, which is where the whole mechanic is visible.
+
+**And the cost, stated rather than found later: the between-culture gap widened by the same factor,
+because it comes out of the same table.** Karsk's median gift multiplier fell from ×0.74 to ×0.59 and
+Meridian's rose from ×1.25 to ×1.40, so a Karsk village now warms at about **half** a Meridian one's
+rate where it was three quarters. That is a real change to how a village feels and it is the owner's
+to rule. It is also, for what it is worth, the direction standing risk 3 wants.
+
+**The ring, after a hundred in-game days.** The artefact the two rulings parked at the close of
+session 06 are made against. One deed a day, nine residents, 35% of the village witnessing:
+
+| | |
+|---|---|
+| villagers who remember anything | 9 of 9 |
+| rings **full** at 32 | **9 of 9** |
+| deeds held across the settlement | 288 — **100%** of its total ring capacity |
+| occupancy distribution | every villager on exactly 32 |
+| deed mix | `FED_HUNGRY` 99 · `GIFT_UNWANTED` 97 · `GIFT_WANTED` 92 |
+
+**The deepest ring** — the villager the player fed most — holds 32 of 32 spanning days 42 to 99,
+**58 days of reach**, mixed `FED_HUNGRY` 20 · `GIFT_WANTED` 6 · `GIFT_UNWANTED` 6. Fifty-six deeds
+happened in front of them; they hold thirty-two and have **forgotten twenty-four**. **The median
+ring** holds 32 of 32 spanning days 2 to 96, **95 days of reach**, mixed almost evenly across the
+three kindnesses. Under a *saturating* player at forty residents the deepest ring's reach falls to
+**22 days**.
+
+So the plain reading, offered rather than ruled: **32 slots is between three weeks and three months
+of memory depending on how hard somebody plays**, it fills completely in a hundred days for
+everybody, and what it evicts is the oldest of a set of near-identical kindnesses rather than
+anything a player would miss. The eviction question is the one the numbers do not settle: nothing in
+this run gave a villager a *killing* to keep, so nothing has yet tested whether thirty-two subsequent
+gifts push one out. `MemoriesTest.theRingIsNotGrindable` covers the same-day version of that; the
+many-day version is a design question rather than a measurement.
+
+**And the artefact points at one of session 06's four routes to depth rather than at another.** The
+deepest ring in the settlement holds thirty-two slots and **three distinct sentences**. It is not
+shallow because it ran out of room; it is shallow because twenty of its rows say the same thing.
+Session 06 priced *more slots* as linear and "the least felt per byte", and *richer per memory* —
+**which** item, not just "a gift" — as "the largest felt gain per byte available, blocked only by
+having no reader". This run is the first evidence for that ordering rather than an argument for it,
+and session 09 is when there is finally a line of dialogue whose quality depends on the answer.
+**Still the owner's to rule, and nothing was changed on the strength of it**: `Deed` gained no field
+this session, because persisting detail no `if` statement reads is the failure `DESIGN.md` §1 exists
+to refuse and the one both reference codebases died of.
+
+#### What the run found that nobody asked it, and the first one is the important one
+
+**1. Warmth from witnessing is cancelled exactly by the decay.** A witness's share of a gift is one
+point; warmth falls one point an in-game day. Five of nine residents met the player and hold **zero**
+warmth after a hundred days, and seven of nine never held more than **one**. Trust, which does not
+decay, reaches **100**. So warmth accumulates only for the people a player directly gives things to,
+and even for them only while a contact is worth more than the gap since the last one.
+
+**Which makes `DESIGN.md` §5's residency threshold unreachable on warmth.** The day the *third*
+resident crossed each mark, one deed a day, a hundred days:
+
+| | 20 | 40 | 60 | 80 | 100 |
+|---|---|---|---|---|---|
+| **warmth** | never | never | never | never | never |
+| **trust** | **29** | 60 | 89 | never | never |
+
+**This is LNK's failure caught two sessions before it would have shipped.** LNK set gates at 35–205
+against an observed maximum of 32 and nobody noticed for months. Session 09 owns the ruling — read
+trust, read *peak* warmth rather than current, or raise the witness share — and session 07 owed it the
+table. Nothing was changed on the strength of it, because tuning a decay curve to make a threshold
+reachable is tuning the measurement to fit the answer.
+
+**2. `Bond.DAILY_CAP = 8` was flagged provisional at the close of session 05, and here is the
+number.** A saturating player pins **the whole village** at 100 warmth and 100 trust: a full standing
+band in **3** days of contact and the ceiling in **13**. That is what the cap permits, by
+construction — the saturating row *is* the cap measured, so nothing can beat it. Whether it is too
+generous is a ruling, and the brief was explicit that the cap is not to be moved this session, so it
+is recorded rather than touched. It is the same number session 12's thresholds are set against.
+
+**3. Standing in the room matters more than anything the model assumed.** The witness sweep:
+
+| witnesses | warmth max | median | met you | rings full |
+|---|---|---|---|---|
+| 0% | 38 | 35 | 3 | 3 |
+| 25% | 56 | 0 | 9 | 4 |
+| **35%** | **56** | **0** | **9** | **9** |
+| 50% | 67 | 1 | 9 | 9 |
+| 100% | 70 | 1 | 9 | 9 |
+
+The subject's own warmth **rises with the witness fraction**, from 38 to 70, which is not what a
+witness share is supposed to do — and the mechanism is the decay again from the other side. A
+resident the player is focused on also *witnesses* the deeds done to the other two, so a higher
+witness fraction gives them contact on more days, and more days of contact is what stops the decay
+eating what they earned. **Being in the room when your neighbour is fed is what keeps your own warmth
+from draining.** Nobody designed that; it falls out of a per-day decay meeting a per-day cap.
+
+**4. The village looks completely different depending on who is playing.** A hundred days:
+
+| model | deeds | warmth max | w p50 | trust max | t p50 | rings full |
+|---|---|---|---|---|---|---|
+| `ATTENTIVE` | 100 | 56 | 0 | 100 | 23 | 9/9 |
+| `SATURATING` | 1,200 | 100 | 100 | 100 | 100 | 9/9 |
+| `INTERMITTENT` | 68 | 28 | 2 | 100 | 24 | 4/9 |
+| `PASSING_THROUGH` | 15 | 2 | 0 | 22 | 3 | 0/9 |
+| `CARELESS` | 200 | 83 | 3 | 100 | 38 | 9/9 |
+
+`PASSING_THROUGH` is the row session 09 should look at hardest: somebody who does one thing a week
+never leaves the bottom of any axis and never fills a ring, so the first hours of the mod are the
+stranger pool and nothing else. And `CARELESS` — two gifts a day and a blow every eighth visit — ends
+**warmer** than `ATTENTIVE`, because goodwill given twice a day outruns a blow given eight times less
+often, and nothing goes negative at all. That is the shape session 12's hostile band has to be set
+against, and it says violence has to be either rarer in the model or heavier in the table.
+
+#### Hard rule 1 did not fire, and proving that was cheap
+
+**No persisted schema change shipped this session.** `NpcSchema.CURRENT` is still 5, no record gained
+or lost a field, and `Deed.id()`'s derivation is untouched — which matters, because session 06 named
+changing it as the one drift with no schema break to catch it. `DialogueStats` was the only thing
+that would have moved the number, and it is derived.
+
+It was checked rather than asserted anyway. The `setup` phase was run on commit `c8fe745` — the
+session 06 head — from a detached checkout, and that world was then loaded by the session 07 build:
+
+```
+Loaded 9 persona(s), 9 bound to an entity, 1 settlement(s), 4 bond(s),
+8 deed(s) across 4 ring(s) (schema 5)
+no migration expected: world is already at schema 5
+PASS  SCHEMA registry is writable (not refused as too new)
+PASS  RELOAD 3/3 personas survived save -> quit -> reload with the same id and values
+PASS  SETTLEMENT RELOAD 6/6 residents came back with the same name, household and settlement
+```
+
+One behavioural change does reach existing saves without touching a byte on disk, and it is worth
+naming: **`Personality.SPREAD` changes what a stored persona is worth.** A world played before this
+session loads identically and its villagers become more different from each other overnight. Nothing
+needs a fixer, because nothing on disk means anything different — a save records eight trait axes and
+those eight numbers are unchanged.
+
+#### Rule 3: ten deliberate breakages, each watched to fail and removed
+
+| Breakage | Result |
+|---|---|
+| The clamp left at 0.4/1.6 while `SPREAD` is 1.6 | **4 red.** *"the clamp engages on 2.43% … Widen `Personality.MIN` and `MAX` to match `SPREAD`"* |
+| `SPREAD` put back to session 05's 1.0 | **2 red.** *"the median settlement's two extremes end a week … 14.0 points apart"* |
+| `DialogueStats` given a codec | **Red.** *"it is on its way into a save file … hard rule 1 then owes a schema bump, a datafixer and a load test"* |
+| `NpcRegistry.save` made to reach `DialogueStats` | **Red.** *"measurement data on the save path is measurement data in a save file"* |
+| The earnrate name column widened to 48 | **NOTHING FAILED.** The fixture never reached the width. |
+| …the same breakage, after the test was given the widest name the generator can make | **Red** |
+| A `%n` put into a report line | **Red.** *"Minecraft draws a carriage return as a missing-glyph box"* |
+| The simulation's subject chosen from the wall clock | **2 red**, including *"two runs of one plan must produce the same report"* |
+| Contact counted in deeds rather than in days | **2 red.** *"one day, whatever happened on it"* |
+| Percentiles taken over strangers as well | **Red.** *"ninety-six strangers must not make the median of four friendships zero"* |
+| A rate of zero reported as zero days rather than never | **NOTHING FAILED.** The only test covering it returned early on a different branch. |
+| …the same breakage, after a fixture that has met the player and earned nothing | **Red** |
+
+**Two of the twelve rows are the pass finding its own gaps, and both are the same shape as session
+06's:** a guard that exists and a fixture that never reaches it. The name-column one is exactly the
+defect this project keeps shipping — a table measured against a fixture rather than against a village
+— and it is the third time the lesson has had to be relearned in a new place.
+
+#### The defect the harness found, on its first run
+
+`/namesake debug simulate` told chat where it had written its report, **as an absolute path**. In a
+development worktree that is **130 characters** against a sixty-character chat width, so the last line
+of a nine-line message arrived as three rows with a directory split across two of them.
+
+**Every unit test in the repo was green and could not have been otherwise**: the path depends on where
+the game is running and nothing in `:common` knows it. The harness step measures what Brigadier
+actually emits to a player, and it turned red the first time it ran. Chat now gets the file name and
+the log gets the path — and `CommandLayoutTest` caught the *replacement* line too, at 67 characters,
+because the line is built by a method a test can hand a path far worse than any real one.
+
+That is the fourth time this project has shipped a string nobody measured against the space it has to
+sit in.
+
+#### One harness step, and why it is not a new leg
+
+The ledger's own rule: anything a unit test can prove belongs in a unit test, and this session's
+report layout, percentiles, bucketing and arithmetic are all pure. **The harness grew six assertions
+inside a phase that was already running** — no new launch, no new CI job, about a millisecond of the
+six minutes the witness phase already spends. They make three claims no `:common` test can:
+
+- a hundred days completes on the server thread **inside a single 50 ms tick**;
+- the live registry — nine personas, a settlement, four bonds, eight deeds across four rings — is
+  **identical afterwards**, queried rather than assumed. The simulation's registry is built with `new`
+  and never handed to a `DimensionDataStorage`, so structurally it cannot reach disk; but
+  "structurally cannot" is a claim, and this project queries rather than claiming;
+- the three commands survive the real dispatcher and reach a player under the chat width with no
+  carriage return, which is the assertion that found the defect above.
+
+**Both loaders, every leg green:** 49 in `setup` (43 before this session) and 9 in `verify`, in two
+launches each, plus the cross-build load test above. **252 unit tests**, up from 218, real JUnit XML,
+`failures=0 errors=0 skipped=0`.
+
+#### Carried into session 08
+
+- `$env:JAVA_HOME` still must be pinned to JDK 21. Kill the dev client between runs — and **delete
+  `<loader>/run/saves/namesake_attachbet`, not `namesake_harness`**, which cost one confusing red run
+  this session: `setup` run twice on one world lays a second village on top of the first and fails
+  seven legs for a reason that has nothing to do with the code.
+- **The warmth-decay finding is session 09's problem and it is the biggest thing on this ledger.** A
+  residency threshold on warmth is a threshold no player crosses. Read trust, read peak warmth, or
+  raise the witness share — but decide it against the table above rather than by eye.
+- **`STILL_UNSETTLED` still fires zero times**, and this session added no evidence either way: the
+  simulation never loads a chunk, so it cannot exercise the branch session 04 flagged. The index is
+  still session 08's problem at the earliest.
+- **`DeedBus.witnessScan` and `DeedBus.emit` still have meters pointed at nothing**, and the brief's
+  offer turns out not to apply. The simulation emits thousands of deeds *without the spatial query* —
+  that is precisely the seam it replaces — so it cannot measure the half the meters watch. It is not a
+  third decline so much as a discovery that the two instruments do not overlap; the phase session 05
+  described is still the only thing that would answer it.
+- The earn-rate unit is **warmth per in-game day of contact**. Session 12's thresholds are written in
+  it; `/namesake debug earnrate` computes the same number off a real save.
+- **A ring-derived rate over-states the truth and never under-states it**, because the warmth is
+  cumulative and the days it is divided by are capped at what thirty-two slots still cover. At a
+  hundred days the error reaches **+109%**. Session 12 must not set a threshold from a live save
+  without that correction.
+
+**Ledger change.** Session 07 → done, session 08 → NEXT. **No risk changes and no exemption
+movement**; none fell due, and for the second session running the forcing function was not what kept
+rule 5 honest. Three decisions added to `DESIGN.md` §2 — the personality magnitude, the earn-rate
+unit, and that measurement data is never persisted — taking the count 49 → 52. A fifth verification
+instrument recorded above, and it is the first one that is *in* CI, by the same argument that keeps
+the profiler out. No changes to the 16-session shape.
