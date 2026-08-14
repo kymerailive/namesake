@@ -3769,12 +3769,17 @@ sentence ship-or-kill is made of.
    the save to had moved since the snapshot. **A snapshot taken before the state stops moving is not
    a snapshot**, which is this project's cached-instrument defect in a third costume. Taking it last
    is strictly stronger: the ring-reload check now covers deeds that crossed a border.
-4. **A leg that was a 62% coin, caught by arithmetic rather than by a red run.** The first version of
-   the border leg fed four villagers and waited for the *first* arrival, which meant one story
-   against six hearers at 0.15 — it passed, and would have failed CI two pushes in five. It now feeds
-   every villager in the village and waits for every story to be told out: thirty-six independent
-   flips, which puts "nobody there heard anything" at three in a thousand. **Session 08 wrote this
-   lesson down and it still had to be applied deliberately rather than remembered.**
+4. **A leg that was a 62% coin, caught by arithmetic, fixed, silently reverted, and then caught again
+   by CI actually failing.** The first version of the border leg fed four villagers and waited for
+   the *first* arrival — one story against six hearers at 0.15, which passes 62% of the time. The fix
+   was written and verified; then the breakage script below reverted it along with everything else
+   uncommitted, and unlike the two documents **nobody noticed, because the leg still passed.** Two
+   pushes later `origin/main` went red on Fabric with `0 of them can still say who did it`, on a run
+   where exactly one story crossed. **This entry claimed the fix was in for two commits while the
+   code did not have it.** It now genuinely feeds every villager and waits for every story to be told
+   out: thirty-six independent flips, which puts "nobody there heard anything" at three in a
+   thousand. **A reverted fix that leaves a green test is worse than one that leaves a red one**, and
+   the only thing that found this was the flaky leg finally flaking.
 5. **CI turned `origin/main` red after the push, on a leg that could not fail on this machine.**
    `FAIL ROAD the router answered 0 edge(s)`, Fabric only. Nothing was wrong with the road: the
    router runs one edge per tick on `Util.backgroundExecutor()`, which a dedicated runner **shares
@@ -3793,6 +3798,15 @@ sentence ship-or-kill is made of.
    by the session that quoted it"*, and this is the session that quoted *that*. The script now restores
    only the one file it broke, and refuses a row whose `sed` matched nothing — because a breakage that
    never happened reports "NOTHING FAILED" for a guard that is perfectly fine.
+
+   **Its third casualty is the one worth the paragraph, and it is defect 4.** The two documents were
+   noticed within minutes because they were obviously empty. The harness tightening was not, because
+   reverting it left a leg that <b>still passed</b> — so the damage from one mistake surfaced as a
+   document looking wrong, a document looking wrong, and then a CI failure two commits later, with a
+   ledger entry claiming the fix was in the whole time. **Restoring by hand from memory after
+   `git checkout -- .` is not a recovery, it is a second chance to forget something.** Commit first;
+   and once it has already happened, `git reflog` and `git fsck --lost-found` are the instruments
+   rather than retyping.
 
 #### Rule 3: seventeen deliberate breakages, each watched to fail and then removed
 

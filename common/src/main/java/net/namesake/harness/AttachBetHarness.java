@@ -1228,37 +1228,49 @@ public final class AttachBetHarness {
                 // addressed ones session 05's legs already emitted and the village already spent.
                 bumpTheDay(level, 1);
                 dayTheDeedsHappened = Deed.dayOf(level);
+                // Every villager in the first village, not a couple of them — for session 08's
+                // reason, restated because it bites harder here. Whether one resident of the far
+                // village takes one telling is a coin at Gossip.ARRIVES_BY_ROAD, so a leg that runs
+                // on every push cannot rest on one story reaching six people: that is a 62% test,
+                // and CI proved it by failing on exactly that after this tightening was written
+                // once, lost to a breakage script's `git checkout -- .`, and not restored. Six
+                // stories against six hearers is thirty-six independent flips, which puts "nobody
+                // there heard anything" at three in a thousand.
                 ServerPlayer player = player(server);
                 int fed = 0;
                 for (Villager villager : villagersNearTheBell(level)) {
-                    if (fed >= 4) {
-                        break;
-                    }
                     if (DeedBus.emit(level, DeedType.FED_HUNGRY, player, villager,
                             "minecraft:bread").happened()) {
                         fed++;
                     }
                 }
                 storiesSentDownTheRoad = registry.gossip().of(registeredSettlement.id()).size();
-                record(fed > 0 && storiesSentDownTheRoad > 0,
+                record(fed >= 6 && storiesSentDownTheRoad >= 6,
                         "ROAD " + fed + " feeding(s) in the first village put "
                                 + storiesSentDownTheRoad + " story(s) in its deque on day "
                                 + dayTheDeedsHappened);
                 // Waiting on the drain, which is game time: sprinting is the right instrument, and
                 // it is a poll against the condition rather than a blind run.
-                beginAwait(3000);
+                beginAwait(9000);
             }
             case 22 -> {
-                int far = roadEdge.other(registeredSettlement.id());
-                if (stillWaiting(server, () -> !registry.gossip().of(far).isEmpty(), true,
-                        "a story to set out down the road on the server's own tick hook")) {
+                int home = registeredSettlement.id();
+                int far = roadEdge.other(home);
+                // Every story spent at home, which is also every story that was ever going to set
+                // out. Waiting only for the first arrival leaves the rest still crossing while the
+                // day turns underneath them, and leaves the leg resting on one coin.
+                if (stillWaiting(server, () -> registry.gossip().of(home).isEmpty()
+                                && !registry.gossip().of(far).isEmpty(), true,
+                        "the first village to finish telling its " + storiesSentDownTheRoad
+                                + " story(s), and every one of them to set out down the road")) {
                     return;
                 }
                 List<Deed> travelling = registry.gossip().of(far);
-                record(!travelling.isEmpty(),
-                        "BORDER " + travelling.size() + " story(s) crossed into the far village's "
-                                + "deque on the server tick hook, with nothing scheduled and nothing "
-                                + "persisted that was not already");
+                record(travelling.size() == storiesSentDownTheRoad,
+                        "BORDER all " + travelling.size() + " of the first village's "
+                                + storiesSentDownTheRoad + " story(s) crossed into the far one's "
+                                + "deque on the server tick hook, with nothing scheduled and "
+                                + "nothing persisted that was not already");
                 record(travelling.stream().allMatch(deed ->
                                 deed.settlementId() == registeredSettlement.id()),
                         "BORDER and every one of them still says where it happened, which is how the "
@@ -1273,12 +1285,15 @@ public final class AttachBetHarness {
                                 + "has heard it (" + heldAbroad + ") — a player can outwalk the news");
 
                 bumpTheDay(level, 1);
-                beginAwait(3000);
+                beginAwait(9000);
             }
             case 23 -> {
                 int far = roadEdge.other(registeredSettlement.id());
-                if (stillWaiting(server, () -> ringsHolding(registry, far) > 0, true,
-                        "the day to turn and the traveller to arrive in the far village")) {
+                // Until the far village has told everything that arrived, not until the first
+                // resident holds something: the first telling of each story is the only attributed
+                // one, and stopping at the first holder can leave five of the six untold.
+                if (stillWaiting(server, () -> registry.gossip().of(far).isEmpty(), true,
+                        "the day to turn and the far village to finish telling what arrived")) {
                     return;
                 }
                 checkTheFarVillageHeard(server, level, far);
