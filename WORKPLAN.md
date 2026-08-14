@@ -3416,6 +3416,12 @@ The two scripts, unchanged:
   look at.
 - `DeedBus.witnessScan`, `DeedBus.emit` and `Gossip.drain` **still have meters pointed at nothing**,
   unchanged and for the unchanged reasons.
+- **Session 12 now owes three fields rather than two, and it is worth knowing three sessions early.**
+  `Bond.respect` (the trade price band), `Persona.professionId` (whether one recipe is taught) and
+  now `Deed.item` all expire at its close, and the ledger already calls `professionId` the weakest of
+  the set. Session 12's brief says it has *exactly three consumers* and to resist adding a fourth —
+  so it opens owing three payments against a budget of three, which is either a neat fit or a
+  squeeze, and noticing which is cheaper now than at the close.
 
 **Ledger change.** Session 09 → done, session 10 → NEXT. **Risk 5 updated, and for the first time
 since it was raised it shrank**: `Bond.trust` and `Bond.warmth` are both paid, which was the whole of
