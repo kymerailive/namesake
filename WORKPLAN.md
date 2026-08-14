@@ -2467,7 +2467,7 @@ the profiler out. No changes to the 16-session shape.
 
 ### Session 08 — 2026-08-14 — gossip and distortion
 
-**Shipped.** `72ae69e..HEAD` plus this ledger commit, pushed to `origin/main`. CI green on all three
+**Shipped.** `72ae69e..e2c918a` plus this correction, pushed to `origin/main`. CI green on all three
 jobs — build and test, and the attach-bet harness on each loader.
 
 **A deed now reaches people who were not standing there.** Feed a villager in a square and within two
@@ -2786,10 +2786,15 @@ earlier the same session. `Memories.idsOf` hands them over. A hundred days warm 
 increase from session 07's 8 ms is the drains doing real work, not the instrumentation, and the
 instrumentation was simply the part that could be given back.
 
+**And the runner is three times slower than this machine, which is the number to keep.** The green
+run measured **61 ms on Fabric and 71 on NeoForge** for the same hundred days this machine runs in 19.
+Any future wall-clock assertion in CI has to survive a 3–4× factor it cannot see coming.
+
 **Worth recording as a process note rather than only as a fix:** the number was visible on this
 machine before the push — 8 ms became 27 and I optimised it to 21 and moved on, without asking what a
-2.5× margin means on a machine twice as slow. CI asked. The instrument that catches this class is not
-a faster machine; it is noticing when an assertion's margin has quietly become the thing under test.
+2.5× margin means on a machine three times slower. CI asked. The instrument that catches this class is
+not a faster machine; it is noticing when an assertion's margin has quietly become the thing under
+test.
 
 #### One harness leg, and why it is one rather than none
 
