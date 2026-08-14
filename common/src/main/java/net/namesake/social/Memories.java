@@ -80,6 +80,29 @@ public final class Memories {
     private static final String KEY_RING = "ring";
 
     /**
+     * One slot of a ring: a deed and the id it is addressed by.
+     *
+     * <p><b>The id is carried rather than recomputed, and session 08 is what made that matter.</b>
+     * This class's own note claimed a lookup was "a linear walk of at most {@link #RING_CAPACITY}
+     * long comparisons" — which was true of the comparison and false of what it took to get there,
+     * because {@link Deed#id()} is a sixty-four bit mix of eight fields and was being run once per
+     * slot per walk. That cost nothing while the only caller was an emit, at most thirteen times in
+     * the tick something happened. {@link Gossip} asks the same question of every resident on every
+     * drain, which turned it into about ninety microseconds of one tick in every two hundred and
+     * fifty; measured through the headless simulation, it was three quarters of the run.
+     *
+     * <p>Derived and never persisted, so it is not a cache in the sense session 03 deleted
+     * {@code Settlement.culture} for: it cannot disagree with the deed it sits beside, because it is
+     * filled in at the same moment from the same record and neither is ever mutated.
+     */
+    private record Held(long id, Deed deed) {
+
+        static Held of(Deed deed) {
+            return new Held(deed.id(), deed);
+        }
+    }
+
+    /**
      * A list rather than a {@code Deque}, from session 08.
      *
      * <p>It is still a ring in every sense that matters — oldest first, appended at the end, oldest
@@ -88,14 +111,14 @@ public final class Memories {
      * {@code Deque} would have had to be rebuilt to do that, and the rule the replacement implements
      * is precisely that the ring's order must not move.
      */
-    private final Map<UUID, List<Deed>> byHolder = new LinkedHashMap<>();
+    private final Map<UUID, List<Held>> byHolder = new LinkedHashMap<>();
 
     // --- reads -----------------------------------------------------------------------------------
 
     /** Everything this NPC remembers, <b>oldest first</b>. Unmodifiable; write through the registry. */
     public List<Deed> of(UUID holder) {
-        List<Deed> ring = byHolder.get(holder);
-        return ring == null ? List.of() : List.copyOf(ring);
+        List<Held> ring = byHolder.get(holder);
+        return ring == null ? List.of() : ring.stream().map(Held::deed).toList();
     }
 
     /**
@@ -112,7 +135,7 @@ public final class Memories {
 
     /** Where this deed sits in the holder's ring, or −1. */
     private int slotOf(UUID holder, long deedId) {
-        List<Deed> ring = byHolder.get(holder);
+        List<Held> ring = byHolder.get(holder);
         if (ring == null) {
             return -1;
         }
@@ -127,7 +150,7 @@ public final class Memories {
     /** How many deeds are held in total, across every ring. */
     public int size() {
         int total = 0;
-        for (List<Deed> ring : byHolder.values()) {
+        for (List<Held> ring : byHolder.values()) {
             total += ring.size();
         }
         return total;
@@ -140,7 +163,7 @@ public final class Memories {
 
     public Map<UUID, List<Deed>> all() {
         Map<UUID, List<Deed>> copy = new LinkedHashMap<>();
-        byHolder.forEach((holder, ring) -> copy.put(holder, List.copyOf(ring)));
+        byHolder.forEach((holder, ring) -> copy.put(holder, of(holder)));
         return Collections.unmodifiableMap(copy);
     }
 
@@ -149,7 +172,7 @@ public final class Memories {
         int slot = slotOf(holder, deedId);
         return slot < 0
                 ? java.util.Optional.empty()
-                : java.util.Optional.of(byHolder.get(holder).get(slot));
+                : java.util.Optional.of(byHolder.get(holder).get(slot).deed());
     }
 
     // --- writes ----------------------------------------------------------------------------------
@@ -206,15 +229,15 @@ public final class Memories {
         long deedId = deed.id();
         int slot = slotOf(holder, deedId);
         if (slot >= 0) {
-            List<Deed> ring = byHolder.get(holder);
-            if (deed.confidence() <= ring.get(slot).confidence()) {
+            List<Held> ring = byHolder.get(holder);
+            if (deed.confidence() <= ring.get(slot).deed().confidence()) {
                 return false;
             }
-            ring.set(slot, deed);
+            ring.set(slot, new Held(deedId, deed));
             return true;
         }
-        List<Deed> ring = byHolder.computeIfAbsent(holder, key -> new ArrayList<>(RING_CAPACITY));
-        ring.add(deed);
+        List<Held> ring = byHolder.computeIfAbsent(holder, key -> new ArrayList<>(RING_CAPACITY));
+        ring.add(new Held(deedId, deed));
         while (ring.size() > RING_CAPACITY) {
             ring.remove(0);
         }
@@ -239,14 +262,15 @@ public final class Memories {
      */
     public void save(CompoundTag root) {
         ListTag list = new ListTag();
-        for (Map.Entry<UUID, List<Deed>> holder : byHolder.entrySet()) {
+        for (Map.Entry<UUID, List<Held>> holder : byHolder.entrySet()) {
             if (holder.getValue().isEmpty()) {
                 continue;
             }
             CompoundTag entry = new CompoundTag();
             entry.putIntArray(KEY_HOLDER, UUIDUtil.uuidToIntArray(holder.getKey()));
             ListTag ring = new ListTag();
-            for (Deed deed : holder.getValue()) {
+            for (Held held : holder.getValue()) {
+                Deed deed = held.deed();
                 ring.add(Deed.CODEC.encodeStart(NbtOps.INSTANCE, deed)
                         .getOrThrow(error -> new IllegalStateException(
                                 "Cannot encode deed " + deed + " of " + holder.getKey() + ": " + error)));

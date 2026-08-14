@@ -499,6 +499,54 @@ class GossipTest {
                         + "and ring in the world at the next autosave");
     }
 
+    /**
+     * <b>A rumour reaches you on the day you hear it, never on the day it happened.</b>
+     *
+     * <p>{@code Bond.apply} stamps {@code lastSeenDay} with the day it is handed, and a story queued
+     * before midnight can be drained after it. Handing the bond the day the deed happened would set
+     * that stamp <i>backwards</i>, and the next read would run the lazy decay over days it had
+     * already decayed. Nothing in the emit path could produce this, which is exactly why it needed
+     * looking for.
+     */
+    @Test
+    @DisplayName("a story heard days later does not stamp a bond backwards")
+    void aLateTellingDoesNotRewindTheBond() {
+        NpcRegistry registry = village(4);
+        Persona hearer = residentsOf(registry).get(0);
+        registry.putBond(hearer.id(), PLAYER,
+                Bond.fresh(5).apply(new int[]{0, 10, 0, 0}, 5, Bond.DAILY_CAP));
+        assertEquals(5, registry.bonds().stored(hearer.id(), PLAYER).orElseThrow().lastSeenDay());
+
+        // A deed from day 0, told on day 5 — the shape a deque that survives a night produces.
+        DeedBus.deliver(registry, aKilling(0).retold(), hearer, 5);
+
+        assertEquals(5, registry.bonds().stored(hearer.id(), PLAYER).orElseThrow().lastSeenDay(),
+                "a bond stamped with a day earlier than the one it already holds would run the "
+                        + "lazy decay backwards on the very next read");
+    }
+
+    /**
+     * The backstop to {@code DeedBus.deliver}'s blur guard.
+     *
+     * <p>Two doors rather than one, for the reason the profiling-fixture refusal has two: what is
+     * being guarded against is silent. A bond about nobody loads perfectly and reads as a real
+     * relationship for ever after.
+     */
+    @Test
+    @DisplayName("the registry refuses a bond about the unknown actor, whatever asks for one")
+    void noBondMayBeHeldAboutNobody() {
+        NpcRegistry registry = village(2);
+        Persona holder = residentsOf(registry).get(0);
+
+        registry.putBond(holder.id(), Deed.UNKNOWN_ACTOR,
+                Bond.fresh(0).apply(new int[]{5, 5, 0, 0}, 0, Bond.DAILY_CAP));
+
+        assertTrue(registry.bonds().stored(holder.id(), Deed.UNKNOWN_ACTOR).isEmpty(),
+                "an unattributed rumour moves nobody's opinion of anybody, because nobody knows "
+                        + "who did it");
+        assertEquals(0, registry.bonds().size());
+    }
+
     @Test
     @DisplayName("a drain marks the file dirty, because the village knows the story less well after it")
     void aDrainMarksTheFileDirty() {

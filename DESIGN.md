@@ -1,7 +1,7 @@
 # DESIGN — Namesake
 
 What we are building and why. `WORKPLAN.md` owns *what happens next*; this owns *what it is*.
-52 decisions ruled, 0 open.
+55 decisions ruled, 0 open.
 
 **The thesis:** a deed witnessed by one villager changes what a different villager, in a different
 settlement, says to you later.
@@ -66,7 +66,10 @@ Enforce with a failing test, not intention.
 | Deed id | **Derived from the deed's own six identity fields, never assigned.** Two identical feedings on the same day are therefore one deed. That is what stops a ring being ground out by repetition — the daily cap's job, one level up, through a door the cap cannot see — and it costs zero persisted bytes, because it is a pure function of fields already on disk. **Confidence is deliberately outside it**, so session 08's retelling dedupes against the deed it retells instead of becoming a second row for one murder. |
 | Deed storage | **A 32-entry ring per persona, in a side table inside `namesake_npcs.dat`** — beside the bonds, never a field on `Persona`. A persona is durable identity and is rebuilt whole on every write; and one malformed deed inside a persona record would cost that villager their name, culture and traits, where a table of its own costs one memory. Oldest out on overflow. Worst case measured: 1.57 MB of NBT, 46 KB on disk, held there by a test. |
 | Bond UI | Bands + the deed ring. **Never raw integers.** |
-| Gossip | Distorts, never lies. Confidence degrades; identity blurs below 50. |
+| Gossip | Distorts, never lies. Confidence degrades; identity blurs below 50. Nothing in the pipeline can add a detail to a story — every field of a retold deed but two is carried through untouched, and those two only move one way. |
+| Gossip retention | **`confidence × 0.70` per hop, not 0.85.** The three clauses this section carried — 0.85, max 2 hops, blur below 50 — were written before there was code, and session 06 proved they were inconsistent: at 0.85 two hops lands at 72, so the blur could never fire. Of the four ways out, three break session 10 — five hops is a different mod, a higher blur threshold makes the two-hop story in the acceptance script's step 5 anonymous, and leaving it ships a distortion mechanic that never distorts. Lowering the retention is the only lever that moves the two hops in *opposite* directions relative to the threshold, and the window is arithmetic: hop one must stay attributed and hop two must not, so `r ∈ [0.50, 0.707)`. Seven tenths is the top of it and therefore the gentlest change that works. |
+| Gossip storage | **Inside `namesake_npcs.dat`, under one `NpcSchema` version** — settlements' argument for the fourth time, and it applies here where session 07's `DialogueStats` said it did not: a queued rumour *is* a `Deed`, which references personas and settlements by id. Persisted rather than volatile because session 10's cross-settlement hop carries a 1200–6000 tick delay, which makes an in-flight story certain to cross a save — and a schema bump during a ship-or-kill session is the worst available time for one. A queued rumour needs no new record, so the migration adds a table and nothing else. |
+| Ring collisions | **The better-attested copy of an event wins a ring slot, and it does not move.** Confidence is outside `Deed.id()`, so two copies of one event can meet in a ring holding different numbers. Better attested wins because a memory should be the best account a person actually has; it does not move because refreshing a slot would let a retelling push first-hand memories out of a ring simply by being repeated. The door only opens upward, so nothing gossip does can degrade a memory. |
 | Grievance notification | None — you must notice. Board is the backstop. |
 | Player as grievance subject | Yes, including romantic rivalry over you |
 | Factions | Named, generated from the shared cause |
@@ -161,9 +164,24 @@ remembers that it worked.
    deeds at all.
 5. **Settlement effect** — contributes to unrest/prosperity. One-time shocks excluded from the drift
    target, so grief fades instead of pinning the settlement forever.
-6. **Gossip queue** — enters the settlement deque, cap 32.
-7. **Drain & distort** — 4/in-game hour, `confidence × 0.85` per hop, cross-settlement along a road
-   edge at 0.15 with a 1200–6000 tick delay, max 2 hops.
+6. **Gossip queue** — enters the settlement deque, cap 32. One entry per story: a deed already in
+   flight is not queued again, so the deque inherits the ring's ungrindability from `Deed.id()`
+   rather than needing its own version of it.
+7. **Drain & distort** — 4/in-game hour, same-settlement transfer at **0.35** per hearer,
+   `confidence × 0.70` per hop, cross-settlement along a road edge at 0.15 with a 1200–6000 tick
+   delay.
+
+   **Max 2 hops, and nothing counts them.** A story is retold while it can still be attributed, and
+   0.70 applied twice to first-hand lands at 49 — below the blur threshold. So the bound is
+   arithmetic rather than bookkeeping, which is what keeps `Deed` at seven fields and every ring in
+   every save at its current shape.
+
+   **The blur is an `if` statement, not a caption.** Below confidence 50 the actor is *replaced* by
+   `Deed.UNKNOWN_ACTOR`, and an unattributed deed moves no bond: a villager who cannot say who
+   killed the smith has no reason to think worse of *you*. They still remember it, because it
+   happened — session 06's asymmetry from the other side. "From the north" needs no field either:
+   the direction is a function of where the deed happened, which the deed carries, and where the
+   holder lives, which their persona carries.
 
 Reputation travelling to the next settlement is not bolted onto this pipeline — **it is the pipeline,
 run one hop further.**
@@ -265,7 +283,7 @@ tick; with it, worst case ~6/tick. *Never expose "make everyone punctual" as a c
 |---|---|
 | Persona record sweep | 20 rotating buckets (~1×/sec/record) |
 | Witness scan | on deed emit — **never polled** |
-| Gossip drain | every 250 ticks |
+| Gossip drain | every 250 ticks — **the only thing in this mod that polls**, and bounded by construction rather than by measurement: a settlement is in the drain's map only while it has an unspent story, and a story is spent after two drains. On 249 ticks in 250 the hook reads a tick count and returns. |
 | Grievance escalation | 1×/in-game day, per settlement |
 | Settlement survey | census on the server thread at 16 chunks/tick, scoring off-thread, once per place, ever |
 | Road edge A* | 1 edge/tick, off-thread, 16×16-chunk heightmap grid |
