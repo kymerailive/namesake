@@ -696,12 +696,37 @@ public final class AttachBetHarness {
                         + "bond about nobody — a story you cannot attribute moves no opinion");
 
         // The instrument the owner's half of the exit criterion is read with, on a villager who was
-        // told rather than one who watched, through the real dispatcher.
+        // told rather than one who watched, through the real dispatcher — and measured.
+        //
+        // Session 07 shipped three over-width lines because every guard it wrote measured a
+        // POPULATED table, and the branches that fire when there is nothing to report were never
+        // rendered at all. So both states go through the dispatcher here: a ring with a rumour in
+        // it, and one of a villager who has seen nothing. The second is the state a player is in
+        // for their first hour.
         ServerPlayer player = player(server);
+        List<String> emitted = new ArrayList<>();
+        CommandSourceStack capturing = capturing(server, player, emitted);
         boundEntity(server, witnessBehindAWall).ifPresent(entity ->
                 server.getCommands().performPrefixedCommand(
-                        player.createCommandSourceStack(),
-                        "namesake debug deeds " + entity.getUUID()));
+                        capturing, "namesake debug deeds " + entity.getUUID()));
+        villagersAt(level).stream()
+                .filter(villager -> PersonaLink.get().personaId(villager)
+                        .map(id -> registry.memories().of(id).isEmpty()).orElse(false))
+                .findFirst()
+                .ifPresentOrElse(
+                        empty -> server.getCommands().performPrefixedCommand(
+                                capturing, "namesake debug deeds " + empty.getUUID()),
+                        () -> Namesake.LOGGER.info("[harness] every loaded villager remembers "
+                                + "something, so the empty-ring branch had nobody to render"));
+
+        record(!emitted.isEmpty(), "GOSSIP the deed ring reached a player through the real "
+                + "dispatcher in " + emitted.size() + " line(s)");
+        String widest = emitted.stream().max(Comparator.comparingInt(String::length)).orElse("");
+        record(widest.length() <= Reports.CHAT_WIDTH,
+                "GOSSIP the widest deed row a player sees is " + widest.length() + " characters, "
+                        + "against a " + Reports.CHAT_WIDTH + "-character chat width: |" + widest + "|");
+        record(emitted.stream().noneMatch(line -> line.contains("\r")),
+                "GOSSIP no deed row carries a carriage return");
 
         // Recorded here rather than at the end of step 17, so the verify phase compares against the
         // state gossip actually left behind. That makes the existing ring-reload check cover a
@@ -767,10 +792,38 @@ public final class AttachBetHarness {
                 + " persona(s)/bond(s)/deed(s) — the simulation's registry is its own");
 
         List<String> emitted = new ArrayList<>();
+        CommandSourceStack capturing = capturing(server, player, emitted);
+
+        for (String command : List.of("namesake debug stats", "namesake debug earnrate",
+                "namesake debug simulate 100 ATTENTIVE")) {
+            server.getCommands().performPrefixedCommand(capturing, command);
+        }
+
+        record(!emitted.isEmpty(), "SIMULATE the three session 07 commands emitted "
+                + emitted.size() + " line(s) through the real dispatcher");
+        String widest = emitted.stream().max(Comparator.comparingInt(String::length)).orElse("");
+        record(widest.length() <= Reports.CHAT_WIDTH,
+                "SIMULATE the widest line a player sees is " + widest.length() + " characters, "
+                        + "against a " + Reports.CHAT_WIDTH + "-character chat width: |" + widest + "|");
+        record(emitted.stream().noneMatch(line -> line.contains("\r")),
+                "SIMULATE no line carries a carriage return, which Minecraft draws as a "
+                        + "missing-glyph box");
+    }
+
+    /**
+     * A command source that collects every line the dispatcher would put on a player's screen.
+     *
+     * <p>The reason this exists rather than reading the log: <b>a log file has no width.</b> Session
+     * 06 shipped a ninety-character deed row and a carriage return, and every instrument in the repo
+     * was green because every one of them read the log. This reads what Brigadier actually emits,
+     * split on the newlines the client would break on.
+     */
+    private static CommandSourceStack capturing(MinecraftServer server, ServerPlayer player,
+                                                List<String> into) {
         CommandSource sink = new CommandSource() {
             @Override
             public void sendSystemMessage(Component component) {
-                emitted.addAll(List.of(component.getString().split("\n", -1)));
+                into.addAll(List.of(component.getString().split("\n", -1)));
             }
 
             @Override
@@ -788,24 +841,8 @@ public final class AttachBetHarness {
                 return false;
             }
         };
-        CommandSourceStack capturing = new CommandSourceStack(sink, player.position(),
-                player.getRotationVector(), player.serverLevel(), 4, "Harness",
-                Component.literal("Harness"), server, player);
-
-        for (String command : List.of("namesake debug stats", "namesake debug earnrate",
-                "namesake debug simulate 100 ATTENTIVE")) {
-            server.getCommands().performPrefixedCommand(capturing, command);
-        }
-
-        record(!emitted.isEmpty(), "SIMULATE the three session 07 commands emitted "
-                + emitted.size() + " line(s) through the real dispatcher");
-        String widest = emitted.stream().max(Comparator.comparingInt(String::length)).orElse("");
-        record(widest.length() <= Reports.CHAT_WIDTH,
-                "SIMULATE the widest line a player sees is " + widest.length() + " characters, "
-                        + "against a " + Reports.CHAT_WIDTH + "-character chat width: |" + widest + "|");
-        record(emitted.stream().noneMatch(line -> line.contains("\r")),
-                "SIMULATE no line carries a carriage return, which Minecraft draws as a "
-                        + "missing-glyph box");
+        return new CommandSourceStack(sink, player.position(), player.getRotationVector(),
+                player.serverLevel(), 4, "Harness", Component.literal("Harness"), server, player);
     }
 
     /** Moves one persona's villager, and stops it falling out of the sky. */
