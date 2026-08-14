@@ -644,7 +644,7 @@ public final class NamesakeCommands {
                 registry.bonds().size()));
         if (viewer == null) {
             // Every section prints its own absence — DESIGN.md §11's rule, applied early.
-            lines.add("  (no viewer - run this as a player to see what they feel about you)");
+            lines.add("  (no viewer - run this as a player, not the console)");
         } else if (stats.metTheViewer() == 0) {
             lines.add("  nobody in this world has met you. That is a real answer.");
         } else {
@@ -663,7 +663,7 @@ public final class NamesakeCommands {
                 "  deepest  %s %d/%d back to day %d",
                 clip(ring.name(), 20), ring.slots(), Memories.RING_CAPACITY, ring.oldestDay())));
         if (stats.rings().isEmpty()) {
-            lines.add("  nobody remembers anything yet. Nothing has happened in front of them.");
+            lines.add("  nobody remembers anything yet. Nothing has happened.");
         }
         for (Map.Entry<DeedType, Integer> entry : stats.deedMix()) {
             lines.add(String.format(Locale.ROOT, "    %-17s %5d", entry.getKey(), entry.getValue()));
@@ -713,7 +713,7 @@ public final class NamesakeCommands {
                 .filter(DialogueStats.Standing::hasMetTheViewer)
                 .toList();
         if (met.isEmpty()) {
-            lines.add("  nobody has met you, so nobody is earning anything. Go and be seen.");
+            lines.add("  nobody has met you, so nobody is earning. Go and be seen.");
             return lines;
         }
 

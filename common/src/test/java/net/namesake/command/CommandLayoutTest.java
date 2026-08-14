@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
 import java.nio.file.Path;
+import java.util.Map;
 import java.util.List;
 import java.util.UUID;
 
@@ -233,32 +234,62 @@ class CommandLayoutTest {
         return DialogueStats.of(outcome.registry(), outcome.player(), outcome.plan().days() - 1);
     }
 
-    @Test
-    @DisplayName("every row of debug stats fits the chat width, at scale")
-    void theStatsTableFits() {
+    /**
+     * <b>Every state both commands can be in, not the one a fixture happens to produce.</b>
+     *
+     * <p>The first version of this measured a populated table and nothing else, and it was green
+     * while three lines were over the budget — all three of them in the <i>absence</i> branches,
+     * which is the state a real player meets first: walk into a village that has never seen you and
+     * `debug earnrate` answers with a 68-character apology. The owner found it in ten seconds by
+     * running the command in a world nobody had done anything in.
+     *
+     * <p>That is the fifth time this project has shipped a string nobody measured against the space
+     * it has to sit in, and the third time in two sessions that the guard existed and the fixture
+     * never reached it. So the guard now enumerates the states rather than sampling one: a populated
+     * world, a world nobody has met you in, and the console with no viewer at all.
+     */
+    private static List<Map.Entry<String, List<String>>> everyStateOfBothCommands() {
         Simulation.Outcome outcome = atScale();
-        List<String> rows = NamesakeCommands.statRows(
-                statsAtScale(outcome), outcome.registry(), outcome.player());
+        NpcRegistry empty = new NpcRegistry();
+        UUID viewer = UUID.fromString("0a0a0a0a-1111-2222-3333-444444444444");
+        DialogueStats none = DialogueStats.of(empty, viewer, 0);
+        DialogueStats console = DialogueStats.of(empty, null, 0);
 
-        assertFalse(rows.isEmpty(), "a report with nothing in it reads as a broken command");
-        for (String row : rows) {
-            assertTrue(row.length() <= CHAT_WIDTH,
-                    () -> "a stats row is " + row.length() + " characters, over the " + CHAT_WIDTH
-                            + "-character budget:\n" + row);
+        // A village that exists and has met nobody — the state a player is in for their first hour,
+        // and the one that was never measured.
+        NpcRegistry unmet = new NpcRegistry();
+        for (Persona resident : outcome.residents()) {
+            unmet.put(resident);
         }
+        DialogueStats strangers = DialogueStats.of(unmet, viewer, 40);
+
+        return List.of(
+                Map.entry("stats, populated", NamesakeCommands.statRows(
+                        statsAtScale(outcome), outcome.registry(), outcome.player())),
+                Map.entry("stats, a village that has not met you",
+                        NamesakeCommands.statRows(strangers, unmet, viewer)),
+                Map.entry("stats, an empty world", NamesakeCommands.statRows(none, empty, viewer)),
+                Map.entry("stats, no viewer", NamesakeCommands.statRows(console, empty, null)),
+                Map.entry("earnrate, populated", NamesakeCommands.earnRateRows(
+                        statsAtScale(outcome), outcome.player())),
+                Map.entry("earnrate, a village that has not met you",
+                        NamesakeCommands.earnRateRows(strangers, viewer)),
+                Map.entry("earnrate, an empty world", NamesakeCommands.earnRateRows(none, viewer)),
+                Map.entry("earnrate, no viewer", NamesakeCommands.earnRateRows(console, null)));
     }
 
     @Test
-    @DisplayName("every row of debug earnrate fits the chat width, at scale")
-    void theEarnRateTableFits() {
-        Simulation.Outcome outcome = atScale();
-        List<String> rows = NamesakeCommands.earnRateRows(statsAtScale(outcome), outcome.player());
-
-        assertFalse(rows.isEmpty());
-        for (String row : rows) {
-            assertTrue(row.length() <= CHAT_WIDTH,
-                    () -> "an earnrate row is " + row.length() + " characters, over the " + CHAT_WIDTH
-                            + "-character budget:\n" + row);
+    @DisplayName("every row of both commands fits the chat width, in every state they can be in")
+    void bothCommandsFitInEveryState() {
+        for (Map.Entry<String, List<String>> state : everyStateOfBothCommands()) {
+            assertFalse(state.getValue().isEmpty(),
+                    () -> state.getKey() + " printed nothing at all, which reads as a broken command");
+            for (String row : state.getValue()) {
+                assertTrue(row.length() <= CHAT_WIDTH,
+                        () -> "a row of '" + state.getKey() + "' is " + row.length()
+                                + " characters, over the " + CHAT_WIDTH + "-character budget:\n"
+                                + row);
+            }
         }
     }
 

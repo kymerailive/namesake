@@ -2385,6 +2385,34 @@ six minutes the witness phase already spends. They make three claims no `:common
 launches each, plus the cross-build load test above. **252 unit tests**, up from 218, real JUnit XML,
 `failures=0 errors=0 skipped=0`.
 
+#### The fifth one, and the owner found it in ten seconds
+
+**Every width guard this session shipped measured a populated table, and all three of the commands'
+absence branches were over the budget.** The owner ran `/namesake debug stats`, `earnrate` and
+`simulate` in a dev client as a fresh username, in a world nobody had done anything in — which is the
+state a real player is in for their first hour and the one no fixture here produced. `debug earnrate`
+answered with a **68-character** apology:
+
+```
+ 68  OVER 60  |  nobody has met you, so nobody is earning anything. Go and be seen.|
+```
+
+Two more were sitting behind it and had simply never been rendered: the empty-ring line at **71** and
+the no-viewer line at **68**. Every one of them is a branch that only fires when there is nothing to
+report, which is exactly when a player meets the command for the first time.
+
+**That is the fifth instance of this project's signature defect, and the third time in two sessions
+that the guard existed and the fixture never reached it** — after the earnrate name column and the
+never-versus-zero-days branch, both caught by the breakage pass. So the guard stopped sampling one
+state and now enumerates four: populated, a village that has not met you, an empty world, and the
+console with no viewer at all. Reverted, the 68-character line turns it red by name.
+
+**And it is the working agreement paying for itself.** `CLAUDE.md` says the owner playtests and rules
+on feel; this session substituted an instrument for that and filed the gap as optional. The
+instrument is genuinely better than it was — it measures what Brigadier emits, at scale, and it
+caught the 130-character path — but it measures the states somebody thought to write down, and a
+person opening the game finds the state nobody thought of.
+
 **The verify count is 9 rather than 10 and that is a property of the save, not a lost leg.**
 `checkDataFixer` returns on its first line with a log entry when the world on disk is already at the
 current schema, so its assertion only exists on a run that actually migrates something — and session
