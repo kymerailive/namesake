@@ -2871,11 +2871,66 @@ outstanding half is narrow and is listed so it cannot be quietly absorbed:
 four different villagers fed, an in-game hour waited, then `/namesake debug deeds` on somebody who was
 not watching — three or four because the blur fires on a coin and one villager is not a sample.
 
+#### Ruled at close, by the owner — and both rulings are about session 09 rather than about 08
+
+The owner could not playtest, so nothing about *feel* was ruled. Two decisions that needed a table
+rather than a screen were, and both were parked on them before session 08 existed.
+
+**1. The residency threshold reads `trust`.** Session 07 measured that warmth can never reach it and
+session 08 closed off gossip as the fix, which left three options; this is the one taken. The third
+resident crosses 20 trust on **day 28**, 40 on 56, 60 on 84, and trust does not decay — so it only
+ever climbs, and residency is earned by consistency rather than by intensity. It costs nothing but
+the threshold itself. **`Bond.warmth`'s exemption still expires at the close of 09** and is now the
+one to watch: warmth is written by every kindness and read by nothing, and if 09 ships with residency
+on trust alone then warmth needs a real consumer or the honest move is to say so out loud rather than
+move the number. `Bond.peakWarmth` is a live candidate — it is already persisted and already consumed
+by the decay floor, and "the warmest you ever were" is a different mechanic from "how you feel today".
+
+**2. Memory depth: all three of the cheap routes, and not the deferral.** Richer per memory (which
+item, not just "a gift"), a repeat count on the ring slot, **and** 32 → 128 slots. The owner has
+asked for in-depth memories three times and this is the answer being taken at face value.
+
+**What that costs, stated at the close of 08 rather than discovered at the close of 09**, because two
+of the three are not free and one of them is the trap this project's build rule exists for.
+
+- **128 slots does not fit the format as it stands, and the test will say so.** Session 06 measured
+  the worst case — 400 personas each holding a full ring — at **1.57 MB of NBT and 46 KB gzipped**,
+  and held it to ceilings of 2 MB and 100 KB. At 128 slots that worst case is **6.26 MB and 186 KB**:
+  *both ceilings go red*. The packed fixed-width ring session 06 priced (44 B a deed against 122)
+  brings it to **~2.25 MB**, which is still over. So session 09 owes three things before it raises
+  `RING_CAPACITY`: the packed ring, a re-ruled ceiling **with the measurement in hand**, and — because
+  this is a persisted shape change — **hard rule 1 in full: schema 7, a datafixer, and a load test
+  against a save written by a pre-change build.** `MemoriesTest`'s own note already says the fix for a
+  red ceiling is a decision rather than a bigger number; this is that decision being made deliberately.
+- **Both new fields need a non-display consumer, and the obvious one is already ruled a display.**
+  This is `DESIGN.md` §1 pointed straight at session 09. The natural reader for "which item" and for
+  "nine times" is a line of dialogue — and the ledger has already ruled that shape out once, in
+  `Bond.trust`'s own entry: *"naming the pool selection instead would be naming a display."* Session
+  03 caught the identical lie when `cultureId` named the syllable grammar. So `SocialValueLedgerTest`
+  will refuse both fields on the consumer session 09 will most want to name, and it will be right.
+
+  **Two candidates that are not displays, offered rather than ruled.** A repeat count has a real
+  mechanical home in **eviction** — which memory survives when a ring overflows is an `if` statement
+  with a consequence, and session 07 flagged eviction as the one question its numbers could not
+  settle. "Which item" has one in **session 12's trade band** (a villager given the thing they
+  actually wanted teaches a recipe) or in **16's grievance engine** (what a favour was worth). Either
+  is a promise with a date, which is what an exemption is; naming the dialogue is not.
+
+**The honest summary: the owner ruled the direction and the direction is right — the 100-day dump
+says the deepest ring is shallow because twenty of its rows say the same thing, not because it ran out
+of room, so richer-per-memory and a repeat count attack the actual problem. The capacity half is the
+expensive one and it is the one with the least evidence behind it.** Session 09 should do the two
+cheap routes first, measure what they buy, and raise `RING_CAPACITY` last — but that is a sequencing
+note, not a re-ruling.
+
 #### Carried into session 09
 
 - **Session 08's playtest is owed**, and with it the three interpretive calls above. Session 09 has a
   playtest of its own (the name swap is the whole pitch in one line), so the two can be run together
   — but 09's exit criterion must not be allowed to stand in for 08's.
+- **The two rulings above are 09's opening work**, and the rule 5 trap in the second is the first
+  thing to solve rather than the last: a field added in week one whose consumer is found in week three
+  is a field that gets an exemption nobody meant to write.
 - `$env:JAVA_HOME` still must be pinned to JDK 21. Kill the dev client between runs, and delete
   `<loader>/run/saves/namesake_attachbet` before a `setup`.
 - **The warmth-decay finding is still session 09's biggest problem, and gossip is no longer one of the
@@ -2899,5 +2954,5 @@ not watching — three or four because the blur fires on a coin and one villager
 **Ledger change.** Session 08 → done, session 09 → NEXT. **No risk changes and no exemption movement**
 — none fell due, and for the third session running the forcing function was not what kept rule 5
 honest. Three decisions added to `DESIGN.md` §2 — the gossip retention, gossip storage, and which copy
-of an event wins a ring slot — taking the count 52 → 55, plus §4 step 7 rewritten around the retention
+of an event wins a ring slot — taking the count 52 → 55 — and two more at close from the owner’s rulings, the residency axis and memory depth, taking it to 57 — plus §4 step 7 rewritten around the retention
 and the blur's `if` statement, and §8's drain row given its bound. No changes to the 16-session shape.
