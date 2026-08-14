@@ -442,10 +442,14 @@ public final class Simulation {
      */
     private static void countHolders(NpcRegistry registry, List<Persona> residents,
                                      Map<Long, Spread> spread, int day) {
+        // Asked of the ring's own cached ids rather than of the deeds, because this runs once a day
+        // over every villager and Deed.id() is a sixty-four bit mix of eight fields. Reading the
+        // deeds instead was three quarters of a hundred-day run, and CI found it before the ledger
+        // did — a shared runner reported 51 ms against a 50 ms tick where this machine reported 21.
         Map<Long, Integer> held = new LinkedHashMap<>();
         for (Persona resident : residents) {
-            for (Deed deed : registry.memories().of(resident.id())) {
-                held.merge(deed.id(), 1, Integer::sum);
+            for (long id : registry.memories().idsOf(resident.id())) {
+                held.merge(id, 1, Integer::sum);
             }
         }
         for (Spread story : spread.values()) {

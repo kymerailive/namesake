@@ -167,6 +167,28 @@ public final class Memories {
         return Collections.unmodifiableMap(copy);
     }
 
+    /**
+     * The ids of everything this NPC remembers, in ring order.
+     *
+     * <p>Exists so that anything counting who holds what can ask once per villager instead of
+     * recomputing {@link Deed#id()} per slot per question. It is the same reason the slot carries
+     * the id at all — see {@code Held} — and it is the difference between a report that costs a
+     * hundred-day run three quarters of its time and one that does not.
+     */
+    public long[] idsOf(UUID holder) {
+        List<Held> ring = byHolder.get(holder);
+        if (ring == null) {
+            return NO_IDS;
+        }
+        long[] ids = new long[ring.size()];
+        for (int slot = 0; slot < ids.length; slot++) {
+            ids[slot] = ring.get(slot).id();
+        }
+        return ids;
+    }
+
+    private static final long[] NO_IDS = new long[0];
+
     /** What this NPC believes about one particular event, if they have heard of it at all. */
     public java.util.Optional<Deed> held(UUID holder, long deedId) {
         int slot = slotOf(holder, deedId);

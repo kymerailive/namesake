@@ -2763,6 +2763,34 @@ reported that honestly rather than passing, which is better than a false green a
 measurement. It is rendered before the drain now, when the villager behind the wall is empty by
 assertion one line above.
 
+#### The defect CI found after the push, and the ruling it forced
+
+**`origin/main` went red on the first push of this session**, on both loaders, on one line:
+`FAIL SIMULATE the run cost 51 ms, against a 50 ms tick`. Every gossip leg passed. The assertion was
+session 07's, written when a hundred simulated days cost 6–8 ms and the margin made the question look
+free; session 08 took it to 21 ms on this machine, and a shared runner is slower than this machine.
+
+**Session 04 had already ruled the general case and this leg predates it mattering.** The profiler
+gets no CI job because *a wall-clock number from a shared runner whose neighbours we cannot see is not
+evidence*, and this was that exact thing wearing a harness leg's clothes. So the ruling is applied
+rather than the number nudged: **the millisecond figure is recorded, and the CI gate is a ceiling
+loose enough that only an order-of-magnitude regression trips it on any machine** — 500 ms, ten ticks,
+against 21 measured here. The sub-tick claim is a property of a known machine and belongs in this
+ledger with its conditions, which is where it now is.
+
+**And it was a real cost as well as a mismeasured one, so the cost was paid too.** `countHolders` —
+the simulation's own instrumentation — walked every ring every day asking each *deed* for its id,
+which is a sixty-four-bit mix of eight fields, when the ring had been carrying those ids since
+earlier the same session. `Memories.idsOf` hands them over. A hundred days warm went **1.24 ms →
+1.02 ms** and the in-game run **21 ms → 19 ms** — which is itself worth reading honestly: most of the
+increase from session 07's 8 ms is the drains doing real work, not the instrumentation, and the
+instrumentation was simply the part that could be given back.
+
+**Worth recording as a process note rather than only as a fix:** the number was visible on this
+machine before the push — 8 ms became 27 and I optimised it to 21 and moved on, without asking what a
+2.5× margin means on a machine twice as slow. CI asked. The instrument that catches this class is not
+a faster machine; it is noticing when an assertion's margin has quietly become the thing under test.
+
 #### One harness leg, and why it is one rather than none
 
 `WORKPLAN.md` rules that the propagation curve — 60% of a village within two in-game days — is a claim
@@ -2807,10 +2835,11 @@ something happened. **The drain asks the same question of every resident on ever
 turned it into about ninety microseconds of one tick in every two hundred and fifty.
 
 Found by effect rather than by reading: the headless simulation's hundred-day run went from 8 ms to
-27 ms on a live server thread. With the id carried it is **21 ms on Fabric and 23 on NeoForge**, and
-warm in a JVM under test it went 2.06 ms to 1.24 ms. Derived and never persisted, so it is not the
-kind of cache session 03 deleted `Settlement.culture` for — it cannot disagree with the deed beside
-it, because both are filled in from the same record at the same moment and neither is ever mutated.
+27 ms on a live server thread. With the id carried it is **21 ms**, and with the report reading those
+ids too — the fix CI forced, above — **19 ms**. Warm in a JVM under test it went 2.06 ms to 1.02 ms.
+Derived and never persisted, so it is not the kind of cache session 03 deleted `Settlement.culture`
+for: it cannot disagree with the deed beside it, because both are filled in from the same record at
+the same moment and neither is ever mutated.
 
 #### Carried into session 09
 
