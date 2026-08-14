@@ -268,7 +268,9 @@ class SocialValueLedgerTest {
             Entry.consumedBy(Deed.class, "actor", List.of("actor"),
                     DeedBus.class, "applyTo",
                     "The subject of the bond that moves. A deed is a thing somebody did, and the "
-                            + "bond is about whoever did it."),
+                            + "bond is about whoever did it. Session 08 gave it a second value it "
+                            + "can hold — Deed.UNKNOWN_ACTOR, for a story nobody can attribute — "
+                            + "and that is why NpcRegistry.putBond refuses one."),
 
             Entry.consumedBy(Deed.class, "subject", List.of("subject"),
                     Deeds.class, "deltaFor",
@@ -292,11 +294,18 @@ class SocialValueLedgerTest {
                     "Scales the whole delta. A blow for two hearts costs a quarter of what a blow "
                             + "for eight does; SocialEvents.severityOf is what writes it."),
 
-            Entry.consumedBy(Deed.class, "confidence", List.of("confidence"),
+            // Two consumers from session 08, and the second is the interesting one. deltaFor
+            // scales the whole delta by it, so a story heard at second hand moves a bond less than
+            // having watched it. And Deed.isAttributed reads it to decide whether the holder can
+            // name who did it at all — which DeedBus.deliver branches on to move no bond whatsoever,
+            // and Gossip.drain branches on to stop passing the story on. One field, three `if`
+            // statements, and the blur is a mechanic rather than a caption because of it.
+            Entry.consumedBy(Deed.class, "confidence", List.of("confidence", "isAttributed"),
                     Deeds.class, "deltaFor",
                     "Scales the whole delta, so a story heard at second hand moves a bond less "
-                            + "than having watched it. Every deed emitted in session 05 is "
-                            + "first-hand at 100; session 08 is what makes any of them less."),
+                            + "than having watched it. Session 08 added a second reader: below "
+                            + "Deed.ATTRIBUTED the holder cannot name the actor, which stops the "
+                            + "bond moving at all and stops the story travelling."),
 
             // --- Bond, new in session 05 -------------------------------------------------------
             //

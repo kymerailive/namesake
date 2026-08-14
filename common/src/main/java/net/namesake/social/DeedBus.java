@@ -22,7 +22,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Steps 1 to 4 of {@code DESIGN.md} §4: emit, scan for witnesses, record, move the bonds.
+ * Steps 1 to 4 and step 6 of {@code DESIGN.md} §4: emit, scan for witnesses, record, move the
+ * bonds, and hand what is left to the village.
  *
  * <p><b>Step 3 arrived in session 06 and is the reason an emit now writes to the save file.</b> Each
  * witness appends the deed to their ring at {@link Deed#FIRST_HAND}, and so does the subject. What
@@ -39,12 +40,18 @@ import java.util.UUID;
  * MCA's harvest chore scans roughly 72,000 blocks per villager per minute looking for something to
  * do; this scans one box, once, at the moment something actually happens, and then does not run
  * again until something else does. Session 04 measured our steady-state per-tick cost at
- * <i>zero calls</i>, and this session does not change that — the meters below record a burst, not a
- * budget line.
+ * <i>zero calls</i>, and this session does not change that <i>here</i> — {@link Gossip} is where the
+ * first poll in this mod lives, and it is bounded there rather than inherited.
  *
- * <p>Steps 5 to 7 are deliberately absent. The settlement effect belongs to the era ladder, and the
- * gossip deque is session 08; building either early would mean building it against a bond system
- * nobody had watched work yet.
+ * <p><b>Step 6 arrived in session 08 and is one line at the end of {@link #record}.</b> That is what
+ * it should be: {@code DESIGN.md} says reputation travelling to the next settlement is not bolted
+ * onto this pipeline but is the pipeline run one hop further, and a deed entering its settlement's
+ * deque is the hinge that makes that true. Step 7 — the drain, the confidence decay and the blur —
+ * is {@link Gossip}, because it happens later and to a village rather than now and to a crowd.
+ *
+ * <p>Step 5 is still deliberately absent. The settlement effect belongs to the era ladder, and
+ * building it against an unrest model nobody has watched work is the mistake session 05 avoided by
+ * not building this one early.
  */
 public final class DeedBus {
 
@@ -188,16 +195,54 @@ public final class DeedBus {
         int remembered = 0;
         int moved = 0;
         for (Persona persona : reached) {
-            // Step 3 before step 4, and unconditionally. The bond is the tally of how much and the
-            // ring is the record of what, so a witness whose daily allowance is already spent — or
-            // whose share rounds to nothing — has still *seen* it. Coupling the two would mean a
-            // deed type that moves no axis leaves no memory either.
-            if (registry.remember(persona.id(), deed)) {
+            Delivery delivery = deliver(registry, deed, persona, deed.gameDay());
+            if (delivery.remembered()) {
                 remembered++;
             }
-            moved += applyTo(registry, deed, persona);
+            if (delivery.bondMoved()) {
+                moved++;
+            }
         }
+
+        // Step 6: it enters the settlement's deque. After the people who were there, because the
+        // deque is what the village has left to say about it once everyone present already knows.
+        registry.enqueueRumour(deed);
+
         return new Result(deed, witnesses, remembered, moved);
+    }
+
+    /** What one person did with one deed. Two questions, because after session 06 they diverge. */
+    public record Delivery(boolean remembered, boolean bondMoved) {
+    }
+
+    /**
+     * Steps 3 and 4 for one person, whether they watched it or were told about it.
+     *
+     * <p><b>One implementation, reached from two places, and that is the point.</b> A witness and a
+     * hearer differ in exactly two fields of the deed they are handed — its confidence and, past
+     * {@link Deed#ATTRIBUTED}, its actor — and in nothing about what happens next. If gossip had its
+     * own copy of this, a report about propagation would be a report about the copy, which is the
+     * same mistake {@link #record} exists to avoid one level up.
+     *
+     * <p>Step 3 runs before step 4 and unconditionally. The bond is the tally of how much and the
+     * ring is the record of what, so a witness whose daily allowance is already spent — or whose
+     * share rounds to nothing — has still <i>seen</i> it. Coupling the two would mean a deed type
+     * that moves no axis leaves no memory either.
+     *
+     * <p><b>An unattributed story moves no bond, and that is what the blur actually means.</b> A
+     * villager who cannot say who killed the smith has no reason to think worse of <i>you</i>; they
+     * remember that it happened, because it did. This is session 06's asymmetry arriving from the
+     * other side, and it is the {@code if} statement that keeps {@link Deed#confidence()} a mechanic
+     * rather than a caption.
+     *
+     * @param learnedOn the day this person heard it, which is never earlier than the day it
+     *                  happened. A bond stamped with a day earlier than the one it already holds
+     *                  would run the lazy decay backwards on the next read.
+     */
+    public static Delivery deliver(NpcRegistry registry, Deed deed, Persona persona, int learnedOn) {
+        boolean remembered = registry.remember(persona.id(), deed);
+        boolean moved = deed.isAttributed() && applyTo(registry, deed, persona, learnedOn) > 0;
+        return new Delivery(remembered, moved);
     }
 
     /**
@@ -250,14 +295,19 @@ public final class DeedBus {
      * the loop above — because "nothing moved" and "nothing happened" are different claims, and only
      * one of them is what a memory records.
      */
-    private static int applyTo(NpcRegistry registry, Deed deed, Persona persona) {
+    private static int applyTo(NpcRegistry registry, Deed deed, Persona persona, int learnedOn) {
         int[] delta = Deeds.deltaFor(deed, persona);
 
+        // The later of the two, which is the day it reaches this person. For a witness they are the
+        // same day; for a rumour drained after midnight they are not, and handing Bond.apply the
+        // earlier one would stamp lastSeenDay backwards and make the next read decay a day it had
+        // already decayed.
+        int day = Math.max(deed.gameDay(), learnedOn);
         Optional<Bond> existing = registry.bonds().stored(persona.id(), deed.actor());
-        Bond before = existing.orElseGet(() -> Bond.fresh(deed.gameDay()));
+        Bond before = existing.orElseGet(() -> Bond.fresh(day));
         // The ceiling, not the step: a receptive villager's day is worth more than a closed one's.
         // See Personality.allowance for why that is where personality had to move to.
-        Bond after = before.apply(delta, deed.gameDay(), Personality.allowance(persona));
+        Bond after = before.apply(delta, day, Personality.allowance(persona));
 
         if (after.isNothing() && existing.isEmpty()) {
             return 0;

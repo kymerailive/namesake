@@ -530,26 +530,43 @@ public final class NamesakeCommands {
         int today = Deed.dayOf(source.getLevel());
 
         List<Deed> ring = registry.memories().of(personaId);
-        StringBuilder out = new StringBuilder(nameOf(persona))
-                .append(" — ").append(ring.size()).append(" of ").append(Memories.RING_CAPACITY)
-                .append(" remembered, newest first (day ").append(today).append(')');
-        if (ring.isEmpty()) {
-            // Every section prints its own absence — DESIGN.md §11. A ring that prints nothing at
-            // all reads as a broken command rather than as a villager who has seen nothing.
-            out.append("\n  they have not seen anything happen. That is a real answer, not an "
-                    + "empty table.");
-        } else {
-            out.append("\n  day  age  ").append(pad("deed", DEED_COLUMN))
-                    .append(pad("how", 8)).append("by");
-        }
-        for (int slot = ring.size() - 1; slot >= 0; slot--) {
-            out.append('\n').append(describeDeed(ring.get(slot), persona, today));
-        }
-
-        String report = out.toString();
+        String report = String.join("\n", deedRows(persona, ring, today));
         source.sendSuccess(() -> Component.literal(report), false);
         Namesake.LOGGER.info("[debug deeds] {}", report);
         return ring.size();
+    }
+
+    /**
+     * The rows of {@code /namesake debug deeds}, as strings.
+     *
+     * <p>Package-visible and taking values rather than a command context, for the reason
+     * {@link #statRows} and {@link #earnRateRows} are: <b>every state this command can be in has to
+     * be measurable, not the one a fixture happens to produce.</b> Session 07 shipped three lines
+     * over the chat width because every guard it wrote measured a populated table, and the absence
+     * branches — the ones a player meets first — were never rendered. {@code CommandLayoutTest}
+     * enumerates the states this command has rather than sampling one.
+     */
+    static List<String> deedRows(Persona persona, List<Deed> ring, int today) {
+        List<String> lines = new ArrayList<>();
+        // The name on a line of its own, which is not a style choice. Session 03's layout budget
+        // allows a 27-character full name, and the header that used to carry the name and the
+        // counts together came to 64 characters for a real villager — over the chat width, in the
+        // populated state, and invisible until session 08 made this method measurable at all.
+        lines.add(nameOf(persona));
+        lines.add(String.format(Locale.ROOT, "  %d of %d remembered, newest first, day %d",
+                ring.size(), Memories.RING_CAPACITY, today));
+        if (ring.isEmpty()) {
+            // Every section prints its own absence — DESIGN.md §11. A ring that prints nothing at
+            // all reads as a broken command rather than as a villager who has seen nothing.
+            lines.add("  they have not seen anything happen. That is a real");
+            lines.add("  answer, not an empty table.");
+            return lines;
+        }
+        lines.add("  day  age  " + pad("deed", DEED_COLUMN) + pad("how", 8) + "by");
+        for (int slot = ring.size() - 1; slot >= 0; slot--) {
+            lines.add(describeDeed(ring.get(slot), persona, today));
+        }
+        return lines;
     }
 
     /** Widest {@link DeedType} name — {@code STRUCK_RESIDENT} and {@code KILLED_RESIDENT}. */
@@ -576,17 +593,25 @@ public final class NamesakeCommands {
      */
     private static String describeDeed(Deed deed, Persona holder, int today) {
         int ago = today - deed.gameDay();
-        // Three ways to hold a deed, and they are exclusive rather than three columns: a thing that
-        // happened *to* you is never something you heard about. Session 08 turns the third one on.
+        // Four ways to hold a deed, and they are exclusive rather than four columns: a thing that
+        // happened *to* you is never something you heard about, and a story you cannot attribute is
+        // not one you watched. Session 08 turns the last two on, and this column plus the `by` one
+        // next to it is what the owner's exit criterion asks to see on a screen — the difference
+        // between a villager who saw it and one who was told, in a running game.
         String how = holder.id().equals(deed.subject()) ? "to them"
-                : deed.confidence() == Deed.FIRST_HAND ? "saw it" : "heard";
+                : deed.confidence() == Deed.FIRST_HAND ? "saw it"
+                : deed.isAttributed() ? "heard" : "rumour";
 
         StringBuilder row = new StringBuilder(String.format(Locale.ROOT, "  %3d %4s  %s%s%s",
                 deed.gameDay(),
                 ago == 0 ? "" : "-" + ago + "d",
                 pad(deed.type().name(), DEED_COLUMN),
                 pad(how, 8),
-                deed.actor().toString().substring(0, 8)));
+                // "Someone from the north" needs no field: the direction is a function of where the
+                // deed happened, which the deed carries, and where the holder lives, which their
+                // persona carries. Session 09's pool is what turns that into a sentence; here it is
+                // enough to say plainly that nobody knows.
+                deed.isAttributed() ? deed.actor().toString().substring(0, 8) : "nobody  "));
 
         if (deed.severity() != Deed.NOMINAL) {
             row.append(" s").append(deed.severity());
@@ -813,6 +838,10 @@ public final class NamesakeCommands {
         Simulation.Outcome outcome = Simulation.run(plan);
 
         List<String> file = new ArrayList<>(Reports.full(outcome));
+        file.add("");
+        file.addAll(Reports.propagation(plan));
+        file.add("");
+        file.addAll(Reports.residencyWithAndWithoutGossip(plan));
         file.add("");
         file.addAll(Reports.acrossModels(plan));
         file.add("");

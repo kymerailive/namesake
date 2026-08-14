@@ -45,6 +45,7 @@ import net.namesake.social.Bond;
 import net.namesake.social.Deed;
 import net.namesake.social.DeedBus;
 import net.namesake.social.DeedType;
+import net.namesake.social.Gossip;
 import net.namesake.social.Personality;
 import net.namesake.verb.ClientInteractionState;
 import net.namesake.verb.ClientPacketSink;
@@ -412,6 +413,7 @@ public final class AttachBetHarness {
             case 9, 10, 11, 12 -> runWireCheck(server, level);
             case 13, 14, 15 -> runSettlementCheck(server, level);
             case 16, 17 -> runWitnessCheck(server, level);
+            case 18 -> runGossipCheck(server, level);
             default -> finish(server, true);
         }
     }
@@ -603,14 +605,112 @@ public final class AttachBetHarness {
                         player.createCommandSourceStack(), "namesake debug deeds "
                                 + subject.getUUID());
 
-                recordBonds(registry, actor);
-                recordMemories(registry);
-                runTheSimulation(server, player);
-                writeSubjects(level);
-                advance(server, 5);
+                // Session 08. Three more feedings, one at each villager who could see, so the
+                // settlement has five distinct stories to tell rather than two. That is not padding:
+                // whether one particular villager takes one particular telling is a coin at
+                // Gossip.TRANSFER_CHANCE over persona ids a real game mints at random, and a leg
+                // that runs on every push cannot be a 3% coin. Five stories against two hearers is
+                // twenty independent flips, which puts "nobody heard anything" at two in ten
+                // thousand — and the assertion below is on the deterministic half besides.
+                for (UUID witness : WITNESSES_IN_SIGHT) {
+                    boundEntity(server, witness)
+                            .filter(entity -> entity instanceof Villager)
+                            .ifPresent(entity -> DeedBus.emit(
+                                    level, DeedType.FED_HUNGRY, player, (Villager) entity));
+                }
+                gossipQueuedAtStart = registry.gossip().size();
+                record(gossipQueuedAtStart > 0,
+                        "GOSSIP step 6: " + gossipQueuedAtStart + " story(s) entered the "
+                                + "settlement's deque when the deeds were emitted");
+                record(registry.memories().of(witnessBehindAWall).isEmpty()
+                                && registry.memories().of(witnessOutOfRange).isEmpty(),
+                        "GOSSIP neither villager who could not see it knows anything yet");
+
+                // Five stories, two drains each, one drain per settlement per 250 ticks. Waiting on
+                // game time rather than on chunk IO, so sprinting is the right instrument here —
+                // and it is a poll against the condition with a deadline, never a blind sprint,
+                // because a blind sprint cannot tell "not yet" from "never".
+                beginAwait(6000);
             }
             default -> finish(server, true);
         }
+    }
+
+    /** How many stories the settlement had to tell before the drain was given any ticks. */
+    private static int gossipQueuedAtStart;
+
+    /**
+     * <b>Session 08's one leg, and it is the claim no unit test in {@code :common} can make.</b>
+     *
+     * <p>The propagation <i>curve</i> — 60% of a village within two in-game days — is a claim about
+     * time, and {@code WORKPLAN.md} rules that those belong in {@code net.namesake.sim}, which is
+     * where it is. What only a running game can show is everything on the other side of the seam:
+     * that a loader's server-tick hook is actually wired to {@link Gossip#onServerTick}, that the
+     * 250-tick cadence fires against a real {@code MinecraftServer}'s tick count, and that a deque
+     * written by an emit is spent by a tick rather than by a test calling a method.
+     *
+     * <p><b>And the assertion is the thesis in one line.</b> Session 05 proved the villager behind a
+     * wall records nothing, five blocks away and well inside the box. This proves that two in-game
+     * hours later they have heard about it anyway — at a confidence that says they were told rather
+     * than that they saw it. The wall stops them seeing; it does not stop the village talking.
+     */
+    private static void runGossipCheck(MinecraftServer server, ServerLevel level) {
+        NpcRegistry registry = NpcRegistry.get(server);
+        if (stillWaiting(server, () -> registry.gossip().isEmpty(), true,
+                "the settlement to finish telling its " + gossipQueuedAtStart + " story(s)")) {
+            return;
+        }
+
+        record(registry.gossip().isEmpty(),
+                "GOSSIP the drain ran on the server tick hook and spent every story: "
+                        + registry.gossip().size() + " left of " + gossipQueuedAtStart);
+
+        List<Deed> wall = registry.memories().of(witnessBehindAWall);
+        List<Deed> high = registry.memories().of(witnessOutOfRange);
+        int toldOf = wall.size() + high.size();
+        record(toldOf > 0,
+                "GOSSIP the villager behind the wall and the one forty blocks up were told about "
+                        + toldOf + " thing(s) they could not possibly have seen");
+        record(wall.stream().noneMatch(deed -> deed.confidence() == Deed.FIRST_HAND)
+                        && high.stream().noneMatch(deed -> deed.confidence() == Deed.FIRST_HAND),
+                "GOSSIP and not one of them at first hand — they were told, they did not see it");
+
+        // Every confidence anywhere in the world, which is the "descending" half of the criterion
+        // and the bound on how far a story travels, read off the save rather than off the constants.
+        Set<Integer> confidences = new java.util.TreeSet<>();
+        for (Persona persona : registry.all()) {
+            registry.memories().of(persona.id())
+                    .forEach(deed -> confidences.add((int) deed.confidence()));
+        }
+        record(confidences.stream().allMatch(c -> c == Deed.FIRST_HAND || c == 70 || c == 49),
+                "GOSSIP the whole world holds three confidences and no others: " + confidences
+                        + " — 100 watched it, 70 was told, 49 cannot name who");
+
+        long unattributed = registry.all().stream()
+                .flatMap(persona -> registry.memories().of(persona.id()).stream())
+                .filter(deed -> !deed.isAttributed())
+                .count();
+        record(registry.all().stream().noneMatch(persona ->
+                        registry.bonds().stored(persona.id(), Deed.UNKNOWN_ACTOR).isPresent()),
+                "GOSSIP " + unattributed + " unattributed rumour(s) in this village and not one "
+                        + "bond about nobody — a story you cannot attribute moves no opinion");
+
+        // The instrument the owner's half of the exit criterion is read with, on a villager who was
+        // told rather than one who watched, through the real dispatcher.
+        ServerPlayer player = player(server);
+        boundEntity(server, witnessBehindAWall).ifPresent(entity ->
+                server.getCommands().performPrefixedCommand(
+                        player.createCommandSourceStack(),
+                        "namesake debug deeds " + entity.getUUID()));
+
+        // Recorded here rather than at the end of step 17, so the verify phase compares against the
+        // state gossip actually left behind. That makes the existing ring-reload check cover a
+        // schema-6 world with rumours in it for free.
+        recordBonds(registry, player.getUUID());
+        recordMemories(registry);
+        runTheSimulation(server, player);
+        writeSubjects(level);
+        advance(server, 5);
     }
 
     // --- session 07: the simulation, inside a real server ------------------------------------------
@@ -1432,8 +1532,8 @@ public final class AttachBetHarness {
     }
 
     /**
-     * The additive migrations — 3 → 4 and 4 → 5 — read out of a world genuinely written at that
-     * version.
+     * The additive migrations — 3 → 4, 4 → 5 and 5 → 6 — read out of a world genuinely written at
+     * that version.
      *
      * <p>Everything asserted here is a negative, which is unusual and is the point. Both of these
      * migrations add a table rather than rewriting a value, so the ways they can be wrong are: they
@@ -1466,9 +1566,23 @@ public final class AttachBetHarness {
         record(registry.settlements().size() == 1,
                 "DATAFIXER " + step + " the settlement table came through the migration ("
                         + registry.settlements().size() + ")");
-        record(registry.memories().size() == 0,
-                "DATAFIXER " + step + " a world with no deed rings loads as having none, not as "
-                        + "damaged (" + registry.memories().size() + ")");
+        // The ring table is the assertion that changed at 5 → 6, exactly as the bond table changed
+        // at 4 → 5, and for the same reason: a world written at schema 5 has rings in it, and they
+        // are what an absent gossip table read as damage would silently cost this world.
+        if (onDisk >= 5) {
+            record(registry.memories().size() > 0,
+                    "DATAFIXER " + step + " the " + registry.memories().size() + " deed(s) across "
+                            + registry.memories().holders() + " ring(s) the schema-5 build wrote "
+                            + "came through intact");
+        } else {
+            record(registry.memories().size() == 0,
+                    "DATAFIXER " + step + " a world with no deed rings loads as having none, not as "
+                            + "damaged (" + registry.memories().size() + ")");
+        }
+        record(registry.gossip().size() == 0,
+                "DATAFIXER " + step + " a world written before schema 6 has no rumours in flight, "
+                        + "and an absent gossip table reads as that rather than as damage ("
+                        + registry.gossip().size() + ")");
         if (onDisk >= 4) {
             record(registry.bonds().size() > 0,
                     "DATAFIXER " + step + " the " + registry.bonds().size() + " bond(s) the "

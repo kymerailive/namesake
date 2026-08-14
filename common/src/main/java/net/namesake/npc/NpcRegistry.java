@@ -16,6 +16,7 @@ import net.namesake.settlement.Settlements;
 import net.namesake.social.Bond;
 import net.namesake.social.Bonds;
 import net.namesake.social.Deed;
+import net.namesake.social.Gossip;
 import net.namesake.social.Memories;
 
 import java.util.Collection;
@@ -31,14 +32,16 @@ import java.util.function.Predicate;
  * Every persona in the world, keyed by persona id, plus the binding from a persona to the entity
  * currently carrying it, plus the settlements those personas belong to.
  *
- * <p><b>Settlements, bonds and memories live here rather than in files of their own.</b> A persona
- * references its settlement by id, a bond references a persona by id, and a deed references both, so
- * two files could be torn apart by a crash between two writes and leave every villager in a village
- * pointing at a settlement that no longer exists, or every bond in the world pointing at people who
- * do not. One file means one schema version that cannot disagree with itself and one load path to
- * get right. Ruled for settlements in session 03, re-ruled for bonds in session 05, and re-ruled
- * again for the deed rings in session 06 — where the size counter-argument was finally big enough to
- * be worth measuring rather than dismissing. See {@link Bonds} and {@link Memories}.
+ * <p><b>Settlements, bonds, memories and gossip live here rather than in files of their own.</b> A
+ * persona references its settlement by id, a bond references a persona by id, and a deed references
+ * both, so two files could be torn apart by a crash between two writes and leave every villager in a
+ * village pointing at a settlement that no longer exists, or every bond in the world pointing at
+ * people who do not. One file means one schema version that cannot disagree with itself and one load
+ * path to get right. Ruled for settlements in session 03, re-ruled for bonds in session 05, again
+ * for the deed rings in session 06 — where the size counter-argument was finally big enough to be
+ * worth measuring rather than dismissing — and again for the gossip deques in session 08, where a
+ * queued rumour is a {@link Deed}, which points at a persona and a settlement by id. See
+ * {@link Bonds}, {@link Memories} and {@link Gossip}.
  *
  * <p>Stored once on the overworld's data storage rather than per-dimension: a persona is a person,
  * not a thing in a place, and it has to be findable from any dimension.
@@ -62,6 +65,7 @@ public final class NpcRegistry extends SavedData {
     private final Settlements settlements = new Settlements();
     private final Bonds bonds = new Bonds();
     private final Memories memories = new Memories();
+    private final Gossip gossip = new Gossip();
 
     private int loadedSchemaVersion = NpcSchema.CURRENT;
     private boolean readOnly;
@@ -135,6 +139,20 @@ public final class NpcRegistry extends SavedData {
         return memories;
     }
 
+    /**
+     * What each settlement is still talking about.
+     *
+     * <p>Read freely; written through {@link #enqueueRumour} and {@code Gossip.drain}, which are the
+     * two doors that mark the file dirty. The drain is the one place in this mod where a persisted
+     * table changes on a tick rather than on an event, so it is worth saying where the dirty flag
+     * comes from: a drain marks it because the village's copy of a story is worse attested
+     * afterwards than it was before, and a rumour that quietly failed to degrade across a reload
+     * would travel further than the design permits.
+     */
+    public Gossip gossip() {
+        return gossip;
+    }
+
     public int size() {
         return personas.size();
     }
@@ -203,6 +221,17 @@ public final class NpcRegistry extends SavedData {
      * not written is indistinguishable from a bond written and lost.
      */
     public void putBond(UUID holder, UUID about, Bond bond) {
+        if (Deed.UNKNOWN_ACTOR.equals(about)) {
+            // The backstop to DeedBus.deliver's blur guard, and two doors rather than one for the
+            // reason the profiling-fixture refusal has two: what is being guarded against is silent.
+            // A bond about nobody loads perfectly, reads as a real relationship forever after, and
+            // is a persisted social value with no person on the other end of it.
+            Namesake.LOGGER.error(
+                    "Refused a bond from persona {} about the unknown actor: an unattributed rumour "
+                            + "moves nobody's opinion of anybody, because nobody knows who did it. "
+                            + "Nothing was written.", holder);
+            return;
+        }
         if (personas.containsKey(about)) {
             Namesake.LOGGER.error(
                     "Refused a bond from persona {} about persona {}: NPC-to-NPC bonds have no "
@@ -235,6 +264,29 @@ public final class NpcRegistry extends SavedData {
      */
     public boolean remember(UUID holder, Deed deed) {
         if (!memories.remember(holder, deed)) {
+            return false;
+        }
+        setDirty();
+        return true;
+    }
+
+    /**
+     * Puts a deed into its own settlement's deque. {@code DESIGN.md} §4 step 6.
+     *
+     * <p>The settlement is read off the deed rather than passed in, for session 05's reason in a new
+     * place: a deed that has to be <i>told</i> where it happened is a deed that can be told wrong,
+     * and it already carries the answer. A deed with no settlement — one done in the wilderness — is
+     * refused by {@link Gossip#enqueue} rather than filed under the unassigned sentinel, because
+     * there is no village there to talk about it.
+     *
+     * <p>Dirty only when the deque actually changed, on {@link #bind}'s rule. Nine identical
+     * feedings are one deed and therefore one rumour, so eight of them must not have Minecraft
+     * rewrite every persona, settlement, bond and ring in the world at the next autosave.
+     *
+     * @return true if the deque changed
+     */
+    public boolean enqueueRumour(Deed deed) {
+        if (!gossip.enqueue(deed.settlementId(), deed)) {
             return false;
         }
         setDirty();
@@ -357,6 +409,7 @@ public final class NpcRegistry extends SavedData {
         settlements.save(tag);
         bonds.save(tag);
         memories.save(tag);
+        gossip.save(tag);
         return tag;
     }
 
@@ -402,6 +455,7 @@ public final class NpcRegistry extends SavedData {
         unreadable += registry.settlements.readFrom(tag);
         unreadable += registry.bonds.readFrom(tag);
         unreadable += registry.memories.readFrom(tag);
+        unreadable += registry.gossip.readFrom(tag);
 
         if (unreadable > 0) {
             // Saving now would drop those records for good. Better a world that loses nothing and
@@ -428,10 +482,11 @@ public final class NpcRegistry extends SavedData {
 
         Namesake.LOGGER.info(
                 "Loaded {} persona(s), {} bound to an entity, {} settlement(s), {} bond(s), "
-                        + "{} deed(s) across {} ring(s) (schema {})",
+                        + "{} deed(s) across {} ring(s), {} rumour(s) in {} settlement(s) (schema {})",
                 registry.personas.size(), registry.personaToEntity.size(),
                 registry.settlements.size(), registry.bonds.size(),
-                registry.memories.size(), registry.memories.holders(), result.resultVersion());
+                registry.memories.size(), registry.memories.holders(),
+                registry.gossip.size(), registry.gossip.settlements(), result.resultVersion());
         return registry;
     }
 }

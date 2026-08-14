@@ -11,6 +11,7 @@ import net.namesake.social.Bond;
 import net.namesake.social.Deed;
 import net.namesake.social.DeedBus;
 import net.namesake.social.DeedType;
+import net.namesake.social.Gossip;
 import net.namesake.social.Personality;
 import net.namesake.social.SocialEvents;
 
@@ -127,7 +128,8 @@ public final class Simulation {
             byte defensibility,
             PlayerModel model,
             int focus,
-            float witnessFraction) {
+            float witnessFraction,
+            boolean gossip) {
 
         public Plan {
             if (days < 1) {
@@ -146,22 +148,42 @@ public final class Simulation {
         public static Plan standard(long seed, int days, PlayerModel model) {
             return new Plan(seed, days, TYPICAL_RESIDENTS, 3, Culture.VALE.id(),
                     net.namesake.settlement.Specialty.FARMING.id(), (byte) 70,
-                    model, TYPICAL_FOCUS, TYPICAL_WITNESS_FRACTION);
+                    model, TYPICAL_FOCUS, TYPICAL_WITNESS_FRACTION, true);
         }
 
         public Plan with(PlayerModel other) {
             return new Plan(seed, days, residents, households, cultureId, specialty, defensibility,
-                    other, focus, witnessFraction);
+                    other, focus, witnessFraction, gossip);
         }
 
         public Plan withWitnessFraction(float fraction) {
             return new Plan(seed, days, residents, households, cultureId, specialty, defensibility,
-                    model, focus, fraction);
+                    model, focus, fraction, gossip);
         }
 
         public Plan withCulture(byte culture) {
             return new Plan(seed, days, residents, households, culture, specialty, defensibility,
-                    model, focus, witnessFraction);
+                    model, focus, witnessFraction, gossip);
+        }
+
+        public Plan withDays(int otherDays) {
+            return new Plan(seed, otherDays, residents, households, cultureId, specialty,
+                    defensibility, model, focus, witnessFraction, gossip);
+        }
+
+        /**
+         * The same village with step 7 of the pipeline switched off.
+         *
+         * <p><b>A switch rather than a second instrument</b>, because the question it exists to
+         * answer is a difference: session 07 measured that no three residents ever reach 20 warmth
+         * in a hundred days, and gossip is plausibly the fix — more villagers holding a deed is more
+         * villagers with contact days, and contact days are what stop the decay eating what was
+         * earned. Running the same plan both ways and putting the residency tables side by side is
+         * the whole experiment, and it costs one column.
+         */
+        public Plan withGossip(boolean spreading) {
+            return new Plan(seed, days, residents, households, cultureId, specialty, defensibility,
+                    model, focus, witnessFraction, spreading);
         }
     }
 
@@ -176,8 +198,8 @@ public final class Simulation {
      *                the true answer and the ring's answer is one of the things this session is
      *                supposed to hand over.
      */
-    public record Moment(int day, DeedType type, UUID subject, List<UUID> reached, int witnesses,
-                         int remembered, int bondsMoved) {
+    public record Moment(int day, long deedId, long blurredId, DeedType type, UUID subject,
+                         List<UUID> reached, int witnesses, int remembered, int bondsMoved) {
 
         public Moment {
             reached = List.copyOf(reached);
@@ -197,10 +219,31 @@ public final class Simulation {
                           int firstContactDay, int peakWarmth, int peakDay) {
     }
 
+    /**
+     * How far one story got, day by day. <b>The exit criterion, as a data structure.</b>
+     *
+     * <p>Keyed on the <i>attributed</i> deed id, because a blurred copy is a different deed by
+     * construction — the actor is part of the derivation — and the question being asked is about the
+     * event rather than about the account of it. So {@link #unattributed} is a subset of
+     * {@link #holders}: everybody who holds this story, and how many of them could not tell you who
+     * did it.
+     *
+     * @param holders      how many residents held this story at the close of each day
+     * @param unattributed how many of them held it with no name attached
+     */
+    public record Spread(long deedId, long blurredId, DeedType type, int emittedOnDay,
+                         int[] holders, int[] unattributed) {
+
+        /** What share of the settlement held it by the close of {@code day}. */
+        public float coverage(int day, int residents) {
+            return residents == 0 ? 0F : (float) holders[day] / residents;
+        }
+    }
+
     /** Everything one run produced. */
     public record Outcome(Plan plan, NpcRegistry registry, List<Persona> residents,
                           Settlement settlement, List<Moment> chronicle,
-                          Map<UUID, History> histories, long elapsedNanos) {
+                          Map<UUID, History> histories, List<Spread> spread, long elapsedNanos) {
 
         /** The ledger's exit criterion is written in seconds; a run is measured in microseconds. */
         public long elapsedMillis() {
@@ -265,6 +308,11 @@ public final class Simulation {
             peakDay.put(resident.id(), -1);
         }
 
+        // One row per deed the run emits, filled in at the close of every day. Keyed on the
+        // attributed id; the blurred twin is counted into the same row, because a story is one
+        // story however badly it is remembered.
+        Map<Long, Spread> spread = new LinkedHashMap<>();
+
         int visit = 0;
         for (int day = 0; day < plan.days(); day++) {
             if (day % plan.model().visitEveryDays() == 0) {
@@ -277,10 +325,25 @@ public final class Simulation {
                     DeedType type = strike && i == 0
                             ? DeedType.STRUCK_RESIDENT
                             : kindnessFor(plan, day, i);
-                    chronicle.add(emit(registry, plan, settlement, residents, day, visit, i, type));
+                    Moment moment = emit(registry, plan, settlement, residents, day, visit, i, type);
+                    chronicle.add(moment);
+                    spread.computeIfAbsent(moment.deedId(), id -> new Spread(id, moment.blurredId(),
+                            moment.type(), moment.day(), new int[plan.days()], new int[plan.days()]));
                 }
                 visit++;
             }
+
+            // Step 7, at the cadence DESIGN.md §8 rules it: four an in-game hour, ninety-six a day.
+            // Run after the day's deeds rather than before, which is the conservative order — a
+            // deed emitted at nine in the morning gets about sixty drains before midnight in a real
+            // game, and a story is exhausted by two.
+            if (plan.gossip()) {
+                for (int drain = 0; drain < Gossip.DRAINS_PER_DAY; drain++) {
+                    Gossip.drainEverySettlement(registry, day);
+                }
+            }
+
+            countHolders(registry, residents, spread, day);
 
             // The day's close, read the way a mechanic would read it: through the decayed view,
             // because that is the number any consumer of a bond actually sees.
@@ -319,7 +382,7 @@ public final class Simulation {
 
         return new Outcome(plan, registry, List.copyOf(residents), settlement,
                 Collections.unmodifiableList(chronicle), Collections.unmodifiableMap(histories),
-                System.nanoTime() - begun);
+                List.copyOf(spread.values()), System.nanoTime() - begun);
     }
 
     /**
@@ -360,9 +423,37 @@ public final class Simulation {
                 : Deed.of(type, PLAYER, subject.id(), settlement.id(), day);
 
         DeedBus.Result result = DeedBus.record(registry, deed, reached, reached.size() - 1);
-        return new Moment(day, type, subject.id(),
+        return new Moment(day, deed.id(), deed.blurredId(), type, subject.id(),
                 reached.stream().map(Persona::id).toList(), result.witnesses(),
                 result.remembered(), result.bondsMoved());
+    }
+
+    /**
+     * How many residents held each story at the close of {@code day}.
+     *
+     * <p>Read off the rings rather than accumulated as the deeds land, for the reason session 07
+     * gave for reading bonds through the decayed view: <b>the report has to say what a villager
+     * actually holds</b>, and a ring evicts. A counter incremented on delivery would keep reporting a
+     * villager as a holder long after the thirty-third distinct thing pushed the story out.
+     *
+     * <p>Both ids are counted into one row. A blurred copy is a different deed by construction —
+     * the actor is part of the derivation — and the question is about the event rather than about
+     * the account of it.
+     */
+    private static void countHolders(NpcRegistry registry, List<Persona> residents,
+                                     Map<Long, Spread> spread, int day) {
+        Map<Long, Integer> held = new LinkedHashMap<>();
+        for (Persona resident : residents) {
+            for (Deed deed : registry.memories().of(resident.id())) {
+                held.merge(deed.id(), 1, Integer::sum);
+            }
+        }
+        for (Spread story : spread.values()) {
+            int named = held.getOrDefault(story.deedId(), 0);
+            int unnamed = held.getOrDefault(story.blurredId(), 0);
+            story.holders()[day] = named + unnamed;
+            story.unattributed()[day] = unnamed;
+        }
     }
 
     /**

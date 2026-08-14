@@ -26,7 +26,7 @@ import java.util.function.ToIntFunction;
 public final class NpcSchema {
 
     /** Bump this and add a {@link Fix} in the same commit. Never one without the other. */
-    public static final int CURRENT = 5;
+    public static final int CURRENT = 6;
 
     /**
      * A registry written before {@link #KEY_VERSION} existed cannot occur — the key has been
@@ -55,7 +55,9 @@ public final class NpcSchema {
             new Fix(3, "bonds added; nothing to rewrite, an absent table means nobody has met anyone",
                     NpcSchema::fixBondTableAdded),
             new Fix(4, "deed rings added; nothing to rewrite, an absent table means nobody has "
-                    + "witnessed anything", NpcSchema::fixMemoryTableAdded)
+                    + "witnessed anything", NpcSchema::fixMemoryTableAdded),
+            new Fix(5, "settlement gossip deques added; nothing to rewrite, an absent table means "
+                    + "no rumour was in flight", NpcSchema::fixGossipTableAdded)
     );
 
     private NpcSchema() {
@@ -229,6 +231,36 @@ public final class NpcSchema {
      * @return zero, always, and the log line says so
      */
     private static int fixMemoryTableAdded(CompoundTag root) {
+        return 0;
+    }
+
+    /**
+     * Schema 6 adds the per-settlement gossip deque, and there is nothing to rewrite.
+     * <b>The third additive migration running, and it is still stated rather than assumed.</b>
+     *
+     * <p>What makes it additive is the same thing that made schema 5 additive, and it is worth
+     * naming because session 08 could easily have made it false. A queued rumour is a
+     * {@link net.namesake.social.Deed} — the same record, the same seven fields, the same codec that
+     * has been on disk since schema 5. <b>Session 08 added no field to any persisted record.</b> The
+     * confidence a story has left was already a field, and the hop count that would otherwise have
+     * needed one is derived from it, so there is no older shape of anything on disk to reconcile: a
+     * schema-5 save simply has no {@code gossip} key.
+     *
+     * <p>Which is where the only real risk sits, so that is where the test is. Read as damage,
+     * {@link NpcRegistry} goes read-only and a world that has been played for a week silently stops
+     * saving its personas, settlements, bonds <i>and</i> rings — because there is one file.
+     * {@code NpcSchemaTest} pins the absence, and it has been reverted and watched to fail.
+     *
+     * <p><b>The assertion is deliberately not on the rewrite count</b>, for the third time: zero is
+     * also what a fix that does nothing at all returns, and session 03 broke the 2 → 3 fix into
+     * exactly that and turned the build red for it. The evidence is
+     * {@link net.namesake.social.Gossip#readFrom} returning an empty table and a writable registry
+     * for a tag with no {@code gossip} key, and the deed rings a schema-5 build wrote coming through
+     * beside it.
+     *
+     * @return zero, always, and the log line says so
+     */
+    private static int fixGossipTableAdded(CompoundTag root) {
         return 0;
     }
 

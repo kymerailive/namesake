@@ -61,7 +61,7 @@ class CommandLayoutTest {
     }
 
     /**
-     * The widest a deed row can be: the longest deed type, a two-digit age, and all three of the
+     * The widest a deed row can be: the longest deed type, a three-digit age, and all three of the
      * markers that only appear when a field is carrying information.
      */
     private static String widestRow() throws Exception {
@@ -69,7 +69,7 @@ class CommandLayoutTest {
         // another village — every marker on at once. The age is three digits because session 07's
         // harness runs a hundred in-game days, which is the widest that column realistically gets.
         Deed worst = new Deed(DeedType.STRUCK_RESIDENT.id(), ACTOR, UUID.randomUUID(), 4, 12,
-                (byte) 60, (byte) 72);
+                (byte) 60, (byte) 70);
         Method describe = NamesakeCommands.class.getDeclaredMethod(
                 "describeDeed", Deed.class, Persona.class, int.class);
         describe.setAccessible(true);
@@ -109,12 +109,54 @@ class CommandLayoutTest {
     void anInformativeRowSaysWhatItIs() throws Exception {
         String row = widestRow();
         assertTrue(row.contains("s60"), () -> "a half-strength blow must show its severity: " + row);
-        assertTrue(row.contains("c72"), () -> "second-hand must show its confidence: " + row);
+        assertTrue(row.contains("c70"), () -> "second-hand must show its confidence: " + row);
         assertTrue(row.contains("@s4"), () -> "another village's business must say so: " + row);
         // "heard" replaces "saw it" rather than sitting beside it: a thing that happened to you is
-        // never something you were told about, so the three states are exclusive and cost one column.
+        // never something you were told about, so the four states are exclusive and cost one column.
         assertTrue(row.contains("heard"), () -> "second-hand must read as heard, not saw it: " + row);
         assertFalse(row.contains("saw it"), () -> "and not both: " + row);
+    }
+
+    /**
+     * <b>The owner's half of session 08's exit criterion, held where a unit test can hold it.</b>
+     *
+     * <p><i>{@code /namesake debug deeds} must show me the difference between a villager who saw it
+     * and one who was told, on screen, in a running game.</i> The running-game half is the harness's;
+     * this is the half that says the three rows are actually distinguishable from each other rather
+     * than three renderings of the same thing.
+     */
+    @Test
+    @DisplayName("seeing it, being told, and hearing a rumour are three visibly different rows")
+    void theThreeWaysOfKnowingLookDifferent() throws Exception {
+        Deed firstHand = Deed.of(DeedType.KILLED_RESIDENT, ACTOR, UUID.randomUUID(), 3, 12);
+        Deed heard = firstHand.retold();
+        Deed rumour = heard.retold();
+
+        Method describe = NamesakeCommands.class.getDeclaredMethod(
+                "describeDeed", Deed.class, Persona.class, int.class);
+        describe.setAccessible(true);
+        String saw = (String) describe.invoke(null, firstHand, holder(), 12);
+        String told = (String) describe.invoke(null, heard, holder(), 12);
+        String rumoured = (String) describe.invoke(null, rumour, holder(), 12);
+
+        assertTrue(saw.contains("saw it"), () -> saw);
+        assertFalse(saw.contains(" c"), () -> "first-hand carries no confidence marker: " + saw);
+        assertTrue(saw.contains(ACTOR.toString().substring(0, 8)), () -> "and it names you: " + saw);
+
+        assertTrue(told.contains("heard"), () -> told);
+        assertTrue(told.contains("c70"), () -> "and says how well they know it: " + told);
+        assertTrue(told.contains(ACTOR.toString().substring(0, 8)), () -> "and still names you: " + told);
+
+        assertTrue(rumoured.contains("rumour"), () -> rumoured);
+        assertTrue(rumoured.contains("c49"), () -> rumoured);
+        assertTrue(rumoured.contains("nobody"), () -> "and nobody can say who: " + rumoured);
+        assertFalse(rumoured.contains(ACTOR.toString().substring(0, 8)),
+                () -> "a blurred row must not leak the actor it blurred: " + rumoured);
+
+        for (String row : List.of(saw, told, rumoured)) {
+            assertTrue(row.length() <= CHAT_WIDTH,
+                    () -> "a deed row is " + row.length() + " characters:\n" + row);
+        }
     }
 
     /**
@@ -226,7 +268,7 @@ class CommandLayoutTest {
         Simulation.Plan plan = new Simulation.Plan(20260814L, 200, 40, 8,
                 net.namesake.culture.Culture.KARSK.id(),
                 net.namesake.settlement.Specialty.MASONRY.id(), (byte) 40,
-                PlayerModel.SATURATING, 3, 0.9F);
+                PlayerModel.SATURATING, 3, 0.9F, true);
         return Simulation.run(plan);
     }
 
@@ -263,6 +305,15 @@ class CommandLayoutTest {
         }
         DialogueStats strangers = DialogueStats.of(unmet, viewer, 40);
 
+        // Session 08's rows, in the four states a ring can be in. The last two are the ones that
+        // did not exist before this session: a villager who was told, and a villager who was told
+        // by somebody who had already forgotten who did it.
+        Persona holder = outcome.residents().get(0);
+        Deed firstHand = Deed.of(DeedType.KILLED_RESIDENT, viewer, holder.id(),
+                holder.settlementId(), 198);
+        Deed heard = firstHand.retold();
+        Deed rumour = heard.retold();
+
         return List.of(
                 Map.entry("stats, populated", NamesakeCommands.statRows(
                         statsAtScale(outcome), outcome.registry(), outcome.player())),
@@ -275,7 +326,15 @@ class CommandLayoutTest {
                 Map.entry("earnrate, a village that has not met you",
                         NamesakeCommands.earnRateRows(strangers, viewer)),
                 Map.entry("earnrate, an empty world", NamesakeCommands.earnRateRows(none, viewer)),
-                Map.entry("earnrate, no viewer", NamesakeCommands.earnRateRows(console, null)));
+                Map.entry("earnrate, no viewer", NamesakeCommands.earnRateRows(console, null)),
+                Map.entry("deeds, a full ring", NamesakeCommands.deedRows(holder,
+                        outcome.registry().memories().of(holder.id()), outcome.plan().days() - 1)),
+                Map.entry("deeds, a villager who has seen nothing",
+                        NamesakeCommands.deedRows(holder, List.of(), 0)),
+                Map.entry("deeds, a story they were told", NamesakeCommands.deedRows(
+                        holder, List.of(firstHand, heard), 200)),
+                Map.entry("deeds, a story nobody can attribute", NamesakeCommands.deedRows(
+                        holder, List.of(rumour), 200)));
     }
 
     @Test
@@ -385,6 +444,8 @@ class CommandLayoutTest {
         everything.addAll(Reports.full(outcome));
         everything.addAll(Reports.acrossModels(outcome.plan()));
         everything.addAll(Reports.witnessSensitivity(outcome.plan()));
+        everything.addAll(Reports.propagation(outcome.plan()));
+        everything.addAll(Reports.residencyWithAndWithoutGossip(outcome.plan().withDays(30)));
 
         for (String line : everything) {
             assertFalse(line.contains("\r"),

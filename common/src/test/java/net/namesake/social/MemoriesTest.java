@@ -209,8 +209,66 @@ class MemoriesTest {
         assertFalse(memories.remember(ANNA, retold));
         assertEquals(1, memories.of(ANNA).size());
         assertEquals(Deed.FIRST_HAND, memories.of(ANNA).get(0).confidence(),
-                "the copy already held is kept; which copy wins when they disagree is session 08's "
-                        + "to rule, and today they never do");
+                "being told about a thing you watched must not degrade your memory of it");
+    }
+
+    /**
+     * <b>Session 08's ruling on the question session 06 parked here by name.</b>
+     *
+     * <p>{@link Deed#id()} excludes confidence, so two copies of one event can meet in a ring holding
+     * different numbers. <b>The better-attested copy wins, and it does not move.</b> Both halves are
+     * load-bearing and the second is the one that protects the ring: refreshing a slot would let a
+     * retelling push first-hand memories out simply by being repeated.
+     *
+     * <p>The upgrade direction is unreachable in the mod as it stands — a deed reaches its witnesses
+     * at emit and enters the deque afterwards, so first-hand always arrives first — and the rule is
+     * here so that session 10's second settlement and session 16's NPC actors meet a ring that
+     * already behaves correctly rather than one that behaves correctly by accident.
+     */
+    @Test
+    @DisplayName("the better-attested copy of an event wins, and it does not move in the ring")
+    void theBetterAttestedCopyWinsWithoutReordering() {
+        Deed heard = onDay(5).retold();
+        assertEquals(70, heard.confidence());
+
+        Memories memories = new Memories();
+        memories.remember(ANNA, heard);
+        memories.remember(ANNA, onDay(9));
+
+        assertTrue(memories.remember(ANNA, onDay(5)),
+                "watching a thing you had only been told about is a change to what you know");
+        assertEquals(2, memories.of(ANNA).size(), "and not a second row for one event");
+        assertEquals(Deed.FIRST_HAND, memories.held(ANNA, heard.id()).orElseThrow().confidence());
+        assertEquals(List.of(5, 9), memories.of(ANNA).stream().map(Deed::gameDay).toList(),
+                "and the ring's order is decided by when things happened, never by when somebody "
+                        + "last mentioned them");
+
+        // Downward is refused outright, which is what stops gossip touching a ring at all.
+        assertFalse(memories.remember(ANNA, heard));
+        assertEquals(Deed.FIRST_HAND, memories.held(ANNA, heard.id()).orElseThrow().confidence());
+    }
+
+    /**
+     * The other half of the ruling, and the reason the eviction question is not reopened by it.
+     *
+     * <p>An upgrade replaces an entry in its own slot, so it cannot push anything out. A full ring
+     * that is told the same thing better stays full of the same thirty-two events.
+     */
+    @Test
+    @DisplayName("a better-attested copy evicts nothing, because it takes the slot it already had")
+    void anUpgradeEvictsNothing() {
+        Memories memories = new Memories();
+        for (int day = 0; day < Memories.RING_CAPACITY; day++) {
+            memories.remember(ANNA, onDay(day).retold());
+        }
+        assertEquals(Memories.RING_CAPACITY, memories.of(ANNA).size());
+
+        for (int day = 0; day < Memories.RING_CAPACITY; day++) {
+            assertTrue(memories.remember(ANNA, onDay(day)));
+        }
+        assertEquals(Memories.RING_CAPACITY, memories.of(ANNA).size());
+        assertEquals(0, memories.of(ANNA).get(0).gameDay(), "the oldest is still the oldest");
+        assertTrue(memories.of(ANNA).stream().allMatch(deed -> deed.confidence() == Deed.FIRST_HAND));
     }
 
     // --- removal -------------------------------------------------------------------------------

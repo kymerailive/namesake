@@ -6,6 +6,7 @@ import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 import net.namesake.settlement.Settlements;
 import net.namesake.social.Bonds;
+import net.namesake.social.Gossip;
 import net.namesake.social.Memories;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -252,6 +253,48 @@ class NpcSchemaTest {
         // The whole hazard, spelled out: zero unreadable records is what keeps the registry
         // writable. NpcRegistryTest.aWorldWithNoMemoryTableStaysWritable runs the same claim through
         // the real load path.
+        ListTag npcs = tag.getList(NpcSchema.KEY_NPCS, Tag.TAG_COMPOUND);
+        assertEquals(3, npcs.size());
+        for (int i = 0; i < npcs.size(); i++) {
+            Persona survivor = Persona.CODEC.parse(NbtOps.INSTANCE, npcs.getCompound(i)).getOrThrow();
+            assertEquals(new UUID(i, i), survivor.id());
+            assertEquals(100L + i, survivor.birthTick());
+        }
+    }
+
+    /**
+     * Schema 5 → 6, the settlement gossip deques, and the third additive migration running.
+     *
+     * <p>What makes this one additive is the thing session 08 could most easily have made false, so
+     * it is worth naming: a queued rumour is a {@code Deed} — the same record, the same seven fields,
+     * the same codec that has been on disk since schema 5. <b>Session 08 added no field to any
+     * persisted record.</b> The confidence a story has left was already there, and the hop count that
+     * would otherwise have needed one is derived from it.
+     *
+     * <p>So the hazard is the same one, and it is the one asserted: an absent {@code gossip} key
+     * reading as damage turns the registry read-only, and a world that has been played for a week
+     * then stops saving its personas, settlements, bonds <i>and</i> rings, because there is one file.
+     */
+    @Test
+    @DisplayName("a pre-schema-6 tag has no gossip deques, and that loads as an empty table")
+    void theGossipTableIsAbsentBeforeSchemaSix() {
+        CompoundTag tag = registryTagAtVersion(5);
+        assertFalse(tag.contains("gossip"), "the fixture must not already have one");
+
+        NpcSchema.Result result = NpcSchema.migrate(tag);
+
+        assertEquals(5, result.foundVersion());
+        assertEquals(NpcSchema.CURRENT, result.resultVersion());
+        assertEquals(0, result.recordsRewritten(),
+                "there is nothing in a persona for a gossip deque to fix");
+        assertTrue(result.migrated(), "the version still moved, so the file must be marked dirty "
+                + "and rewritten — otherwise every future load migrates again");
+
+        Gossip gossip = new Gossip();
+        assertEquals(0, gossip.readFrom(tag), "an absent table is not an unreadable one");
+        assertEquals(0, gossip.size());
+        assertEquals(0, gossip.settlements());
+
         ListTag npcs = tag.getList(NpcSchema.KEY_NPCS, Tag.TAG_COMPOUND);
         assertEquals(3, npcs.size());
         for (int i = 0; i < npcs.size(); i++) {

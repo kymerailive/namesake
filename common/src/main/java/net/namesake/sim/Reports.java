@@ -67,6 +67,160 @@ public final class Reports {
         return lines;
     }
 
+    // --- session 08: how far one deed travels ------------------------------------------------------
+
+    /**
+     * <b>{@code WORKPLAN.md}'s exit criterion for session 08, as a table.</b>
+     *
+     * <p><i>A deed emitted in a settlement is held by 60%+ of its residents within two in-game days
+     * at descending confidence, with at least one holder unable to name the actor.</i> That is a
+     * claim about time and about a population, which is what session 07 built an instrument for — so
+     * it is measured here rather than in the attach-bet harness, which is for what only a running
+     * game can show.
+     *
+     * <p>One deed, deliberately. The standard plan emits one a day and the rows would be a hundred
+     * overlapping stories; {@code PASSING_THROUGH} over three days emits exactly one, on day zero,
+     * and then leaves the village alone to talk about it.
+     *
+     * <p><b>Two rows nobody asked for and both are the point.</b> The witness fraction sweep is here
+     * because the criterion's 60% is partly paid by the people who were standing there — session 07
+     * called that the least grounded input in the instrument, and a criterion that only clears at
+     * 35% witnesses is a criterion that depends on a guess. And the gossip-off row is the control:
+     * without step 7 the number is exactly the witnesses, which is the sentence this whole session
+     * exists to stop being true.
+     */
+    public static List<String> propagation(Simulation.Plan plan) {
+        Simulation.Plan one = plan.withDays(3).with(PlayerModel.PASSING_THROUGH);
+        List<String> lines = new ArrayList<>();
+        lines.add("--- how far one deed travels, and how well it survives the telling ---");
+        lines.add("  one deed, emitted on day 0 in a settlement of " + one.residents()
+                + ", then nobody visits.");
+        lines.add(String.format(Locale.ROOT, "  a retelling keeps %.0f%% of the teller's confidence;"
+                        + " below %d nobody can name the actor.",
+                Deed.RETOLD * 100F, Deed.ATTRIBUTED));
+        lines.add("");
+        lines.add(String.format(Locale.ROOT, "  %-22s %7s %7s %7s %9s %9s",
+                "witnesses / gossip", "day 0", "day 1", "day 2", "of village", "unnamed"));
+
+        for (float fraction : new float[]{0F, 0.35F, 1F}) {
+            lines.add(propagationRow(one.withWitnessFraction(fraction).withGossip(true),
+                    Math.round(fraction * 100F) + "% seen it, told"));
+        }
+        lines.add(propagationRow(one.withWitnessFraction(Simulation.TYPICAL_WITNESS_FRACTION)
+                .withGossip(false), "35% seen it, silent"));
+
+        lines.add("");
+        lines.add("  'unnamed' is holders who cannot say who did it, at the close of day 2.");
+        lines.add("  the silent row is the control: with step 7 off, a deed reaches the people who");
+        lines.add("  were standing there and stops. That is what this session exists to end.");
+        lines.addAll(confidenceLadder(one.withGossip(true)));
+        return lines;
+    }
+
+    /** One row of {@link #propagation}: a whole run, reduced to how far its one deed got. */
+    private static String propagationRow(Simulation.Plan plan, String label) {
+        Simulation.Outcome outcome = Simulation.run(plan);
+        if (outcome.spread().isEmpty()) {
+            return String.format(Locale.ROOT, "  %-22s %7s", label, "no deed");
+        }
+        Simulation.Spread story = outcome.spread().get(0);
+        int last = plan.days() - 1;
+        return String.format(Locale.ROOT, "  %-22s %7d %7d %7d %8.0f%% %9d",
+                label, story.holders()[0], story.holders()[1], story.holders()[2],
+                story.coverage(last, plan.residents()) * 100F, story.unattributed()[last]);
+    }
+
+    /**
+     * What confidences a village actually ends up holding, which is the "descending" half.
+     *
+     * <p>Read off the rings rather than predicted from the constants, because the constants are what
+     * is under test. Three values are reachable and a fourth would mean the hop bound has moved.
+     */
+    private static List<String> confidenceLadder(Simulation.Plan plan) {
+        Simulation.Outcome outcome = Simulation.run(plan);
+        Map<Integer, Integer> byConfidence = new java.util.TreeMap<>(java.util.Comparator.reverseOrder());
+        for (Persona resident : outcome.residents()) {
+            for (Deed deed : outcome.registry().memories().of(resident.id())) {
+                byConfidence.merge((int) deed.confidence(), 1, Integer::sum);
+            }
+        }
+        List<String> lines = new ArrayList<>();
+        lines.add("");
+        lines.add("  every copy the village holds, by confidence:");
+        for (Map.Entry<Integer, Integer> entry : byConfidence.entrySet()) {
+            lines.add(String.format(Locale.ROOT, "    %3d  %-24s %3d holder(s)",
+                    entry.getKey(),
+                    entry.getKey() >= Deed.ATTRIBUTED ? "names the actor" : "someone from the north",
+                    entry.getValue()));
+        }
+        lines.add("  a fourth row here would mean the two-hop bound has moved. Nothing counts hops:");
+        lines.add("  it falls out of the retention and the attribution floor, and GossipTest says so.");
+        return lines;
+    }
+
+    /**
+     * <b>The one question session 09 inherits, answered rather than handed over.</b>
+     *
+     * <p>Session 07 measured that no three residents ever reach 20 warmth in a hundred in-game days,
+     * because a witness's share of a gift is one point and warmth decays one point a day — the two
+     * cancel exactly. Gossip is plausibly the fix and testing it is nearly free: more villagers
+     * holding a deed is more villagers with contact days, and contact days are what stop the decay
+     * eating what was earned. So the same plan is run both ways and the two tables are printed side
+     * by side.
+     *
+     * <p>Nothing is concluded here. The numbers go next to each other and the ledger is where the
+     * reading goes, exactly as session 07 handled the finding that produced the question.
+     */
+    public static List<String> residencyWithAndWithoutGossip(Simulation.Plan plan) {
+        List<String> lines = new ArrayList<>();
+        lines.add("--- does gossip make the residency threshold reachable? ---");
+        lines.add("  session 07: a witness's share of a gift is one point and warmth decays one a");
+        lines.add("  day, so no three residents ever reach 20 warmth. Gossip gives more villagers");
+        lines.add("  more contact days, and contact days are what stop the decay. Same plan, twice:");
+        lines.add("  the in-game day the THIRD resident crossed each mark.");
+
+        StringBuilder header = new StringBuilder("    axis     gossip  ");
+        for (int mark : DialogueStats.LADDER) {
+            header.append(String.format(Locale.ROOT, "%8d", mark));
+        }
+        lines.add(header.toString());
+
+        for (boolean spreading : new boolean[]{false, true}) {
+            Simulation.Outcome outcome = Simulation.run(plan.withGossip(spreading));
+            String label = spreading ? "on " : "off";
+            lines.add(comparisonRow(outcome, "warmth", label, Simulation.History::warmthByDay));
+            lines.add(comparisonRow(outcome, "trust", label, Simulation.History::trustByDay));
+        }
+        lines.add("  'never' means no three residents reached it in " + plan.days() + " days.");
+        return lines;
+    }
+
+    /** One row of {@link #residencyWithAndWithoutGossip}. */
+    private static String comparisonRow(Simulation.Outcome outcome, String axis, String gossip,
+                                        java.util.function.Function<Simulation.History, int[]> series) {
+        StringBuilder row = new StringBuilder(String.format(Locale.ROOT, "    %-8s %-6s ", axis, gossip));
+        for (int mark : DialogueStats.LADDER) {
+            row.append(String.format(Locale.ROOT, "%8s", dayThirdCrossed(outcome, series, mark)));
+        }
+        return row.toString();
+    }
+
+    /** The first day three residents held {@code mark} at once, or {@code never}. */
+    private static String dayThirdCrossed(Simulation.Outcome outcome,
+                                          java.util.function.Function<Simulation.History, int[]> series,
+                                          int mark) {
+        for (int day = 0; day < outcome.plan().days(); day++) {
+            int at = day;
+            long held = outcome.histories().values().stream()
+                    .filter(history -> series.apply(history)[at] >= mark)
+                    .count();
+            if (held >= 3) {
+                return String.valueOf(day);
+            }
+        }
+        return "never";
+    }
+
     /**
      * <b>What session 09's residency threshold would actually cost, on each axis.</b>
      *
@@ -104,17 +258,7 @@ public final class Reports {
                                   java.util.function.Function<Simulation.History, int[]> series) {
         StringBuilder row = new StringBuilder(String.format(Locale.ROOT, "    %-8s", axis));
         for (int mark : DialogueStats.LADDER) {
-            int day = -1;
-            for (int candidate = 0; candidate < outcome.plan().days() && day < 0; candidate++) {
-                int at = candidate;
-                long held = outcome.histories().values().stream()
-                        .filter(history -> series.apply(history)[at] >= mark)
-                        .count();
-                if (held >= 3) {
-                    day = candidate;
-                }
-            }
-            row.append(String.format(Locale.ROOT, "%8s", day < 0 ? "never" : day));
+            row.append(String.format(Locale.ROOT, "%8s", dayThirdCrossed(outcome, series, mark)));
         }
         return row.toString();
     }
@@ -178,6 +322,8 @@ public final class Reports {
         stats.deepestRing().ifPresent(ring -> lines.add(String.format(Locale.ROOT,
                 "  deepest %d/%d slots, reaching back %d days",
                 ring.slots(), Memories.RING_CAPACITY, ring.reachDays())));
+        lines.add(String.format(Locale.ROOT, "  spread  %d%% of the village held a deed by day 2",
+                Math.round(medianCoverageByDayTwo(outcome) * 100F)));
         // The best rate rather than the median, because the median is routinely zero — a bystander
         // gains one warmth and the decay takes it back the next day — and a row of "never" tells
         // you nothing about how long the fastest relationship in the village takes.
@@ -189,6 +335,30 @@ public final class Reports {
         }
         lines.add(ladder.toString());
         return lines;
+    }
+
+    /**
+     * The median story's coverage two days after it happened, across every deed in the run.
+     *
+     * <p>The median rather than the best, because the best is whichever deed the most people happened
+     * to witness and says nothing about propagation. Stories emitted in the last two days of a run
+     * are skipped: they have not had their two days yet, and counting them would drag the median down
+     * with an answer to a different question.
+     */
+    static float medianCoverageByDayTwo(Simulation.Outcome outcome) {
+        List<Float> coverage = new ArrayList<>();
+        for (Simulation.Spread story : outcome.spread()) {
+            int day = story.emittedOnDay() + 2;
+            if (day >= outcome.plan().days()) {
+                continue;
+            }
+            coverage.add(story.coverage(day, outcome.plan().residents()));
+        }
+        if (coverage.isEmpty()) {
+            return 0F;
+        }
+        java.util.Collections.sort(coverage);
+        return coverage.get(coverage.size() / 2);
     }
 
     // --- the chronicle -----------------------------------------------------------------------------

@@ -7,9 +7,8 @@ import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 import net.namesake.Namesake;
 
-import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -80,13 +79,22 @@ public final class Memories {
     private static final String KEY_HOLDER = "holder";
     private static final String KEY_RING = "ring";
 
-    private final Map<UUID, Deque<Deed>> byHolder = new LinkedHashMap<>();
+    /**
+     * A list rather than a {@code Deque}, from session 08.
+     *
+     * <p>It is still a ring in every sense that matters — oldest first, appended at the end, oldest
+     * out on overflow — and the change bought one thing: {@link #remember} can now replace an entry
+     * <i>in its own slot</i> when a better-attested copy of the same event turns up. A
+     * {@code Deque} would have had to be rebuilt to do that, and the rule the replacement implements
+     * is precisely that the ring's order must not move.
+     */
+    private final Map<UUID, List<Deed>> byHolder = new LinkedHashMap<>();
 
     // --- reads -----------------------------------------------------------------------------------
 
     /** Everything this NPC remembers, <b>oldest first</b>. Unmodifiable; write through the registry. */
     public List<Deed> of(UUID holder) {
-        Deque<Deed> ring = byHolder.get(holder);
+        List<Deed> ring = byHolder.get(holder);
         return ring == null ? List.of() : List.copyOf(ring);
     }
 
@@ -99,22 +107,27 @@ public final class Memories {
      * emitted and never on any other tick at all.
      */
     public boolean remembers(UUID holder, long deedId) {
-        Deque<Deed> ring = byHolder.get(holder);
+        return slotOf(holder, deedId) >= 0;
+    }
+
+    /** Where this deed sits in the holder's ring, or −1. */
+    private int slotOf(UUID holder, long deedId) {
+        List<Deed> ring = byHolder.get(holder);
         if (ring == null) {
-            return false;
+            return -1;
         }
-        for (Deed held : ring) {
-            if (held.id() == deedId) {
-                return true;
+        for (int slot = 0; slot < ring.size(); slot++) {
+            if (ring.get(slot).id() == deedId) {
+                return slot;
             }
         }
-        return false;
+        return -1;
     }
 
     /** How many deeds are held in total, across every ring. */
     public int size() {
         int total = 0;
-        for (Deque<Deed> ring : byHolder.values()) {
+        for (List<Deed> ring : byHolder.values()) {
             total += ring.size();
         }
         return total;
@@ -131,20 +144,57 @@ public final class Memories {
         return Collections.unmodifiableMap(copy);
     }
 
+    /** What this NPC believes about one particular event, if they have heard of it at all. */
+    public java.util.Optional<Deed> held(UUID holder, long deedId) {
+        int slot = slotOf(holder, deedId);
+        return slot < 0
+                ? java.util.Optional.empty()
+                : java.util.Optional.of(byHolder.get(holder).get(slot));
+    }
+
     // --- writes ----------------------------------------------------------------------------------
 
     /**
      * Appends a deed to one NPC's ring. {@code DESIGN.md} §4 step 3.
      *
      * <p><b>Returns false when nothing changed, and every caller must care.</b> A duplicate is not an
-     * error and is not a write: {@code NpcRegistry.remember} marks the file dirty only when this says
-     * something happened, so a player repeating themselves does not make Minecraft rewrite the whole
-     * registry on the next autosave. That is {@code NpcRegistry.bind}'s rule, for the same reason.
+     * error and is usually not a write: {@code NpcRegistry.remember} marks the file dirty only when
+     * this says something happened, so a player repeating themselves does not make Minecraft rewrite
+     * the whole registry on the next autosave. That is {@code NpcRegistry.bind}'s rule, for the same
+     * reason.
      *
-     * <p><b>A duplicate does not move the deed it duplicates, either.</b> The entry keeps its place
-     * in the ring rather than being refreshed to the newest slot. Being told a thing again is not the
-     * thing happening again, and refreshing would let session 08's gossip push first-hand memories
-     * out of a ring by retelling them.
+     * <h2>Which copy survives when two disagree — ruled at session 08</h2>
+     *
+     * <p>Session 06 left this open by name. {@link Deed#id()} deliberately excludes confidence, so
+     * <b>a story retold is the same deed known less well</b> and dedupes against the deed it retells
+     * rather than becoming a second row for one murder — which means two copies of one event can
+     * meet here holding different numbers. Until now the first one in simply won.
+     *
+     * <p><b>The ruling is: the better-attested copy wins, and it does not move.</b> Two halves, and
+     * both are load-bearing.
+     *
+     * <ul>
+     *   <li><b>Better attested wins.</b> A memory should be the best account of an event a person
+     *       actually has. Somebody who is told about a killing at seventy and then <i>watches</i> a
+     *       hundred-confidence copy of it arrive knows it first-hand from that moment; keeping the
+     *       rumour would be recording that they only heard about a thing they saw.</li>
+     *   <li><b>It does not move.</b> Session 06's reason stands unchanged and is the half that
+     *       actually protects the ring: refreshing a slot would let a retelling push first-hand
+     *       memories out of a ring simply by being repeated. The entry is replaced <i>where it
+     *       already sits</i>, so the order a villager remembers things in is decided by when they
+     *       happened and never by when somebody last mentioned them.</li>
+     * </ul>
+     *
+     * <p><b>What it costs, plainly, because the cheap answer was to rule the other way.</b> This
+     * makes the method a read-modify-write rather than a read-and-maybe-append, and it opens a door
+     * content addressing had closed: a retelling can now touch a ring. The door only opens
+     * <i>upward</i> — a copy that knows less changes nothing at all, and the two ways into this
+     * method are an emit (first-hand, a hundred) and a drain (strictly less than whatever it was
+     * retold from) — so nothing gossip does can ever degrade a memory. And no path in the mod as it
+     * stands produces the case at all: a deed reaches its witnesses at emit and enters the deque
+     * afterwards, so first-hand always arrives first. That is stated rather than relied on. The rule
+     * is here so that session 10's second settlement and session 16's NPC actors meet a ring that
+     * already behaves correctly, instead of meeting one that behaves correctly by accident.
      *
      * <p>Reaching this method directly appends a deed that exists until the world reloads and then
      * does not. Write through {@code NpcRegistry.remember}, which is the only door that marks the
@@ -154,13 +204,19 @@ public final class Memories {
      */
     public boolean remember(UUID holder, Deed deed) {
         long deedId = deed.id();
-        if (remembers(holder, deedId)) {
-            return false;
+        int slot = slotOf(holder, deedId);
+        if (slot >= 0) {
+            List<Deed> ring = byHolder.get(holder);
+            if (deed.confidence() <= ring.get(slot).confidence()) {
+                return false;
+            }
+            ring.set(slot, deed);
+            return true;
         }
-        Deque<Deed> ring = byHolder.computeIfAbsent(holder, key -> new ArrayDeque<>(RING_CAPACITY));
-        ring.addLast(deed);
+        List<Deed> ring = byHolder.computeIfAbsent(holder, key -> new ArrayList<>(RING_CAPACITY));
+        ring.add(deed);
         while (ring.size() > RING_CAPACITY) {
-            ring.removeFirst();
+            ring.remove(0);
         }
         return true;
     }
@@ -183,7 +239,7 @@ public final class Memories {
      */
     public void save(CompoundTag root) {
         ListTag list = new ListTag();
-        for (Map.Entry<UUID, Deque<Deed>> holder : byHolder.entrySet()) {
+        for (Map.Entry<UUID, List<Deed>> holder : byHolder.entrySet()) {
             if (holder.getValue().isEmpty()) {
                 continue;
             }

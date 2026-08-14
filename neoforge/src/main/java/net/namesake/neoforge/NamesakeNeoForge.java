@@ -10,6 +10,7 @@ import net.namesake.harness.ProfilerHarness;
 import net.namesake.npc.PersonaService;
 import net.namesake.platform.VerbTransport;
 import net.namesake.settlement.SettlementRegistrar;
+import net.namesake.social.Gossip;
 import net.namesake.social.SocialEvents;
 import net.namesake.verb.Interactions;
 import net.namesake.verb.VerbNetwork;
@@ -145,11 +146,14 @@ public final class NamesakeNeoForge {
     }
 
     /**
-     * Spends whatever settlement survey a villager's arrival asked for, a few chunks at a time.
-     * Both callees return on their first line when there is nothing to do, which is the usual case.
+     * Spends whatever settlement survey a villager's arrival asked for, a few chunks at a time, and
+     * — from session 08 — retells one story per settlement that has one, every 250 ticks. Every
+     * callee returns on its first line when there is nothing to do, which is the usual case; see
+     * {@code Gossip} for why the drain is bounded by construction rather than measured.
      */
     private static void onServerTick(ServerTickEvent.Post event) {
         SettlementRegistrar.onServerTick(event.getServer());
+        Gossip.onServerTick(event.getServer());
         AttachBetHarness.onServerTick(event.getServer());
         ProfilerHarness.onServerTick(event.getServer());
     }

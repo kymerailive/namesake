@@ -112,8 +112,11 @@ class SimulationTest {
     @Test
     @DisplayName("a hundred days of a grinder does not fill a ring with one afternoon")
     void theRingIsNotGroundOutOverAHundredDays() {
+        // Gossip off, deliberately: the claim here is about Deed.id()'s content addressing and
+        // nothing else, and propagation is a second variable that legitimately moves the number.
+        // What it costs is measured separately, in gossipCostsMemoryDepth.
         Simulation.Outcome outcome = Simulation.run(
-                Simulation.Plan.standard(SEED, 100, PlayerModel.SATURATING));
+                Simulation.Plan.standard(SEED, 100, PlayerModel.SATURATING).withGossip(false));
         DialogueStats stats = Reports.statsOf(outcome);
 
         assertTrue(stats.deepestRing().isPresent(), "a hundred days must leave somebody remembering");
@@ -122,6 +125,32 @@ class SimulationTest {
                 () -> "the deepest ring holds " + deepest.slots() + " deeds spanning only "
                         + deepest.reachDays() + " days. Twelve deeds a day collapsing to fewer than "
                         + "one entry a day is what Deed.id()'s content addressing is for.");
+    }
+
+    /**
+     * <b>What gossip costs a villager's memory, measured rather than discovered later.</b>
+     *
+     * <p>It fell out of the breakage above: with step 7 on, a villager's ring fills with things that
+     * happened to their neighbours as well as things that happened in front of them, so it reaches
+     * <i>less far back</i> in the same number of days. That is a real consequence of this session
+     * rather than a defect — the ring is thirty-two slots and gossip is competition for them — and it
+     * is the owner's to rule against, which is why it is a printed number rather than a threshold.
+     */
+    @Test
+    @DisplayName("gossip fills a ring faster, so it reaches less far back — measured, not assumed")
+    void gossipCostsMemoryDepth() {
+        Simulation.Plan plan = Simulation.Plan.standard(SEED, 100, PlayerModel.SATURATING);
+        DialogueStats.Ring silent = Reports.statsOf(Simulation.run(plan.withGossip(false)))
+                .deepestRing().orElseThrow();
+        DialogueStats.Ring spreading = Reports.statsOf(Simulation.run(plan.withGossip(true)))
+                .deepestRing().orElseThrow();
+
+        System.out.printf("[gossip] the deepest ring reaches back %d days without propagation "
+                        + "and %d days with it%n", silent.reachDays(), spreading.reachDays());
+
+        assertTrue(spreading.reachDays() <= silent.reachDays(),
+                "propagation can only ever add entries to a ring, so it cannot make one reach "
+                        + "further back than it did without");
     }
 
     @Test
@@ -228,9 +257,157 @@ class SimulationTest {
         StringBuilder out = new StringBuilder("\n");
         Reports.full(outcome).forEach(line -> out.append(line).append('\n'));
         out.append('\n');
+        Reports.propagation(plan).forEach(line -> out.append(line).append('\n'));
+        out.append('\n');
+        Reports.residencyWithAndWithoutGossip(plan).forEach(line -> out.append(line).append('\n'));
+        out.append('\n');
         Reports.acrossModels(plan).forEach(line -> out.append(line).append('\n'));
         out.append('\n');
         Reports.witnessSensitivity(plan).forEach(line -> out.append(line).append('\n'));
         System.out.println(out);
+    }
+
+    // --- session 08: the exit criterion, as a claim about time and a population ---------------------
+
+    /**
+     * <b>{@code WORKPLAN.md}'s exit criterion for session 08.</b>
+     *
+     * <p><i>A deed emitted in a settlement is held by 60%+ of its residents within two in-game days
+     * at descending confidence, with at least one holder unable to name the actor.</i>
+     *
+     * <p>It lives here rather than in the attach-bet harness because it is a claim about time, which
+     * is the instrument session 07 built. {@code PASSING_THROUGH} over three days emits exactly one
+     * deed, on day zero, and then leaves the village alone with it — so the numbers are about one
+     * story rather than about a hundred overlapping ones.
+     */
+    @Test
+    @DisplayName("a deed reaches 60% of a village within two in-game days, at descending confidence")
+    void aDeedTravels() {
+        Simulation.Plan plan = Simulation.Plan.standard(SEED, 3, PlayerModel.PASSING_THROUGH);
+        Simulation.Outcome outcome = Simulation.run(plan);
+
+        assertEquals(1, outcome.chronicle().size(), "one deed, so the numbers are about one story");
+        assertEquals(1, outcome.spread().size());
+        Simulation.Spread story = outcome.spread().get(0);
+
+        float coverage = story.coverage(2, plan.residents());
+        assertTrue(coverage >= 0.60F,
+                () -> "one deed reached " + story.holders()[2] + " of " + plan.residents()
+                        + " residents by day 2, which is " + Math.round(coverage * 100)
+                        + "% against the 60% the ledger asks for");
+
+        assertTrue(story.unattributed()[2] >= 1,
+                () -> "nobody lost the actor's name. WORKPLAN.md asks for at least one holder unable "
+                        + "to name them, and session 08 lowered Deed.RETOLD to 0.70 precisely so "
+                        + "that two hops lands at 49 rather than at 72.");
+
+        // Descending, and every step of the ladder actually occupied.
+        java.util.Set<Integer> confidences = new java.util.TreeSet<>();
+        for (var resident : outcome.residents()) {
+            outcome.registry().memories().of(resident.id())
+                    .forEach(deed -> confidences.add((int) deed.confidence()));
+        }
+        assertEquals(java.util.Set.of(100, 70, 49), confidences,
+                "a village holds one story at three confidences and no others: watched it, was "
+                        + "told, and heard a rumour");
+    }
+
+    /**
+     * <b>The same criterion across twelve villages rather than the one it was written against.</b>
+     *
+     * <p>This project's signature defect is a claim measured against a fixture rather than against a
+     * village — five instances so far, three of them in the last two sessions. A nine-resident
+     * settlement and a deterministic transfer coin is a small enough sample that one seed clearing
+     * 60% proves very little, and the seed changes both the personalities and the coin.
+     *
+     * <p><b>And the row that matters is the zero-witness one.</b> The exit criterion's 60% is partly
+     * paid by the people who were standing there, and session 07 called the witness fraction the
+     * least grounded input in the whole instrument. A criterion that only clears because of a guess
+     * is a criterion that has to wait for session 15's playtest; this one clears without it.
+     */
+    @Test
+    @DisplayName("60% is not seed luck, and it does not depend on the witness fraction")
+    void theCriterionHoldsAcrossVillages() {
+        int cleared = 0;
+        int blurred = 0;
+        StringBuilder seen = new StringBuilder();
+        for (long seed = 1; seed <= 12; seed++) {
+            Simulation.Plan plan = Simulation.Plan.standard(seed, 3, PlayerModel.PASSING_THROUGH)
+                    .withWitnessFraction(0F);
+            Simulation.Spread story = Simulation.run(plan).spread().get(0);
+            float coverage = story.coverage(2, plan.residents());
+            seen.append(' ').append(Math.round(coverage * 100)).append('%');
+            if (coverage >= 0.60F) {
+                cleared++;
+            }
+            if (story.unattributed()[2] >= 1) {
+                blurred++;
+            }
+        }
+        System.out.println("[gossip] coverage by day 2 with nobody watching:" + seen);
+
+        final int clearedSeeds = cleared;
+        assertTrue(cleared >= 10, () -> "only " + clearedSeeds + " of twelve villages reached 60% of "
+                + "residents from gossip alone, with nobody having witnessed the deed:" + seen);
+        final int blurredSeeds = blurred;
+        assertTrue(blurred >= 10, () -> "only " + blurredSeeds + " of twelve villages produced a "
+                + "holder who could not name the actor");
+    }
+
+    /**
+     * The control, and it is the sentence this whole session exists to make false.
+     *
+     * <p>With step 7 switched off a deed reaches the people who were standing there and stops. If
+     * this ever stops failing to spread, the switch has come unwired and every number in the
+     * comparison above is measuring one thing twice.
+     */
+    @Test
+    @DisplayName("with gossip off, a deed reaches the witnesses and nobody else")
+    void withoutGossipADeedGoesNowhere() {
+        Simulation.Plan plan = Simulation.Plan.standard(SEED, 3, PlayerModel.PASSING_THROUGH)
+                .withGossip(false);
+        Simulation.Outcome outcome = Simulation.run(plan);
+        Simulation.Spread story = outcome.spread().get(0);
+
+        assertEquals(story.holders()[0], story.holders()[2],
+                "nothing may spread after the tick the deed was emitted on");
+        assertEquals(0, story.unattributed()[2], "and nobody hears it at second hand at all");
+        assertTrue(story.coverage(2, plan.residents()) < 0.60F,
+                () -> "the control reached " + Math.round(story.coverage(2, plan.residents()) * 100)
+                        + "% on its own, so the criterion above is not measuring gossip");
+    }
+
+    /**
+     * <b>The answer session 09 is handed instead of the question.</b>
+     *
+     * <p>Session 07 found that no three residents reach 20 warmth in a hundred in-game days, because
+     * a witness's share of a gift is one point and warmth decays one a day. Gossip was the plausible
+     * fix — more holders is more contact days, and contact days are what stop the decay. This
+     * measures whether it is, rather than assuming either way, and the ledger carries the reading.
+     */
+    @Test
+    @DisplayName("gossip is measured against session 07's warmth-decay finding, not assumed")
+    void gossipIsMeasuredAgainstTheResidencyThreshold() {
+        Simulation.Plan plan = Simulation.Plan.standard(SEED, 100, PlayerModel.ATTENTIVE);
+        DialogueStats silent = Reports.statsOf(Simulation.run(plan.withGossip(false)));
+        DialogueStats spreading = Reports.statsOf(Simulation.run(plan.withGossip(true)));
+
+        System.out.printf("[gossip] warmth p50 %d -> %d, max %d -> %d; met the player %d -> %d%n",
+                silent.percentile(Bond.WARMTH, 50), spreading.percentile(Bond.WARMTH, 50),
+                silent.observedMaximum(Bond.WARMTH), spreading.observedMaximum(Bond.WARMTH),
+                silent.metTheViewer(), spreading.metTheViewer());
+
+        // The one direction that must hold whatever the warmth does: gossip cannot make a village
+        // know the player less well than it did without it.
+        assertTrue(spreading.metTheViewer() >= silent.metTheViewer(),
+                "propagation must not shrink the number of people who have met you");
+
+        // And the switch has to do something. Measured over ten days rather than a hundred, because
+        // at a hundred every ring in the village is full either way and the totals are pinned to
+        // residents x RING_CAPACITY — which is itself session 07's finding, not a regression.
+        Simulation.Plan brief = plan.withDays(10);
+        assertTrue(Reports.statsOf(Simulation.run(brief.withGossip(true))).deedsHeld()
+                        > Reports.statsOf(Simulation.run(brief.withGossip(false))).deedsHeld(),
+                "gossip must put more deeds into more rings, or the switch does nothing");
     }
 }

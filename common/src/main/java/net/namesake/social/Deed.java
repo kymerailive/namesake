@@ -46,6 +46,87 @@ public record Deed(
     public static final byte NOMINAL = 100;
 
     /**
+     * What a retelling keeps of the confidence the teller had. <b>Ruled at the open of session 08,
+     * and it is the one number of the three that moved.</b>
+     *
+     * <p>{@code DESIGN.md} §4 step 7 carried {@code confidence × 0.85} from before there was any
+     * code to run it against, alongside two other clauses — <i>max 2 hops</i> and <i>identity blurs
+     * below 50</i>. Session 06 did the arithmetic and wrote the consequence into {@link #id()}: at
+     * 0.85 a two-hop story stands at 72, so <b>the blur could never fire at all</b> and one of the
+     * three clauses was dead. {@code WORKPLAN.md}'s exit criterion for this session asks for a
+     * holder who cannot name the actor, which the design as ruled could not produce.
+     *
+     * <p><b>Three of the four ways out break session 10, which is the argument.</b> Raising the hop
+     * cap needs five hops before 0.85 crosses 50, and a story five settlements deep is a different
+     * mod. Raising the blur threshold to catch 72 makes a two-hop story anonymous — and the
+     * acceptance script's step 5 is <i>"someone says they've heard your name, referencing A"</i>,
+     * which is a two-hop story. Leaving the criterion unmet ships a distortion mechanic that never
+     * distorts.
+     *
+     * <p><b>Lowering the retention is the only one that fixes the criterion and protects the
+     * thesis</b>, because it is the only lever that moves the two hops in <i>opposite</i>
+     * directions relative to the threshold. The window is arithmetic rather than taste: hop one must
+     * stay attributed and hop two must not, so {@code r ≥ 0.50} and {@code r² < 0.50}, which is
+     * {@code [0.50, 0.707)}. Seven tenths is the top of that window and therefore the gentlest
+     * change that works — <b>100 → 70 → 49</b>.
+     *
+     * <p>What it costs is real and is smaller than it looks. {@code Deeds.deltaFor} scales the whole
+     * delta by confidence, so a rumour is now worth 0.70 of first-hand where it was 0.85. That
+     * number is dominated by {@link DeedType#witnessShare()} — a third for a gift — and by the
+     * outsider weight, so the visible effect on a bond is usually the same integer. Where it is not,
+     * 0.70 is the more defensible figure anyway: hearing about a murder should not move you 85% as
+     * much as watching one.
+     *
+     * <p>{@code GossipTest} pins every clause of this paragraph, including that the pair below still
+     * produces exactly {@link #MAX_HOPS}.
+     */
+    public static final float RETOLD = 0.70F;
+
+    /**
+     * Below this, the holder no longer knows who did it. {@code DESIGN.md} §2, unchanged.
+     *
+     * <p>It does two jobs and they are the same rule read twice. A story you cannot attribute is a
+     * story you cannot pass on, so this is also the floor on retelling — which is what makes
+     * {@link #MAX_HOPS} fall out of {@link #RETOLD} rather than needing a counter of its own. That
+     * matters beyond tidiness: a hop count would be an eighth field on a record session 06
+     * deliberately kept at seven, persisted in every ring in every save, and derivable from a field
+     * already there.
+     */
+    public static final byte ATTRIBUTED = 50;
+
+    /**
+     * How many retellings a first-hand deed survives. {@code DESIGN.md} §4 step 7's "max 2 hops".
+     *
+     * <p><b>Not enforced — derived, and then asserted.</b> {@link #RETOLD} and {@link #ATTRIBUTED}
+     * between them permit exactly two: 100 and 70 are attributed and may be retold, 49 is not.
+     * Nothing counts hops anywhere in the pipeline. {@code GossipTest} walks the chain and fails if
+     * this constant and that arithmetic ever disagree, so changing the retention without meaning to
+     * change the reach turns the build red.
+     */
+    public static final int MAX_HOPS = 2;
+
+    /**
+     * The actor of a story nobody can attribute. <b>"Someone from the north."</b>
+     *
+     * <p>The nil UUID, which is structurally disjoint from every id this mod can mint: a persona id
+     * comes from {@code UUID.randomUUID} and a player's is version 3 or 4, so both carry a non-zero
+     * version nibble that this leaves at zero.
+     *
+     * <p><b>Blurring replaces the actor rather than hiding them, and that is what gives the blur an
+     * {@code if} statement rather than a caption.</b> A deed whose actor is this moves no bond — see
+     * {@link Deeds#deltaFor}'s caller in {@code DeedBus} — because a villager who cannot say who
+     * killed the smith has no reason to think worse of <i>you</i>. It is still remembered, which is
+     * session 06's asymmetry arriving from the other side: seeing something is not the same as it
+     * changing your mind about somebody, and neither is hearing it.
+     *
+     * <p><b>The direction needs no field.</b> "From the north" is a function of where the deed
+     * happened, which {@link #settlementId()} already carries, and where the holder lives, which
+     * their persona already carries. Session 06 declined an eighth field on this record and session
+     * 08 declines a ninth for the same reason: the struct already contains the answer.
+     */
+    public static final UUID UNKNOWN_ACTOR = new UUID(0L, 0L);
+
+    /**
      * Field names are the long readable ones the rest of this file uses, and that is a decision with
      * a number behind it rather than a default. Four hundred personas each holding a full ring is
      * about 1.5 MB of uncompressed NBT, of which roughly a third is these seven key names repeated
@@ -146,8 +227,14 @@ public record Deed(
 
     private static final long ID_SEED = 0x9E37_79B9_7F4A_7C15L;
 
-    /** One round of a murmur3-style finalizer. Written out so it cannot change by inheritance. */
-    private static long mix(long hash, long value) {
+    /**
+     * One round of a murmur3-style finalizer. Written out so it cannot change by inheritance.
+     *
+     * <p>Package-visible so {@link Gossip} can derive its transfer coin from the same finalizer
+     * rather than carrying a second copy of one. Nothing about {@link #id()} changes by exposing it,
+     * and {@code MemoriesTest.theDerivationIsPinned} would say so if it did.
+     */
+    static long mix(long hash, long value) {
         long mixed = hash ^ value;
         mixed *= 0xFF51_AFD7_ED55_8CCDL;
         mixed ^= mixed >>> 33;
@@ -157,6 +244,62 @@ public record Deed(
 
     public Deed withSeverity(byte newSeverity) {
         return new Deed(typeId, actor, subject, settlementId, gameDay, newSeverity, confidence);
+    }
+
+    // --- session 08: what happens to a story when it is passed on --------------------------------
+
+    /**
+     * Whether the holder of this copy can say who did it.
+     *
+     * <p>Two conditions rather than one, and they are belt and braces on purpose: a copy is
+     * attributed while its confidence is at least {@link #ATTRIBUTED} <b>and</b> its actor is a real
+     * person. {@link #retold()} keeps the two in step, so the second only fires for a deed somebody
+     * built by hand — which is exactly the case a guard is for.
+     */
+    public boolean isAttributed() {
+        return confidence >= ATTRIBUTED && !UNKNOWN_ACTOR.equals(actor);
+    }
+
+    /**
+     * This deed as the next person to hear about it holds it.
+     *
+     * <p>One rule, applied to itself: keep {@link #RETOLD} of what the teller believed, and if that
+     * leaves too little to name anybody, drop the name. <b>Nothing is invented</b> — every field but
+     * confidence and the actor is carried through untouched, and the actor only ever goes from a
+     * person to nobody. A rumour in this mod cannot acquire a detail, only lose one.
+     *
+     * <p>The retold copy keeps the same {@link #id()} while it is still attributed, because
+     * confidence is deliberately outside the derivation: <b>a story retold is the same event known
+     * less well</b>, so it dedupes against the deed it retells rather than becoming a second row for
+     * one murder. A blurred copy is a different id, and that is not a leak either — it is a
+     * genuinely different claim, and {@code Gossip} declines to hand it to anybody who already holds
+     * the attributed one.
+     */
+    public Deed retold() {
+        byte next = (byte) Math.round(confidence * RETOLD);
+        Deed told = withConfidence(next);
+        return next >= ATTRIBUTED ? told : told.blurred();
+    }
+
+    /** The same event, with the actor's name gone. Never called on its own — see {@link #retold()}. */
+    Deed blurred() {
+        return new Deed(typeId, UNKNOWN_ACTOR, subject, settlementId, gameDay, severity, confidence);
+    }
+
+    /**
+     * The id this event has once nobody can attribute it.
+     *
+     * <p>Two ids for one event is the cost session 06 named and bounded when it put the actor into
+     * {@link #id()}, and it is real rather than theoretical now that the blur can fire. Anything
+     * that wants to count how many people hold a story has to ask about both, so the second id is a
+     * method rather than a fact everybody has to rediscover.
+     */
+    public long blurredId() {
+        return blurred().id();
+    }
+
+    Deed withConfidence(byte newConfidence) {
+        return new Deed(typeId, actor, subject, settlementId, gameDay, severity, newConfidence);
     }
 
     /**
