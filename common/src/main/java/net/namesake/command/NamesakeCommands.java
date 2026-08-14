@@ -717,16 +717,10 @@ public final class NamesakeCommands {
             return lines;
         }
 
-        int nameColumn = Math.max(4, met.stream()
-                .mapToInt(standing -> Math.min(EARN_NAME_MAX, standing.name().length()))
-                .max().orElse(4) + 1);
-        lines.add("  " + pad("who", nameColumn)
-                + String.format(Locale.ROOT, "%6s %5s %9s %9s", "warm", "days", "/contact", "/elapsed"));
+        int nameColumn = earnNameColumn(met);
+        lines.add("  " + pad("who", nameColumn) + EARN_COLUMNS);
         for (DialogueStats.Standing standing : met) {
-            lines.add("  " + pad(clip(standing.name(), EARN_NAME_MAX), nameColumn)
-                    + String.format(Locale.ROOT, "%6d %5d %9.2f %9.2f",
-                    standing.bond().warmth(), standing.contactDays(),
-                    standing.perContactDay(), standing.perElapsedDay()));
+            lines.add(earnRateRow(standing, nameColumn));
         }
 
         float[] rates = stats.ratesPerContactDay();
@@ -747,8 +741,43 @@ public final class NamesakeCommands {
         return lines;
     }
 
-    /** Names are clipped rather than padded to the widest a generator can make. Session 06's fix. */
+    /**
+     * How wide a name may be on an earn-rate row before it is clipped.
+     *
+     * <p>Session 03's layout budget allows a 27-character full name — fourteen given plus twelve
+     * family plus a space — and four columns of numbers beside one of those does not fit sixty
+     * characters. So the column measures the report (session 06's fix, which bought the bonds table
+     * back under its ratchet) <i>and</i> is capped here, because a report is only as narrow as the
+     * names that happen to be in it and the next village's names are not this one's.
+     */
     private static final int EARN_NAME_MAX = 18;
+
+    /** Everything to the right of the name on an earn-rate row. */
+    private static final String EARN_COLUMNS =
+            String.format(Locale.ROOT, "%6s %5s %9s %9s", "warm", "days", "/contact", "/elapsed");
+
+    /**
+     * How wide the name column is for this report: the widest name present, capped.
+     *
+     * <p>Package-visible, and taking the standings rather than the whole {@code DialogueStats}, so
+     * {@code CommandLayoutTest} can hand it a villager with the longest name the generator can make
+     * rather than whichever names a fixture happened to roll. That distinction is not academic — a
+     * breakage that widened {@link #EARN_NAME_MAX} to 48 turned nothing red the first time it was
+     * run, because no name in the fixture village was longer than eighteen characters.
+     */
+    static int earnNameColumn(List<DialogueStats.Standing> standings) {
+        return Math.max(4, standings.stream()
+                .mapToInt(standing -> Math.min(EARN_NAME_MAX, standing.name().length()))
+                .max().orElse(4) + 1);
+    }
+
+    /** One earn-rate row. Measured by {@code CommandLayoutTest} at the widest name and number. */
+    static String earnRateRow(DialogueStats.Standing standing, int nameColumn) {
+        return "  " + pad(clip(standing.name(), EARN_NAME_MAX), nameColumn)
+                + String.format(Locale.ROOT, "%6d %5d %9.2f %9.2f",
+                standing.bond().warmth(), standing.contactDays(),
+                standing.perContactDay(), standing.perElapsedDay());
+    }
 
     /**
      * <b>Runs the headless simulation and hands back the report.</b> Session 07's exit criterion.

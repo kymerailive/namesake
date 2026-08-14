@@ -271,6 +271,37 @@ class DialogueStatsTest {
 
     // --- the ladder --------------------------------------------------------------------------------
 
+    /**
+     * <b>"Never" has to survive the case it is actually for.</b>
+     *
+     * <p>{@code anEmptyWorldIsAnAnswer} covers a world where nobody has met anybody, and a breakage
+     * that made a zero rate report zero days rather than never turned it green — because that path
+     * returns early on an empty list and the interesting branch was never reached. The case that
+     * matters is a village that has <i>met</i> the player and is still earning nothing, which is not
+     * hypothetical: a witness gains one warmth and the decay takes it back the next day, so it is
+     * what most of a real village looks like.
+     */
+    @Test
+    @DisplayName("a village that has met you and earned nothing reads as never, not as zero days")
+    void earningNothingIsNeverRatherThanImmediately() {
+        NpcRegistry registry = village(3);
+        for (Persona persona : registry.all()) {
+            // Met on day 1, gained a point, and it decayed away by day 40 — the bystander's whole
+            // arc, and the reason the median rate in a real village is routinely zero.
+            registry.remember(persona.id(), gift(persona.id(), 1));
+            registry.putBond(persona.id(), PLAYER,
+                    Bond.fresh(1).apply(new int[]{0, 1, 0, 0}, 1, 8));
+        }
+
+        DialogueStats stats = DialogueStats.of(registry, PLAYER, 40);
+        assertEquals(3, stats.metTheViewer(), "they all met the player");
+        assertEquals(0, stats.observedMaximum(Bond.WARMTH), "and none of them kept anything");
+        assertEquals(-1, stats.contactDaysTo(20),
+                "a rate of zero must read as never. Reporting zero days would say a threshold is "
+                        + "reached immediately by somebody who will never reach it at all, which is "
+                        + "the LNK failure with the sign flipped.");
+    }
+
     @Test
     @DisplayName("days to a target come from the median rate and round up")
     void daysToATargetRoundUp() {

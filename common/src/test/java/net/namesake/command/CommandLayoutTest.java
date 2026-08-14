@@ -5,6 +5,7 @@ import net.namesake.npc.Persona;
 import net.namesake.sim.PlayerModel;
 import net.namesake.sim.Reports;
 import net.namesake.sim.Simulation;
+import net.namesake.social.Bond;
 import net.namesake.social.Deed;
 import net.namesake.social.DeedType;
 import net.namesake.social.DialogueStats;
@@ -258,6 +259,36 @@ class CommandLayoutTest {
                     () -> "an earnrate row is " + row.length() + " characters, over the " + CHAT_WIDTH
                             + "-character budget:\n" + row);
         }
+    }
+
+    /**
+     * <b>The row measured against the widest name the generator can make, not the widest one this
+     * fixture happened to roll.</b>
+     *
+     * <p>Written because the first breakage run found the gap: widening the name cap from eighteen
+     * to forty-eight turned nothing red, because no villager in the forty-resident fixture had a
+     * name longer than eighteen characters. Session 03's layout budget allows twenty-seven —
+     * fourteen given plus twelve family plus a space — and the numbers beside it are at their widest
+     * too. That is the row that has to fit.
+     */
+    @Test
+    @DisplayName("an earnrate row fits at the widest name and the widest numbers the game can make")
+    void theWidestEarnRateRowFits() {
+        String longest = "Theardraelthild Hseingtsai";
+        assertEquals(26, longest.length(), "session 03 caps a full name at 27 characters");
+
+        DialogueStats.Standing worst = new DialogueStats.Standing(
+                UUID.randomUUID(), longest,
+                Bond.fresh(0).apply(new int[]{0, 100, 0, 0}, 0, 15),
+                9999, 99999, Memories.RING_CAPACITY, 1.8F, 14);
+        int column = NamesakeCommands.earnNameColumn(List.of(worst));
+        String row = NamesakeCommands.earnRateRow(worst, column);
+
+        assertTrue(row.length() <= CHAT_WIDTH,
+                () -> "the widest earnrate row is " + row.length() + " characters and the budget is "
+                        + CHAT_WIDTH + ":\n" + row);
+        assertTrue(row.contains("Theardraelthild"),
+                () -> "the name has to still be recognisable after clipping:\n" + row);
     }
 
     @Test
