@@ -887,8 +887,15 @@ public final class AttachBetHarness {
             days++;
             // Spent through the shipped drain rather than left in the deque, so the state written to
             // disk is a settled one. The tick hook is already proven by the gossip legs above; this
-            // is the same method it calls, run to exhaustion so nothing is still travelling when the
-            // world is saved.
+            // is the same method it calls.
+            //
+            // Run to exhaustion, and that it *reaches* exhaustion is bounded by construction rather
+            // than hoped for: a deque holds at most Gossip.DEQUE_CAPACITY stories and a story is
+            // spent after two drains, so 64 is the worst case against the 96 an in-game day allows.
+            // It matters because recordMemories runs immediately after this and the verify phase
+            // compares against what it recorded — a story still travelling when the world saved
+            // would change a ring after it had been written down, and the ring-reload leg would fail
+            // for a reason that has nothing to do with reloading.
             for (int drain = 0; drain < Gossip.DRAINS_PER_DAY && !registry.gossip().isEmpty(); drain++) {
                 Gossip.drainEverySettlement(registry, today + days);
             }

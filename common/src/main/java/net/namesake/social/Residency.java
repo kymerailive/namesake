@@ -110,9 +110,18 @@ public final class Residency {
      * instruments. It is also what lets session 07's headless simulation report the day each of the
      * five player models crosses it, which is a claim about time and belongs there.
      *
-     * <p><b>Never polled.</b> This walks a settlement's residents and, if the band has not been met,
-     * their rings. It is asked when somebody speaks to a villager, which is an interaction rather
-     * than a tick — the same discipline the witness scan has carried since session 05.
+     * <p><b>Never polled, and it runs in two passes so the common case is cheap.</b> This is asked
+     * when somebody speaks to a villager — an interaction rather than a tick, the same discipline the
+     * witness scan has carried since session 05 — but "not on a tick" is not the same as "free". The
+     * band is one map lookup per resident; the deed route is a walk of every ring in the settlement,
+     * which at {@code DESIGN.md} §8's population and session 09's capacity is tens of thousands of
+     * deeds. So the bands are counted first and the rings are only read <b>if the band has not
+     * already been met</b>.
+     *
+     * <p>The consequence is stated rather than hidden: for a settlement that has taken you in by the
+     * band, {@link Verdict#feedings()} and {@link Verdict#defendedARaid()} report nothing rather than
+     * what they would have found. A village that has already decided does not need a second reason,
+     * and {@link Verdict#granted()} — which is what every caller actually asks — is unaffected.
      */
     public static Verdict verdict(NpcRegistry registry, int settlementId, UUID player, int day) {
         if (settlementId == Persona.UNASSIGNED || player == null) {
@@ -121,15 +130,21 @@ public final class Residency {
         }
 
         int atThreshold = 0;
+        for (Persona resident : registry.all()) {
+            if (resident.settlementId() == settlementId
+                    && registry.bonds().at(resident.id(), player, day).trust() >= TRUST_THRESHOLD) {
+                atThreshold++;
+            }
+        }
+        if (atThreshold >= RESIDENTS_REQUIRED) {
+            return new Verdict(Route.BAND, atThreshold, 0, false);
+        }
+
         Set<Long> feedings = new HashSet<>();
         boolean defended = false;
-
         for (Persona resident : registry.all()) {
             if (resident.settlementId() != settlementId) {
                 continue;
-            }
-            if (registry.bonds().at(resident.id(), player, day).trust() >= TRUST_THRESHOLD) {
-                atThreshold++;
             }
             for (Deed deed : registry.memories().of(resident.id())) {
                 // Deeds are counted across the whole settlement and deduped by id, so one feeding
@@ -147,12 +162,7 @@ public final class Residency {
             }
         }
 
-        Route route = Route.NONE;
-        if (atThreshold >= RESIDENTS_REQUIRED) {
-            route = Route.BAND;
-        } else if (defended || feedings.size() >= FEEDINGS_REQUIRED) {
-            route = Route.DEED;
-        }
+        Route route = defended || feedings.size() >= FEEDINGS_REQUIRED ? Route.DEED : Route.NONE;
         return new Verdict(route, atThreshold, feedings.size(), defended);
     }
 

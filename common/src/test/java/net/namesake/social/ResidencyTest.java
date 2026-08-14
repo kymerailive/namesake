@@ -222,6 +222,36 @@ class ResidencyTest {
         assertFalse(Residency.isResident(registry, VILLAGE, PLAYER, 1));
     }
 
+    /**
+     * <b>The two-pass shortcut, held to the only thing it may not change.</b>
+     *
+     * <p>{@link Residency#verdict} counts bands first and reads the rings only if the band is not
+     * met, because this runs on an interaction and a ring walk at {@code DESIGN.md} §8's population
+     * is tens of thousands of deeds. A shortcut that changed the <i>answer</i> would be a bug wearing
+     * an optimisation's clothes, so the answer is what is asserted: a settlement that would grant
+     * residency both ways still grants it, and by the band.
+     */
+    @Test
+    @DisplayName("a village that would say yes twice still says yes, and says the band did it")
+    void bothRoutesAtOnceIsStillResidency() {
+        NpcRegistry registry = village(9);
+        for (int i = 0; i < Residency.RESIDENTS_REQUIRED; i++) {
+            trusts(registry, i, Residency.TRUST_THRESHOLD);
+        }
+        for (int day = 0; day < Residency.FEEDINGS_REQUIRED; day++) {
+            registry.remember(new UUID(77, 0),
+                    Deed.of(DeedType.FED_HUNGRY, PLAYER, new UUID(77, 0), VILLAGE, day));
+        }
+
+        Residency.Verdict verdict = Residency.verdict(registry, VILLAGE, PLAYER, 0);
+        assertTrue(verdict.granted());
+        assertEquals(Residency.Route.BAND, verdict.route(),
+                "the band is checked first, so it is what is reported");
+        assertEquals(Residency.RESIDENTS_REQUIRED, verdict.residentsAtThreshold());
+        assertEquals(0, verdict.feedings(),
+                "and the rings were not read at all, which is the whole point of the shortcut");
+    }
+
     @Test
     @DisplayName("a deed done somewhere else does not count here")
     void deedsAreCountedInTheirOwnSettlement() {
