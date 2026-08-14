@@ -2,10 +2,15 @@ package net.namesake.npc;
 
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
 import net.namesake.Namesake;
 
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.ToIntFunction;
 
 /**
@@ -26,7 +31,7 @@ import java.util.function.ToIntFunction;
 public final class NpcSchema {
 
     /** Bump this and add a {@link Fix} in the same commit. Never one without the other. */
-    public static final int CURRENT = 6;
+    public static final int CURRENT = 7;
 
     /**
      * A registry written before {@link #KEY_VERSION} existed cannot occur — the key has been
@@ -57,7 +62,9 @@ public final class NpcSchema {
             new Fix(4, "deed rings added; nothing to rewrite, an absent table means nobody has "
                     + "witnessed anything", NpcSchema::fixMemoryTableAdded),
             new Fix(5, "settlement gossip deques added; nothing to rewrite, an absent table means "
-                    + "no rumour was in flight", NpcSchema::fixGossipTableAdded)
+                    + "no rumour was in flight", NpcSchema::fixGossipTableAdded),
+            new Fix(6, "deed rings repacked to fixed-width records behind an actor and an item "
+                    + "palette; every ring on disk is rewritten", NpcSchema::fixPackedDeedRings)
     );
 
     private NpcSchema() {
@@ -262,6 +269,130 @@ public final class NpcSchema {
      */
     private static int fixGossipTableAdded(CompoundTag root) {
         return 0;
+    }
+
+    /**
+     * Schema 7 repacks every deed ring, and <b>it is the first migration since schema 3 that has to
+     * rewrite something rather than assume something.</b>
+     *
+     * <p>Three additive migrations ran in a row — bonds at 4, rings at 5, gossip at 6 — and each one
+     * said out loud that "additive" is a claim rather than a default. This one is the other kind, and
+     * it says so with the same emphasis. The owner ruled memory depth at the close of session 08:
+     * richer per memory, a repeat count, and 32 → 128 slots, all three. The first two add a field
+     * each and the third multiplies the table by four, and session 08 had already done the
+     * arithmetic: at the readable codec's 122 B a deed the worst case goes to <b>6.26 MB of NBT
+     * against a 2 MB ceiling</b>. So the format changed, and a format change is a rewrite.
+     *
+     * <p><b>What it converts.</b> Schema 6 wrote each holder's ring as a {@code ListTag} of
+     * {@code CompoundTag}s, one per deed, through {@code Deed.CODEC}. Schema 7 writes one
+     * {@code ByteArrayTag} per holder at twenty-five bytes a slot, with the UUIDs and the item ids
+     * held once each in two palettes at the root of the table. Every field is carried across; the two
+     * that did not exist take their defaults, which are <i>no particular object</i> and <i>it
+     * happened once</i>. Both are true of every deed a schema-6 build could write, because neither
+     * field existed for it to be wrong about.
+     *
+     * <p><b>Written out longhand here rather than calling {@code Memories}, and that is deliberate.</b>
+     * A datafixer describes a shape that is frozen in the past. Calling the current writer would make
+     * this fix mean "whatever the newest format happens to be", so a schema-8 format change would
+     * silently rewrite schema-6 saves into schema-8 bytes and stamp them schema 7 —
+     * which loads, and is wrong. The constants below are schema 7's, for ever.
+     * {@code NpcSchemaTest.thePackedRingThisFixWritesIsTheOneMemoriesReads} is what pins the two
+     * together <i>today</i>, and it is the test a future session has to come and look at rather than
+     * a claim it can quietly break.
+     *
+     * <p><b>The hazard, so the test is pointed at the right thing.</b> Vanilla's
+     * {@code CompoundTag.getByteArray} returns an <i>empty array</i> for a key holding the wrong tag
+     * type. So if this fix does not run, or runs and writes nothing, every ring in the world reads
+     * back as a villager who remembers nothing — no error, no crash, and then written back that way
+     * at the next autosave. {@code Memories.readFrom} refuses that shape by name and counts it as
+     * damage precisely so the silent version cannot happen.
+     *
+     * @return how many deeds were rewritten, which is a real number here rather than the zero the
+     * three additive fixes return
+     */
+    private static int fixPackedDeedRings(CompoundTag root) {
+        ListTag rings = root.getList(KEY_MEMORIES, Tag.TAG_COMPOUND);
+        if (rings.isEmpty()) {
+            // A world where nobody has witnessed anything. Nothing to convert, and the palettes are
+            // still written so the table has the shape schema 7 expects rather than half of it.
+            root.putIntArray(KEY_MEMORY_ACTORS, new int[0]);
+            root.put(KEY_MEMORY_ITEMS, itemPalette(List.of("")));
+            return 0;
+        }
+
+        List<int[]> actors = new ArrayList<>();
+        Map<String, Integer> actorIndex = new LinkedHashMap<>();
+        int rewritten = 0;
+
+        for (int i = 0; i < rings.size(); i++) {
+            CompoundTag entry = rings.getCompound(i);
+            ListTag ring = entry.getList(KEY_RING, Tag.TAG_COMPOUND);
+            byte[] packed = new byte[ring.size() * PACKED_RECORD_BYTES];
+            ByteBuffer buffer = ByteBuffer.wrap(packed);
+            for (int slot = 0; slot < ring.size(); slot++) {
+                CompoundTag deed = ring.getCompound(slot);
+                buffer.putShort(deed.getShort("type"));
+                buffer.putInt(internActor(deed.getIntArray("actor"), actors, actorIndex));
+                buffer.putInt(internActor(deed.getIntArray("subject"), actors, actorIndex));
+                buffer.putInt(deed.getInt("settlement"));
+                buffer.putInt(deed.getInt("day"));
+                buffer.put(deed.getByte("severity"));
+                buffer.put(deed.getByte("confidence"));
+                // No schema-6 deed knows what object it was about, and none happened more than once
+                // as far as anything on disk can say. Index 0 is the empty item id; 1 is "once".
+                buffer.putInt(0);
+                buffer.put((byte) 1);
+                rewritten++;
+            }
+            entry.remove(KEY_RING);
+            entry.putByteArray(KEY_RING, packed);
+        }
+
+        int[] flattened = new int[actors.size() * 4];
+        for (int i = 0; i < actors.size(); i++) {
+            System.arraycopy(actors.get(i), 0, flattened, i * 4, 4);
+        }
+        root.putIntArray(KEY_MEMORY_ACTORS, flattened);
+        root.put(KEY_MEMORY_ITEMS, itemPalette(List.of("")));
+        return rewritten;
+    }
+
+    /**
+     * Schema 7's packed slot width. <b>Frozen — see {@link #fixPackedDeedRings}.</b> If a later
+     * schema changes the record, this constant does not move with it.
+     */
+    private static final int PACKED_RECORD_BYTES = 25;
+
+    private static final String KEY_MEMORIES = "memories";
+    private static final String KEY_RING = "ring";
+    private static final String KEY_MEMORY_ACTORS = "memoryActors";
+    private static final String KEY_MEMORY_ITEMS = "memoryItems";
+
+    private static ListTag itemPalette(List<String> items) {
+        ListTag tags = new ListTag();
+        for (String item : items) {
+            tags.add(StringTag.valueOf(item));
+        }
+        return tags;
+    }
+
+    /** A UUID's four ints, interned into the palette. Keyed on its printable form so it can hash. */
+    private static int internActor(int[] uuid, List<int[]> palette, Map<String, Integer> index) {
+        if (uuid.length != 4) {
+            // A deed whose actor cannot be read is one the packed form cannot represent. Writing the
+            // nil UUID rather than dropping the slot keeps the ring's length and its order, and
+            // Deed.UNKNOWN_ACTOR is already the value that means "nobody can say who".
+            uuid = new int[4];
+        }
+        String key = uuid[0] + ":" + uuid[1] + ":" + uuid[2] + ":" + uuid[3];
+        Integer existing = index.get(key);
+        if (existing != null) {
+            return existing;
+        }
+        int next = palette.size();
+        palette.add(uuid.clone());
+        index.put(key, next);
+        return next;
     }
 
     private static int fixUnassignedCulture(CompoundTag root) {

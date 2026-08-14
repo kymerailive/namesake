@@ -1,0 +1,761 @@
+﻿To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.6.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+
+> Configure project :fabric
+Fabric Loom: 1.17.19
+
+> Task :common:prepareCommonResources NO-SOURCE
+> Task :neoforge:createMinecraftArtifacts UP-TO-DATE
+> Task :neoforge:verifyPacketRegistration
+> Task :neoforge:compileJava
+> Task :neoforge:processResources UP-TO-DATE
+> Task :neoforge:classes
+> Task :neoforge:downloadAssets UP-TO-DATE
+> Task :neoforge:writeClientLegacyClasspath UP-TO-DATE
+> Task :neoforge:prepareClientRun
+
+> Task :neoforge:runClient
+WARN StatusConsoleListener Advanced terminal features are not available in this environment
+[23:49:59] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: ModLauncher running: args [--launchTarget, forgeclientdev, --version, 21.1.234, --assetIndex, 17, --assetsDir, C:\\Users\\lunch\\.gradle\\caches\\neoformruntime\\assets, --gameDir, ., --fml.fmlVersion, 4.0.42, --fml.mcVersion, 1.21.1, --fml.neoForgeVersion, 21.1.234, --fml.neoFormVersion, 20240808.144430]
+[23:49:59] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: JVM identified as Eclipse Adoptium OpenJDK 64-Bit Server VM 21.0.10+7-LTS
+[23:49:59] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: ModLauncher 11.0.5+main.901c6ea8 starting: java version 21.0.10 by Eclipse Adoptium; OS Windows 11 arch amd64 version 10.0
+[23:49:59] [main/INFO] [ne.ne.fm.lo.ImmediateWindowHandler/]: Loading ImmediateWindowProvider fmlearlywindow
+[23:49:59] [main/INFO] [EARLYDISPLAY/]: Trying GL version 4.6
+[23:49:59] [main/INFO] [EARLYDISPLAY/]: Requested GL version 4.6 got version 4.6
+[23:49:59] [main/INFO] [mixin/]: SpongePowered MIXIN Subsystem Version=0.8.7 Source=union:/C:/Users/lunch/.gradle/caches/modules-2/files-2.1/net.fabricmc/sponge-mixin/0.15.2+mixin.0.8.7/2af2f021d8e02a0220dc27a7a72b4666d66d44ca/sponge-mixin-0.15.2+mixin.0.8.7.jar%23138!/ Service=ModLauncher Env=CLIENT
+[23:50:00] [pool-2-thread-1/INFO] [EARLYDISPLAY/]: GL info: NVIDIA GeForce RTX 5070/PCIe/SSE2 GL version 4.6.0 NVIDIA 610.47, NVIDIA Corporation
+[23:50:00] [main/INFO] [ne.ne.fm.lo.mo.lo.JarInJarDependencyLocator/]: Found 2 dependencies adding them to mods collection
+[23:50:00] [main/INFO] [ne.ne.fm.lo.mo.ModDiscoverer/]: 
+     Mod List:
+		Name Version (Mod Id)
+
+		Minecraft 1.21.1 (minecraft)
+		Namesake 1.21.1-SNAPSHOT (namesake)
+		NeoForge 21.1.234 (neoforge)
+[23:50:00] [main/INFO] [cp.mo.mo.LaunchServiceHandler/MODLAUNCHER]: Launching target 'forgeclientdev' with arguments [--version, 21.1.234, --gameDir, ., --assetsDir, C:\Users\lunch\.gradle\caches\neoformruntime\assets, --assetIndex, 17]
+[23:50:01] [Datafixer Bootstrap/INFO] [mojang/DataFixerBuilder]: 229 Datafixer optimizations took 171 milliseconds
+[23:50:01] [pool-7-thread-1/INFO] [MixinExtras|Service/]: Initializing MixinExtras via com.llamalad7.mixinextras.service.MixinExtrasServiceImpl(version=0.5.3).
+[23:50:04] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, location] and [teleport, destination] with inputs: [0.1 -0.5 .9, 0 0 0]
+[23:50:04] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, location] and [teleport, targets] with inputs: [0.1 -0.5 .9, 0 0 0]
+[23:50:04] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, destination] and [teleport, targets] with inputs: [Player, 0123, @e, dd12be42-52a9-4a91-a8a1-11c01849e498]
+[23:50:04] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, targets] and [teleport, destination] with inputs: [Player, 0123, dd12be42-52a9-4a91-a8a1-11c01849e498]
+[23:50:04] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, targets, location] and [teleport, targets, destination] with inputs: [0.1 -0.5 .9, 0 0 0]
+[23:50:04] [Render thread/WARN] [minecraft/VanillaPackResourcesBuilder]: Assets URL 'union:/C:/MCA%20Reborn%20Rework/.claude/worktrees/namesake-authorization-layer-6c24f2/neoforge/build/moddev/artifacts/neoforge-21.1.234.jar%23189!/assets/.mcassetsroot' uses unexpected schema
+[23:50:04] [Render thread/WARN] [minecraft/VanillaPackResourcesBuilder]: Assets URL 'union:/C:/MCA%20Reborn%20Rework/.claude/worktrees/namesake-authorization-layer-6c24f2/neoforge/build/moddev/artifacts/neoforge-21.1.234.jar%23189!/data/.mcassetsroot' uses unexpected schema
+[23:50:04] [Render thread/INFO] [mojang/YggdrasilAuthenticationService]: Environment: Environment[sessionHost=https://sessionserver.mojang.com, servicesHost=https://api.minecraftservices.com, name=PROD]
+[23:50:04] [Render thread/INFO] [minecraft/Minecraft]: Setting user: Dev
+[23:50:04] [Render thread/INFO] [minecraft/Minecraft]: Backend library: LWJGL version 3.3.3+5
+[23:50:04] [modloading-worker-0/INFO] [ne.ne.ne.co.NeoForgeMod/NEOFORGE-MOD]: NeoForge mod loading, version 21.1.234, for MC 1.21.1
+[23:50:04] [modloading-worker-0/INFO] [Namesake/]: Namesake initialising on NeoForge (Minecraft 1.21.1, dev)
+[23:50:04] [modloading-worker-0/INFO] [Namesake/]: Wired 1 serverbound verb(s), each behind its own authorize gate: [namesake:greet]
+[23:50:04] [modloading-worker-0/WARN] [Namesake/]: Attach-bet harness ARMED, phase 'setup'. This rewrites game rules, moves the player and kills a villager. Unset -Dnamesake.harness to disable.
+[23:50:04] [modloading-worker-0/INFO] [Namesake/]: [harness] NeoForge client tick hook registered
+[23:50:05] [Render thread/INFO] [ne.ne.ne.ga.GameTestHooks/]: Enabled Gametest Namespaces: []
+[23:50:05] [Render thread/INFO] [minecraft/ReloadableResourceManager]: Reloading ResourceManager: vanilla, mod_resources, mod/namesake, mod/neoforge
+[23:50:05] [Worker-Main-8/INFO] [minecraft/UnihexProvider]: Found unifont_all_no_pua-15.1.05.hex, loading
+[23:50:05] [Worker-Main-10/INFO] [minecraft/UnihexProvider]: Found unifont_jp_patch-15.1.05.hex, loading
+[23:50:05] [Render thread/WARN] [minecraft/SoundEngine]: Missing sound for event: minecraft:item.goat_horn.play
+[23:50:05] [Render thread/WARN] [minecraft/SoundEngine]: Missing sound for event: minecraft:entity.goat.screaming.horn_break
+[23:50:06] [Render thread/INFO] [mojang/Library]: OpenAL initialized on device OpenAL Soft on Speakers (2- Realtek(R) Audio)
+[23:50:06] [Render thread/INFO] [minecraft/SoundEngine]: Sound engine started
+[23:50:06] [Render thread/INFO] [minecraft/TextureAtlas]: Created: 1024x512x4 minecraft:textures/atlas/blocks.png-atlas
+[23:50:06] [Render thread/INFO] [minecraft/TextureAtlas]: Created: 256x256x4 minecraft:textures/atlas/signs.png-atlas
+[23:50:06] [Render thread/INFO] [minecraft/TextureAtlas]: Created: 512x512x4 minecraft:textures/atlas/shield_patterns.png-atlas
+[23:50:06] [Render thread/INFO] [minecraft/TextureAtlas]: Created: 512x512x4 minecraft:textures/atlas/banner_patterns.png-atlas
+[23:50:06] [Render thread/INFO] [minecraft/TextureAtlas]: Created: 1024x1024x4 minecraft:textures/atlas/armor_trims.png-atlas
+[23:50:06] [Render thread/INFO] [minecraft/TextureAtlas]: Created: 256x256x4 minecraft:textures/atlas/chest.png-atlas
+[23:50:06] [Render thread/INFO] [minecraft/TextureAtlas]: Created: 128x64x4 minecraft:textures/atlas/decorated_pot.png-atlas
+[23:50:06] [Render thread/INFO] [minecraft/TextureAtlas]: Created: 512x256x4 minecraft:textures/atlas/beds.png-atlas
+[23:50:06] [Render thread/INFO] [minecraft/TextureAtlas]: Created: 512x256x4 minecraft:textures/atlas/shulker_boxes.png-atlas
+[23:50:06] [Render thread/INFO] [minecraft/TextureAtlas]: Created: 512x256x0 minecraft:textures/atlas/particles.png-atlas
+[23:50:06] [Render thread/INFO] [minecraft/TextureAtlas]: Created: 512x256x0 minecraft:textures/atlas/paintings.png-atlas
+[23:50:06] [Render thread/INFO] [minecraft/TextureAtlas]: Created: 256x128x0 minecraft:textures/atlas/mob_effects.png-atlas
+[23:50:06] [Render thread/INFO] [minecraft/TextureAtlas]: Created: 64x64x0 minecraft:textures/atlas/map_decorations.png-atlas
+[23:50:06] [Render thread/INFO] [minecraft/TextureAtlas]: Created: 1024x512x0 minecraft:textures/atlas/gui.png-atlas
+[23:50:06] [Render thread/WARN] [minecraft/ShaderInstance]: Shader rendertype_entity_translucent_emissive could not find sampler named Sampler2 in the specified shader program.
+[23:50:06] [Render thread/INFO] [ne.ne.ne.cl.en.an.js.AnimationLoader/]: Loaded 0 entity animations
+[23:50:08] [Render thread/INFO] [Namesake/]: [harness] unattended: muted, and pause-on-lost-focus off so clicking away from the window cannot stop the integrated server ticking
+[23:50:08] [Render thread/INFO] [Namesake/]: [harness] entering from screen net.minecraft.client.gui.screens.AccessibilityOnboardingScreen
+[23:50:08] [Render thread/INFO] [Namesake/]: [harness] creating world 'namesake_attachbet'
+[23:50:08] [Render thread/INFO] [minecraft/RecipeManager]: Loaded 1290 recipes
+[23:50:08] [Render thread/INFO] [minecraft/AdvancementTree]: Loaded 1399 advancements
+[23:50:09] [Server thread/INFO] [minecraft/IntegratedServer]: Starting integrated minecraft server version 1.21.1
+[23:50:09] [Server thread/INFO] [minecraft/MinecraftServer]: Generating keypair
+[23:50:10] [Server thread/INFO] [minecraft/MinecraftServer]: Preparing start region for dimension minecraft:overworld
+[23:50:10] [progressListener/INFO] [minecraft/LoggerChunkProgressListener]: Preparing spawn area: 2%
+[23:50:11] [progressListener/INFO] [minecraft/LoggerChunkProgressListener]: Preparing spawn area: 18%
+[23:50:11] [progressListener/INFO] [minecraft/LoggerChunkProgressListener]: Preparing spawn area: 51%
+[23:50:11] [Server thread/INFO] [ne.ne.ne.se.pe.PermissionAPI/]: Successfully initialized permission handler neoforge:default_handler
+[23:50:11] [progressListener/INFO] [minecraft/LoggerChunkProgressListener]: Time elapsed: 1341 ms
+[23:50:11] [Server thread/INFO] [minecraft/IntegratedServer]: Changing view distance to 12, from 10
+[23:50:11] [Server thread/INFO] [minecraft/IntegratedServer]: Changing simulation distance to 12, from 0
+[23:50:12] [Server thread/INFO] [minecraft/PlayerList]: Dev[local:E:748c2cfc] logged in with entity id 17 at (7.5, 72.0, -7.5)
+[23:50:12] [Server thread/INFO] [minecraft/MinecraftServer]: Dev joined the game
+[23:50:12] [Server thread/INFO] [Namesake/]: [harness] phase setup starting
+[23:50:12] [Render thread/INFO] [minecraft/AdvancementTree]: Loaded 2 advancements
+[23:50:13] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 124 ticks per second, or 8.05 ms per tick
+[23:50:13] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] [Server: Sprint completed with 124 ticks per second, or 8.05 ms per tick]
+[23:50:14] [Server thread/INFO] [Namesake/]: [harness] PASS  ATTACH spawned 3 villagers, found 3
+[23:50:14] [Server thread/INFO] [Namesake/]: [harness] subject persona=8ec3820c-3c95-43b9-bbee-15643faac9b0 entity=a9912419-97ab-4574-b6ef-ad3a2ad36ed5 warmth=11 culture=0
+[23:50:14] [Server thread/INFO] [Namesake/]: [harness] subject persona=e36b10bd-ab3d-47cf-a6ab-01f2fad0451b entity=478ab9d7-b3cf-48af-ae4e-24cdc83760f4 warmth=22 culture=0
+[23:50:14] [Server thread/INFO] [Namesake/]: [harness] subject persona=f0e8b522-36ed-454f-b06d-4a1fb9e754ae entity=3fb7cfb0-db8f-42a9-99cb-2f7b4de9e124 warmth=33 culture=0
+[23:50:14] [Server thread/INFO] [Namesake/]: [harness] PASS  ATTACH every villager carries a persona (3/3)
+[23:50:14] [Server thread/INFO] [Namesake/]: [harness] PASS  GENERATE 3/3 wilderness villagers were generated with a culture and no settlement
+[23:50:14] [Server thread/INFO] [Namesake/]: [harness] PASS  GENERATE no settlement was invented for a place with no bell (0)
+[23:50:14] [Server thread/INFO] [Namesake/]: [harness] wrote 3 subject(s) to C:\MCA Reborn Rework\.claude\worktrees\namesake-authorization-layer-6c24f2\neoforge\run\namesake-harness-subjects.txt
+[23:50:14] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 1359 ticks per second, or 0.74 ms per tick
+[23:50:14] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] [Server: Sprint completed with 1359 ticks per second, or 0.74 ms per tick]
+[23:50:14] [Server thread/INFO] [Namesake/]: [harness] PASS  UNLOAD test-site villagers unloaded (0 still resident)
+[23:50:14] [Server thread/ERROR] [Namesake/]: [harness] persona 8ec3820c-3c95-43b9-bbee-15643faac9b0 has no loaded entity that agrees it holds it
+[23:50:14] [Server thread/ERROR] [Namesake/]: [harness] persona 8ec3820c-3c95-43b9-bbee-15643faac9b0 has no loaded entity that agrees it holds it
+[23:50:14] [Server thread/ERROR] [Namesake/]: [harness] persona 8ec3820c-3c95-43b9-bbee-15643faac9b0 has no loaded entity that agrees it holds it
+[23:50:14] [Server thread/ERROR] [Namesake/]: [harness] persona 8ec3820c-3c95-43b9-bbee-15643faac9b0 has no loaded entity that agrees it holds it
+[23:50:14] [Server thread/ERROR] [Namesake/]: [harness] persona 8ec3820c-3c95-43b9-bbee-15643faac9b0 has no loaded entity that agrees it holds it
+[23:50:14] [Server thread/ERROR] [Namesake/]: [harness] persona 8ec3820c-3c95-43b9-bbee-15643faac9b0 has no loaded entity that agrees it holds it
+[23:50:14] [Server thread/INFO] [Namesake/]: [harness] PASS  CHUNK RELOAD personas identical after chunk unload/reload
+[23:50:14] [Server thread/INFO] [minecraft/Villager]: Villager Villager['Villager'/55, l='ServerLevel[namesake_attachbet]', x=800.50, y=70.00, z=0.50] died, message: 'Villager was slain by Zombie'
+[23:50:14] [Server thread/INFO] [Namesake/]: Persona 8ec3820c-3c95-43b9-bbee-15643faac9b0 survived minecraft:villager -> minecraft:zombie_villager (entity a9912419-97ab-4574-b6ef-ad3a2ad36ed5 -> f4cb68c1-dd1b-4308-935e-6f61b897154f)
+[23:50:14] [Server thread/INFO] [Namesake/]: [harness] PASS  ZOMBIFY persona rode the villager onto the zombie villager (minecraft:zombie_villager)
+[23:50:14] [Server thread/INFO] [Namesake/]: [harness] PASS  ZOMBIFY trait value intact across the conversion
+[23:50:14] [Server thread/INFO] [Namesake/]: [harness] PASS  CURE conversion started
+[23:50:14] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 347 ticks per second, or 2.88 ms per tick
+[23:50:14] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] [Server: Sprint completed with 347 ticks per second, or 2.88 ms per tick]
+[23:50:15] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 1799 ticks per second, or 0.56 ms per tick
+[23:50:15] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] [Server: Sprint completed with 1799 ticks per second, or 0.56 ms per tick]
+[23:50:15] [Server thread/INFO] [Namesake/]: [harness] waiting for the zombie villager to finish curing (15600 ticks left)
+[23:50:15] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 4224 ticks per second, or 0.24 ms per tick
+[23:50:15] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] [Server: Sprint completed with 4224 ticks per second, or 0.24 ms per tick]
+[23:50:15] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 3328 ticks per second, or 0.30 ms per tick
+[23:50:15] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] [Server: Sprint completed with 3328 ticks per second, or 0.30 ms per tick]
+[23:50:15] [Server thread/INFO] [Namesake/]: [harness] waiting for the zombie villager to finish curing (15200 ticks left)
+[23:50:15] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 2353 ticks per second, or 0.42 ms per tick
+[23:50:15] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] [Server: Sprint completed with 2353 ticks per second, or 0.42 ms per tick]
+[23:50:15] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 2890 ticks per second, or 0.35 ms per tick
+[23:50:15] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] [Server: Sprint completed with 2890 ticks per second, or 0.35 ms per tick]
+[23:50:15] [Server thread/INFO] [Namesake/]: [harness] waiting for the zombie villager to finish curing (14800 ticks left)
+[23:50:15] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 1857 ticks per second, or 0.54 ms per tick
+[23:50:15] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] [Server: Sprint completed with 1857 ticks per second, or 0.54 ms per tick]
+[23:50:15] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 4706 ticks per second, or 0.21 ms per tick
+[23:50:15] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] [Server: Sprint completed with 4706 ticks per second, or 0.21 ms per tick]
+[23:50:15] [Server thread/INFO] [Namesake/]: [harness] waiting for the zombie villager to finish curing (14400 ticks left)
+[23:50:15] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 6720 ticks per second, or 0.15 ms per tick
+[23:50:15] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] [Server: Sprint completed with 6720 ticks per second, or 0.15 ms per tick]
+[23:50:15] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 9067 ticks per second, or 0.11 ms per tick
+[23:50:16] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] [Server: Sprint completed with 9067 ticks per second, or 0.11 ms per tick]
+[23:50:16] [Server thread/INFO] [Namesake/]: [harness] waiting for the zombie villager to finish curing (14000 ticks left)
+[23:50:16] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 2245 ticks per second, or 0.45 ms per tick
+[23:50:16] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] [Server: Sprint completed with 2245 ticks per second, or 0.45 ms per tick]
+[23:50:16] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 4454 ticks per second, or 0.22 ms per tick
+[23:50:16] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] [Server: Sprint completed with 4454 ticks per second, or 0.22 ms per tick]
+[23:50:16] [Server thread/INFO] [Namesake/]: [harness] waiting for the zombie villager to finish curing (13600 ticks left)
+[23:50:16] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 2662 ticks per second, or 0.38 ms per tick
+[23:50:16] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] [Server: Sprint completed with 2662 ticks per second, or 0.38 ms per tick]
+[23:50:16] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 4579 ticks per second, or 0.22 ms per tick
+[23:50:16] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] [Server: Sprint completed with 4579 ticks per second, or 0.22 ms per tick]
+[23:50:16] [Server thread/INFO] [Namesake/]: [harness] waiting for the zombie villager to finish curing (13200 ticks left)
+[23:50:16] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 2727 ticks per second, or 0.37 ms per tick
+[23:50:16] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] [Server: Sprint completed with 2727 ticks per second, or 0.37 ms per tick]
+[23:50:16] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 3728 ticks per second, or 0.27 ms per tick
+[23:50:16] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] [Server: Sprint completed with 3728 ticks per second, or 0.27 ms per tick]
+[23:50:16] [Server thread/INFO] [Namesake/]: [harness] waiting for the zombie villager to finish curing (12800 ticks left)
+[23:50:16] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 2823 ticks per second, or 0.35 ms per tick
+[23:50:16] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] [Server: Sprint completed with 2823 ticks per second, or 0.35 ms per tick]
+[23:50:17] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 943 ticks per second, or 1.06 ms per tick
+[23:50:17] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] [Server: Sprint completed with 943 ticks per second, or 1.06 ms per tick]
+[23:50:17] [Server thread/INFO] [Namesake/]: [harness] waiting for the zombie villager to finish curing (12400 ticks left)
+[23:50:17] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 2204 ticks per second, or 0.45 ms per tick
+[23:50:17] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] [Server: Sprint completed with 2204 ticks per second, or 0.45 ms per tick]
+[23:50:17] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 1891 ticks per second, or 0.53 ms per tick
+[23:50:17] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] [Server: Sprint completed with 1891 ticks per second, or 0.53 ms per tick]
+[23:50:17] [Server thread/INFO] [Namesake/]: [harness] waiting for the zombie villager to finish curing (12000 ticks left)
+[23:50:17] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 2070 ticks per second, or 0.48 ms per tick
+[23:50:17] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] [Server: Sprint completed with 2070 ticks per second, or 0.48 ms per tick]
+[23:50:17] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 2569 ticks per second, or 0.39 ms per tick
+[23:50:17] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] [Server: Sprint completed with 2569 ticks per second, or 0.39 ms per tick]
+[23:50:17] [Server thread/INFO] [minecraft/MinecraftServer]: Dev has reached the goal [Zombie Doctor]
+[23:50:17] [Server thread/INFO] [Namesake/]: Reaped stray persona 6f95cbb0-cbe3-4b9a-8656-54c7edf6d528 minted for conversion product 3714b180-f50d-495f-9387-2ee858f7d712
+[23:50:17] [Server thread/INFO] [Namesake/]: Persona 8ec3820c-3c95-43b9-bbee-15643faac9b0 survived minecraft:zombie_villager -> minecraft:villager (entity f4cb68c1-dd1b-4308-935e-6f61b897154f -> 3714b180-f50d-495f-9387-2ee858f7d712)
+[23:50:17] [Server thread/INFO] [Namesake/]: [harness] PASS  CURE persona rode the zombie villager back onto a villager (minecraft:villager)
+[23:50:17] [Server thread/INFO] [Namesake/]: [harness] PASS  CURE trait value intact across the cure
+[23:50:17] [Server thread/INFO] [Namesake/]: [harness] PASS  NO STRAY registry holds 3 persona(s), was 3
+[23:50:17] [Server thread/INFO] [Namesake/]: [harness] PASS  SUBJECTS all three personas still correct
+[23:50:17] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] Dev has reached the goal [Zombie Doctor]
+[23:50:17] [Render thread/INFO] [minecraft/AdvancementTree]: Loaded 10 advancements
+[23:50:17] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 494 ticks per second, or 2.02 ms per tick
+[23:50:17] [Server thread/INFO] [Namesake/]: [harness] PASS  WIRE S2C the interaction token reached the client
+[23:50:17] [Server thread/INFO] [Namesake/]: [harness] PASS  WIRE the server holds an open interaction
+[23:50:17] [Server thread/INFO] [Namesake/]: Verb namesake:greet refused for Dev: NO_LIVE_INTERACTION
+[23:50:17] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] [Server: Sprint completed with 494 ticks per second, or 2.02 ms per tick]
+[23:50:17] [Server thread/INFO] [Namesake/]: [harness] PASS  WIRE C2S the forged greet reached the server's handler
+[23:50:17] [Server thread/INFO] [Namesake/]: [harness] PASS  GATE the forged token was refused (interaction expiry unmoved at 5783)
+[23:50:17] [Server thread/INFO] [Namesake/]: [harness] PASS  GATE the real token was accepted (interaction expiry moved 5783 -> 5785)
+[23:50:18] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 12 ticks per second, or 79.05 ms per tick
+[23:50:18] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] [Server: Sprint completed with 12 ticks per second, or 79.05 ms per tick]
+[23:50:18] [Server thread/INFO] [Namesake/]: [harness] PASS  VILLAGE site is on real ground at y=63
+[23:50:19] [Server thread/INFO] [Namesake/]: [harness] built a village at 800, 63, 300: bell, 6 workstations, 6 beds
+[23:50:19] [Server thread/INFO] [Namesake/]: [harness] spawned village villager 0 at 801, 64, 301 (in level: true)
+[23:50:19] [Server thread/INFO] [Namesake/]: [harness] spawned village villager 1 at 802, 64, 301 (in level: true)
+[23:50:19] [Server thread/INFO] [Namesake/]: [harness] spawned village villager 2 at 803, 64, 301 (in level: true)
+[23:50:19] [Server thread/INFO] [Namesake/]: [harness] spawned village villager 3 at 821, 64, 301 (in level: true)
+[23:50:19] [Server thread/INFO] [Namesake/]: [harness] spawned village villager 4 at 822, 64, 301 (in level: true)
+[23:50:19] [Server thread/INFO] [Namesake/]: [harness] spawned village villager 5 at 823, 64, 301 (in level: true)
+[23:50:19] [Server thread/INFO] [Namesake/]: [harness] 6 villager(s) within 64 of the bell right after spawning
+[23:50:19] [Server thread/INFO] [Namesake/]: Registered settlement 0 at 800, 63, 300 (minecraft:overworld): FARMING, defensibility 82, Tally[sites=[0, 3, 1, 1, 1, 0, 0] beds=6 workstations=6 meanDistance=11]
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] PASS  SETTLEMENT exactly one settlement registered from the bell we placed (1)
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] PASS  SETTLEMENT centre is the bell at 800, 63, 300 (got 800, 63, 300)
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] PASS  SURVEY the workstation census read a farming town (got FARMING)
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] PASS  SURVEY needs: food 0, tools 34 - a farming town feeds itself and is short of a smith
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] PASS  SURVEY a compact village is defensible (82)
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] near the bell: entity f053ef5c-c5c6-482f-9915-c1a767f977f9 at 801, 64, 301 persona=11c65606 settlement=0
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] near the bell: entity 2c55089c-dcbb-48ca-861b-0d0c810a2c70 at 802, 64, 301 persona=308bfddb settlement=0
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] near the bell: entity 3663ecd3-d612-456b-8ddd-77056f25c804 at 803, 64, 301 persona=a7a8f76e settlement=0
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] near the bell: entity 17c807c9-ce3f-46ae-972d-101dc1eb75d8 at 821, 64, 301 persona=66f32313 settlement=0
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] near the bell: entity 73b89aec-c893-4931-afdc-8a7ab0ad6673 at 822, 64, 301 persona=2686c30c settlement=0
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] near the bell: entity 4b9e54f4-10c5-4267-8a5d-d2602cf50ccd at 823, 64, 301 persona=e29d80dc settlement=0
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] PASS  RESIDENTS 6/6 villagers were placed in the settlement the survey registered (6 villagers near the bell, 6 with a persona)
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] resident Turnangit Gvirnsk culture=1 household=1896895516 traits=[-14, 27, 5, -17, 37, 15, 40, -16]
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] resident Vuryark Gvirnsk culture=1 household=1896895516 traits=[6, 40, 5, -18, 41, 25, 25, -31]
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] resident Vigosk Gvirnsk culture=1 household=1896895516 traits=[-11, 59, 21, -12, 30, 10, 41, -22]
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] resident Stinkark Stuksk culture=1 household=1872263607 traits=[10, 39, 25, -13, 47, -15, 4, -35]
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] resident Morrogirn Stuksk culture=1 household=1872263607 traits=[-11, 13, 23, -23, 24, -23, 29, -37]
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] resident Draknozzysk Stuksk culture=1 household=1872263607 traits=[7, 47, 19, 1, 24, -13, 19, -29]
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] PASS  CULTURE one village, one culture (1 seen: [1])
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] PASS  HOUSEHOLDS two cells twenty blocks apart made two households (2)
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] PASS  HOUSEHOLDS everyone in a household shares one family name [[Gvirnsk], [Stuksk]]
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] PASS  HOUSEHOLDS the two households do not share a family name
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] wrote 3 subject(s) to C:\MCA Reborn Rework\.claude\worktrees\namesake-authorization-layer-6c24f2\neoforge\run\namesake-harness-subjects.txt
+[23:50:20] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 359 ticks per second, or 2.78 ms per tick
+[23:50:20] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] [Server: Sprint completed with 359 ticks per second, or 2.78 ms per tick]
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] PASS  WITNESS the cast is in place: five villagers inside the 24-block box, one forty blocks up outside it
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] PASS  WITNESS the scan found 3 witnesses; three could see it, one was behind a wall and one was out of range
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] PASS  DEED the villager who was fed gained +3 (trust 3, warmth 3)
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] PASS  DEED 3/3 witnesses who could see it gained +1
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] PASS  CANSEE the villager behind the wall recorded nothing, though it was five blocks away and well inside the box
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] PASS  RANGE the villager forty blocks up recorded nothing, though nothing at all was in its way
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] PASS  CAP nine feedings in one day left trust 8 and warmth 8, cap 8
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] PASS  CAP all nine landed on the same in-game day (0)
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] PASS  RING nine identical feedings left 1 memory rather than nine — the ring is content-addressed
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] PASS  RING a different kind of deed on the same day is a second memory (2)
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] PASS  RING the ring is ordered oldest first [FED_HUNGRY, GIFT_WANTED]
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] PASS  RING the subject and all 3 witnesses recorded it (4)
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] PASS  RING the gift moved 0 bonds — every allowance was already spent — and was remembered by 4 people regardless. Seeing something is not the same as it changing your mind about somebody
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] PASS  RING the villager behind the wall remembers nothing either — no bond and no memory
+[23:50:20] [Server thread/INFO] [Namesake/]: [debug bonds] day 0 — 6 loaded NPC(s), nearest first; 4 bond(s) and 8 deed(s) across 4 ring(s) in the world
+  who                trust warmth respect fear   cap   gift×  mem
+  Turnangit Gvirnsk     +8     +8      +0   +0   8/8/0/0  1.00   2
+  Vuryark Gvirnsk       +8     +8      +0   +0   8/8/0/0  1.00   2
+  Vigosk Gvirnsk        +8     +8      +0   +0   8/8/0/0  1.00   2
+  Stinkark Stuksk       +8     +8      +0   +0   8/8/0/0  1.00   2
+  Morrogirn Stuksk      +0     +0      +0   +0   0/0/0/0  1.00   0
+  Draknozzysk Stuksk    +0     +0      +0   +0   0/0/0/0  1.00   0
+[23:50:20] [Server thread/INFO] [Namesake/]: [debug deeds] Turnangit Gvirnsk
+  2 of 32 remembered, newest first, day 0
+  day  age  deed             how     by
+    0       GIFT_WANTED      to them 380df991
+    0       FED_HUNGRY       to them 380df991
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] PASS  GOSSIP step 6: 5 story(s) entered the settlement's deque when the deeds were emitted
+[23:50:20] [Server thread/INFO] [Namesake/]: [harness] PASS  GOSSIP neither villager who could not see it knows anything yet
+[23:50:20] [Server thread/INFO] [Namesake/]: [debug deeds] Morrogirn Stuksk
+  0 of 32 remembered, newest first, day 0
+  they have not seen anything happen. That is a real
+  answer, not an empty table.
+[23:50:20] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] day 0 — 6 loaded NPC(s), nearest first; 4 bond(s) and 8 deed(s) across 4 ring(s) in the world\n  who                trust warmth respect fear   cap   gift×  mem\n  Turnangit Gvirnsk     +8     +8      +0   +0   8/8/0/0  1.00   2\n  Vuryark Gvirnsk       +8     +8      +0   +0   8/8/0/0  1.00   2\n  Vigosk Gvirnsk        +8     +8      +0   +0   8/8/0/0  1.00   2\n  Stinkark Stuksk       +8     +8      +0   +0   8/8/0/0  1.00   2\n  Morrogirn Stuksk      +0     +0      +0   +0   0/0/0/0  1.00   0\n  Draknozzysk Stuksk    +0     +0      +0   +0   0/0/0/0  1.00   0
+[23:50:20] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] Turnangit Gvirnsk\n  2 of 32 remembered, newest first, day 0\n  day  age  deed             how     by\n    0       GIFT_WANTED      to them 380df991\n    0       FED_HUNGRY       to them 380df991
+[23:50:21] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 1854 ticks per second, or 0.54 ms per tick
+[23:50:21] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] [Server: Sprint completed with 1854 ticks per second, or 0.54 ms per tick]
+[23:50:21] [Server thread/INFO] [Namesake/]: [harness] waiting for the settlement to finish telling its 5 story(s) (5600 ticks left)
+[23:50:21] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 2027 ticks per second, or 0.49 ms per tick
+[23:50:21] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] [Server: Sprint completed with 2027 ticks per second, or 0.49 ms per tick]
+[23:50:21] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 2227 ticks per second, or 0.45 ms per tick
+[23:50:21] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] [Server: Sprint completed with 2227 ticks per second, or 0.45 ms per tick]
+[23:50:21] [Server thread/INFO] [Namesake/]: [harness] waiting for the settlement to finish telling its 5 story(s) (5200 ticks left)
+[23:50:21] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 2313 ticks per second, or 0.43 ms per tick
+[23:50:21] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] [Server: Sprint completed with 2313 ticks per second, or 0.43 ms per tick]
+[23:50:21] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 2499 ticks per second, or 0.40 ms per tick
+[23:50:21] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] [Server: Sprint completed with 2499 ticks per second, or 0.40 ms per tick]
+[23:50:21] [Server thread/INFO] [Namesake/]: [harness] waiting for the settlement to finish telling its 5 story(s) (4800 ticks left)
+[23:50:21] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 2459 ticks per second, or 0.41 ms per tick
+[23:50:21] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] [Server: Sprint completed with 2459 ticks per second, or 0.41 ms per tick]
+[23:50:22] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 1061 ticks per second, or 0.94 ms per tick
+[23:50:22] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] [Server: Sprint completed with 1061 ticks per second, or 0.94 ms per tick]
+[23:50:22] [Server thread/INFO] [Namesake/]: [harness] waiting for the settlement to finish telling its 5 story(s) (4400 ticks left)
+[23:50:22] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 2444 ticks per second, or 0.41 ms per tick
+[23:50:22] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] [Server: Sprint completed with 2444 ticks per second, or 0.41 ms per tick]
+[23:50:22] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 2565 ticks per second, or 0.39 ms per tick
+[23:50:22] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] [Server: Sprint completed with 2565 ticks per second, or 0.39 ms per tick]
+[23:50:22] [Server thread/INFO] [Namesake/]: [harness] waiting for the settlement to finish telling its 5 story(s) (4000 ticks left)
+[23:50:22] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 3772 ticks per second, or 0.27 ms per tick
+[23:50:22] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] [Server: Sprint completed with 3772 ticks per second, or 0.27 ms per tick]
+[23:50:22] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 1879 ticks per second, or 0.53 ms per tick
+[23:50:22] [Render thread/INFO] [minecraft/ChatComponent]: [System] [CHAT] [Server: Sprint completed with 1879 ticks per second, or 0.53 ms per tick]
+[23:50:22] [Server thread/INFO] [Namesake/]: [harness] PASS  GOSSIP the drain ran on the server tick hook and spent every story: 0 left of 5
+[23:50:22] [Server thread/INFO] [Namesake/]: [harness] PASS  GOSSIP the villager behind the wall and the one forty blocks up were told about 7 thing(s) they could not possibly have seen
+[23:50:22] [Server thread/INFO] [Namesake/]: [harness] PASS  GOSSIP and not one of them at first hand — they were told, they did not see it
+[23:50:22] [Server thread/INFO] [Namesake/]: [harness] PASS  GOSSIP the whole world holds three confidences and no others: [49, 70, 100] — 100 watched it, 70 was told, 49 cannot name who
+[23:50:22] [Server thread/INFO] [Namesake/]: [harness] PASS  GOSSIP 4 unattributed rumour(s) in this village and not one bond about nobody — a story you cannot attribute moves no opinion
+[23:50:22] [Server thread/INFO] [Namesake/]: [debug deeds] Morrogirn Stuksk
+  3 of 32 remembered, newest first, day 0
+  day  age  deed             how     by
+    0       FED_HUNGRY       rumour  nobody   c49
+    0       GIFT_WANTED      rumour  nobody   c49
+    0       FED_HUNGRY       heard   380df991 c70
+[23:50:22] [Server thread/INFO] [Namesake/]: [harness] PASS  GOSSIP the empty-ring branch was rendered to a player before anybody was told anything — the state a real player meets first, and the one session 07 shipped over the chat width because no fixture ever reached it
+[23:50:22] [Server thread/INFO] [Namesake/]: [harness] PASS  GOSSIP the deed ring reached a player through the real dispatcher in 10 line(s), in both of its states
+[23:50:22] [Server thread/INFO] [Namesake/]: [harness] PASS  GOSSIP the widest deed row a player sees is 52 characters, against a 60-character chat width: |  they have not seen anything happen. That is a real|
+[23:50:22] [Server thread/INFO] [Namesake/]: [harness] PASS  GOSSIP no deed row carries a carriage return
+[23:50:22] [Server thread/INFO] [Namesake/]: [harness] recorded 6 bond(s) for the verify phase
+[23:50:22] [Server thread/INFO] [Namesake/]: [harness] recorded 6 ring(s) holding 27 deed(s) for the verify phase
+[23:50:22] [Server thread/INFO] [Namesake/]: [harness] PASS  SIMULATE a hundred in-game days emitted 100 deeds on the server thread in 15 ms
+[23:50:22] [Server thread/INFO] [Namesake/]: [harness] PASS  SIMULATE the run cost 15 ms, against a 500 ms ceiling. A tick is 50 ms and this machine's number belongs in the ledger with its conditions; a shared runner's does not
+[23:50:22] [Server thread/INFO] [Namesake/]: [harness] PASS  SIMULATE this world is untouched at 9/6/27 persona(s)/bond(s)/deed(s) — the simulation's registry is its own
+[23:50:22] [Server thread/INFO] [Namesake/]: [debug stats] day 0 - 9 persona(s), 1 settlement(s), 6 bond(s)
+  6 of 9 have met you
+  trust    max    8  p50    8  min    0
+  warmth   max    8  p50    8  min    0
+  respect  max    0  p50    0  min    0
+  fear     max    0  p50    0  min    0
+  rings    6 hold 27 deed(s), 0 full at 32
+  deepest  Turnangit Gvirnsk 5/32 back to day 0
+    FED_HUNGRY           22
+    GIFT_WANTED           5
+[23:50:22] [Server thread/INFO] [Namesake/]: [debug earnrate] day 0 - warmth per in-game day of contact
+  who                  warm  days  /contact  /elapsed
+  Turnangit Gvirnsk       8     1      8.00      8.00
+  Vuryark Gvirnsk         8     1      8.00      8.00
+  Vigosk Gvirnsk          8     1      8.00      8.00
+  Stinkark Stuksk         8     1      8.00      8.00
+  Draknozzysk Stuksk      2     1      2.00      2.00
+  Morrogirn Stuksk        1     1      1.00      1.00
+  observed max warmth 8 of 100
+  a threshold above that is a band nobody is ever in.
+  contact days to reach, at the fastest rate here:
+    20:3 40:5 60:8 80:10 100:13
+[23:50:22] [Server thread/INFO] [Namesake/]: [debug simulate] report written to C:\MCA Reborn Rework\.claude\worktrees\namesake-authorization-layer-6c24f2\neoforge\run\namesake-simulation-report.txt
+[23:50:22] [Server thread/INFO] [Namesake/]: [debug simulate]
+=== namesake headless simulation ===
+  seed 20260813 - 100 in-game days - 9 residents in 3 households
+  Vale, FARMING, defensibility 70
+  player   ATTENTIVE       one deed a day, every day, focused on 3 resident(s)
+  witness  35% of the village sees a deed, capped at 12
+           this is the least grounded input here - see the sweep below
+  ran 100 in-game days in 5.48 ms
+  the record layer's only input from time is an integer day, so a hundred days
+  here is a hundred days exactly. What is modelled is the player and the witnesses.
+
+--- chronicle ---
+  day   0  you arrive. 9 residents; nobody has met you.
+  day   0  you feed   Delrolfond        3 saw it, 4 remembered, 4 moved
+  day   1  you give   Kisnirluth        3 saw it, 4 remembered, 4 moved
+  day   2  you offer  Limsock           3 saw it, 4 remembered, 3 moved
+  day   3  you feed   Delrolfond        3 saw it, 4 remembered, 4 moved
+  day   4  you give   Kisnirluth        3 saw it, 4 remembered, 4 moved
+  day   5  you offer  Limsock           3 saw it, 4 remembered, 4 moved
+  day   6  you feed   Delrolfond        3 saw it, 4 remembered, 4 moved
+  wk   1    7 deed(s) to 3 resident(s), 21 witnessed; warmth best 9, village 1
+  wk   2    7 deed(s) to 3 resident(s), 21 witnessed; warmth best 11, village 1
+  wk   3    7 deed(s) to 3 resident(s), 21 witnessed; warmth best 17, village 1
+  day  33  * Delrolfond reaches 20 warmth
+  wk   4    7 deed(s) to 3 resident(s), 21 witnessed; warmth best 20, village 1
+  wk   5    7 deed(s) to 3 resident(s), 21 witnessed; warmth best 23, village 1
+  wk   6    7 deed(s) to 3 resident(s), 21 witnessed; warmth best 29, village 1
+  wk   7    7 deed(s) to 3 resident(s), 21 witnessed; warmth best 31, village 1
+  wk   8    7 deed(s) to 3 resident(s), 21 witnessed; warmth best 32, village 1
+  day  67  * Kisnirluth reaches 20 warmth
+  wk   9    7 deed(s) to 3 resident(s), 21 witnessed; warmth best 38, village 1
+  day  75  * Delrolfond reaches 40 warmth
+  wk  10    7 deed(s) to 3 resident(s), 21 witnessed; warmth best 40, village 1
+  wk  11    7 deed(s) to 3 resident(s), 21 witnessed; warmth best 42, village 1
+  wk  12    7 deed(s) to 3 resident(s), 21 witnessed; warmth best 48, village 1
+  wk  13    7 deed(s) to 3 resident(s), 21 witnessed; warmth best 51, village 1
+  wk  14    2 deed(s) to 2 resident(s), 6 witnessed; warmth best 53, village 1
+
+--- earn rate: warmth per in-game day of contact ---
+  who                  warmth   peak  trust   days   span /contact /elapsed
+  Delrolfond Lickfield     53     53    100     26     37     2.04     1.43
+  Kisnirluth Seahollow     27     28     92     29     36     0.93     0.75
+  Rinnusdeld Seahollow      3      3     48     21     41     0.14     0.07
+  Stongessaend Lickfie      1      3     43     24     42     0.04     0.02
+  Gemtherthath Heilhol      1      1     19     28     48     0.04     0.02
+  Sisbon Lickfield          1      1     41     27     41     0.04     0.02
+  Limsock Heilhollow        0      1     76     30     38     0.00     0.00
+  Benvowi Seahollow         0      1     39     24     42     0.00     0.00
+  Stemwisneind Heilhol      0      1     30     29     50     0.00     0.00
+
+                       warmth    trust  respect     fear
+  observed maximum         53      100        0        0
+  observed median           1       43        0        0
+  observed minimum          0       19        0        0
+  a threshold above the maximum is a band nobody is ever in. LNK shipped five.
+
+  warmth is the only axis that decays: one point an in-game day, toward four
+  tenths of its high-water mark. So it accumulates only while one contact is
+  worth more than the gap since the last; trust has no such condition.
+    residents who met the player:                   9
+    ...whose warmth ever rose above zero:           9
+    ...who hold none of it after 100 days:          3
+    highest warmth anybody ever held:              53  (day 99)
+    trust, which does not decay:              p50  43, max 100
+
+  in-game days of contact to reach, at three observed rates:
+    target        20      40      60      80     100
+    best          10      20      30      40      50
+    median       540    1080    1620    2160    2700
+    worst      never   never   never   never   never
+  these are marks on a 0-100 axis, not bands. Session 12 owns the bands.
+  'never' is a real answer, and it is the LNK failure with the arithmetic done:
+  a threshold on a row that reads never is a band that villager never enters.
+
+--- the deed ring after 100 in-game days ---
+  9 of 9 villagers remember anything; 9 ring(s) are full at 32
+  288 deeds held across the settlement, 100% of its total ring capacity
+
+  occupancy, slots used -> how many villagers:
+    32:9
+
+  the whole settlement's deed mix:
+    GIFT_UNWANTED       101
+    GIFT_WANTED          97
+    FED_HUNGRY           90
+
+  the deepest ring - Delrolfond Lickfield, 32/32 slots, days 63 to 99 (37 days of reach)
+    56 deed(s) happened in front of them; they hold 32 and have forgotten 24
+    mix: FED_HUNGRY 13 GIFT_UNWANTED 11 GIFT_WANTED 8
+    a wanted gift is worth x1.08 to them; their day is worth 9
+    day   deed             how
+     99   FED_HUNGRY       to them
+     98   GIFT_UNWANTED    saw it
+     97   GIFT_WANTED      saw it
+     96   FED_HUNGRY       to them
+     95   GIFT_UNWANTED    saw it
+     94   GIFT_WANTED      saw it
+     93   FED_HUNGRY       to them
+     92   GIFT_UNWANTED    saw it
+     91   GIFT_WANTED      saw it
+     90   FED_HUNGRY       to them
+     89   GIFT_UNWANTED    saw it
+     88   GIFT_WANTED      saw it
+     87   FED_HUNGRY       to them
+     86   GIFT_UNWANTED    saw it
+     85   GIFT_WANTED      saw it
+     84   FED_HUNGRY       to them
+     82   GIFT_WANTED      saw it
+     81   FED_HUNGRY       to them
+     80   GIFT_UNWANTED    saw it
+     78   FED_HUNGRY       to them
+     77   GIFT_UNWANTED    saw it
+     75   FED_HUNGRY       to them
+     74   GIFT_UNWANTED    saw it
+     73   GIFT_WANTED      saw it
+     72   FED_HUNGRY       to them
+     71   GIFT_UNWANTED    saw it
+     69   FED_HUNGRY       to them
+     68   GIFT_UNWANTED    saw it
+     66   FED_HUNGRY       to them
+     65   GIFT_UNWANTED    saw it
+     64   GIFT_WANTED      saw it
+     63   FED_HUNGRY       to them
+
+  the median ring - Benvowi Seahollow, 32/32 slots, days 58 to 97 (40 days of reach)
+    33 deed(s) happened in front of them; they hold 32 and have forgotten 1
+    mix: GIFT_WANTED 12 GIFT_UNWANTED 10 FED_HUNGRY 10
+    a wanted gift is worth x1.42 to them; their day is worth 11
+    day   deed             how
+     97   GIFT_WANTED      saw it
+     96   FED_HUNGRY       saw it
+     95   GIFT_UNWANTED    saw it
+     94   GIFT_WANTED      saw it
+     92   GIFT_UNWANTED    saw it
+     91   GIFT_WANTED      saw it
+     90   FED_HUNGRY       saw it
+     89   GIFT_UNWANTED    saw it
+     87   FED_HUNGRY       saw it
+     86   GIFT_UNWANTED    saw it
+     85   GIFT_WANTED      saw it
+     84   FED_HUNGRY       saw it
+     83   GIFT_UNWANTED    saw it
+     82   GIFT_WANTED      saw it
+     80   GIFT_UNWANTED    saw it
+     78   FED_HUNGRY       saw it
+     77   GIFT_UNWANTED    saw it
+     76   GIFT_WANTED      saw it
+     75   FED_HUNGRY       saw it
+     74   GIFT_UNWANTED    saw it
+     73   GIFT_WANTED      saw it
+     70   GIFT_WANTED      saw it
+     69   FED_HUNGRY       saw it
+     67   GIFT_WANTED      saw it
+     66   FED_HUNGRY       saw it
+     65   GIFT_UNWANTED    saw it
+     64   GIFT_WANTED      saw it
+     63   FED_HUNGRY       saw it
+     62   GIFT_UNWANTED    saw it
+     61   GIFT_WANTED      saw it
+     60   FED_HUNGRY       saw it
+     58   GIFT_WANTED      saw it
+
+--- what the ring hides from a live save ---
+  who                   true days  ring days rate error
+  Delrolfond Lickfield         56         26       115%
+  Kisnirluth Seahollow         67         29       131%
+  Rinnusdeld Seahollow         34         21        62%
+  Stongessaend Lickfie         44         24        83%
+  Gemtherthath Heilhol         34         28        21%
+  Sisbon Lickfield             33         27        22%
+  Limsock Heilhollow           66         30         0%
+  Benvowi Seahollow            33         24         0%
+  Stemwisneind Heilhol         33         29         0%
+  a ring holds 32 deeds. Any playthrough longer than that overstates its own earn rate,
+  because the warmth is cumulative and the days it is divided by are not.
+
+--- what a residency threshold would cost, per axis ---
+  DESIGN.md  grants residency on a known band with three residents, and
+  Bond.trust and Bond.warmth are the two exemptions that expire at session 09.
+  The in-game day the THIRD resident crossed each mark:
+    mark          20      40      60      80     100
+    warmth     never   never   never   never   never
+    trust         28      54      80   never   never
+  'never' means no three residents reached it in 100 days at this model.
+
+--- how far one deed travels, and how well it survives the telling ---
+  one deed, emitted on day 0 in a settlement of 9, then nobody visits.
+  a retelling keeps 70% of the teller's confidence; below 50 nobody can name the actor.
+
+  witnesses / gossip       day 0   day 1   day 2 of village   unnamed
+  0% seen it, told             5       5       5       56%         0
+  35% seen it, told            6       6       6       67%         0
+  100% seen it, told           9       9       9      100%         0
+  35% seen it, silent          4       4       4       44%         0
+
+  'unnamed' is holders who cannot say who did it, at the close of day 2.
+  the silent row is the control: with step 7 off, a deed reaches the people who
+  were standing there and stops. That is what this session exists to end.
+
+  every copy the village holds, by confidence:
+    100  names the actor            4 holder(s)
+     70  names the actor            2 holder(s)
+  a fourth row here would mean the two-hop bound has moved. Nothing counts hops:
+  it falls out of the retention and the attribution floor, and GossipTest says so.
+
+--- does gossip make the residency threshold reachable? ---
+  session 07: a witness's share of a gift is one point and warmth decays one a
+  day, so no three residents ever reach 20 warmth. Gossip gives more villagers
+  more contact days, and contact days are what stop the decay. Same plan, twice:
+  the in-game day the THIRD resident crossed each mark.
+    axis     gossip        20      40      60      80     100
+    warmth   off       never   never   never   never   never
+    trust    off          29      60      89   never   never
+    warmth   on        never   never   never   never   never
+    trust    on           28      54      80   never   never
+  'never' means no three residents reached it in 100 days.
+
+--- earn rate by player model, 100 in-game days ---
+  model             deeds  warmth   w p50   trust   t p50   rings
+  ATTENTIVE           100      53       1     100      43     9/9
+  SATURATING         1200     100     100     100     100     9/9
+  INTERMITTENT         68      22       3     100      47     9/9
+  PASSING_THROUGH      15       2       0      22       7     0/9
+  CARELESS            200     100       5     100      77     9/9
+  warmth and trust are the maximum any resident reached; p50 is the median of
+  everyone who met the player at all. SATURATING is the ceiling by construction:
+  it is what Bond.DAILY_CAP is measured against, so nothing can beat that row.
+
+--- sensitivity to the one input nobody has measured ---
+  witnesses       max      p50  met you rings full
+  0%               48        0        9        9
+  25%              48        1        9        9
+  35%              53        1        9        9
+  50%              53        1        9        9
+  75%              62        1        9        9
+  100%             70        1        9        9
+  the subject's own column is unaffected by this; every other resident's is not.
+
+--- chronicle, every deed ---
+  day   0  you feed   Delrolfond        3 saw it, 4 remembered, 4 moved
+  day   1  you give   Kisnirluth        3 saw it, 4 remembered, 4 moved
+  day   2  you offer  Limsock           3 saw it, 4 remembered, 3 moved
+  day   3  you feed   Delrolfond        3 saw it, 4 remembered, 4 moved
+  day   4  you give   Kisnirluth        3 saw it, 4 remembered, 4 moved
+  day   5  you offer  Limsock           3 saw it, 4 remembered, 4 moved
+  day   6  you feed   Delrolfond        3 saw it, 4 remembered, 4 moved
+  day   7  you give   Kisnirluth        3 saw it, 4 remembered, 4 moved
+  day   8  you offer  Limsock           3 saw it, 4 remembered, 4 moved
+  day   9  you feed   Delrolfond        3 saw it, 4 remembered, 4 moved
+  day  10  you give   Kisnirluth        3 saw it, 4 remembered, 4 moved
+  day  11  you offer  Limsock           3 saw it, 4 remembered, 4 moved
+  day  12  you feed   Delrolfond        3 saw it, 4 remembered, 4 moved
+  day  13  you give   Kisnirluth        3 saw it, 4 remembered, 4 moved
+  day  14  you offer  Limsock           3 saw it, 4 remembered, 4 moved
+  day  15  you feed   Delrolfond        3 saw it, 4 remembered, 4 moved
+  day  16  you give   Kisnirluth        3 saw it, 4 remembered, 4 moved
+  day  17  you offer  Limsock           3 saw it, 4 remembered, 4 moved
+  day  18  you feed   Delrolfond        3 saw it, 4 remembered, 4 moved
+  day  19  you give   Kisnirluth        3 saw it, 4 remembered, 4 moved
+  day  20  you offer  Limsock           3 saw it, 4 remembered, 4 moved
+  day  21  you feed   Delrolfond        3 saw it, 4 remembered, 4 moved
+  day  22  you give   Kisnirluth        3 saw it, 4 remembered, 4 moved
+  day  23  you offer  Limsock           3 saw it, 4 remembered, 4 moved
+  day  24  you feed   Delrolfond        3 saw it, 4 remembered, 4 moved
+  day  25  you give   Kisnirluth        3 saw it, 4 remembered, 4 moved
+  day  26  you offer  Limsock           3 saw it, 4 remembered, 4 moved
+  day  27  you feed   Delrolfond        3 saw it, 4 remembered, 4 moved
+  day  28  you give   Kisnirluth        3 saw it, 4 remembered, 4 moved
+  day  29  you offer  Limsock           3 saw it, 4 remembered, 4 moved
+  day  30  you feed   Delrolfond        3 saw it, 4 remembered, 4 moved
+  day  31  you give   Kisnirluth        3 saw it, 4 remembered, 4 moved
+  day  32  you offer  Limsock           3 saw it, 4 remembered, 4 moved
+  day  33  you feed   Delrolfond        3 saw it, 4 remembered, 4 moved
+  day  34  you give   Kisnirluth        3 saw it, 4 remembered, 4 moved
+  day  35  you offer  Limsock           3 saw it, 4 remembered, 4 moved
+  day  36  you feed   Delrolfond        3 saw it, 4 remembered, 4 moved
+  day  37  you give   Kisnirluth        3 saw it, 4 remembered, 4 moved
+  day  38  you offer  Limsock           3 saw it, 4 remembered, 4 moved
+  day  39  you feed   Delrolfond        3 saw it, 4 remembered, 4 moved
+  day  40  you give   Kisnirluth        3 saw it, 4 remembered, 4 moved
+  day  41  you offer  Limsock           3 saw it, 4 remembered, 4 moved
+  day  42  you feed   Delrolfond        3 saw it, 4 remembered, 4 moved
+  day  43  you give   Kisnirluth        3 saw it, 4 remembered, 4 moved
+  day  44  you offer  Limsock           3 saw it, 4 remembered, 4 moved
+  day  45  you feed   Delrolfond        3 saw it, 4 remembered, 4 moved
+  day  46  you give   Kisnirluth        3 saw it, 4 remembered, 4 moved
+  day  47  you offer  Limsock           3 saw it, 4 remembered, 4 moved
+  day  48  you feed   Delrolfond        3 saw it, 4 remembered, 4 moved
+  day  49  you give   Kisnirluth        3 saw it, 4 remembered, 4 moved
+  day  50  you offer  Limsock           3 saw it, 4 remembered, 4 moved
+  day  51  you feed   Delrolfond        3 saw it, 4 remembered, 4 moved
+  day  52  you give   Kisnirluth        3 saw it, 4 remembered, 4 moved
+  day  53  you offer  Limsock           3 saw it, 4 remembered, 4 moved
+  day  54  you feed   Delrolfond        3 saw it, 4 remembered, 4 moved
+  day  55  you give   Kisnirluth        3 saw it, 4 remembered, 4 moved
+  day  56  you offer  Limsock           3 saw it, 4 remembered, 4 moved
+  day  57  you feed   Delrolfond        3 saw it, 4 remembered, 4 moved
+  day  58  you give   Kisnirluth        3 saw it, 4 remembered, 4 moved
+  day  59  you offer  Limsock           3 saw it, 4 remembered, 4 moved
+  day  60  you feed   Delrolfond        3 saw it, 4 remembered, 4 moved
+  day  61  you give   Kisnirluth        3 saw it, 4 remembered, 4 moved
+  day  62  you offer  Limsock           3 saw it, 4 remembered, 4 moved
+  day  63  you feed   Delrolfond        3 saw it, 4 remembered, 4 moved
+  day  64  you give   Kisnirluth        3 saw it, 4 remembered, 4 moved
+  day  65  you offer  Limsock           3 saw it, 4 remembered, 4 moved
+  day  66  you feed   Delrolfond        3 saw it, 4 remembered, 4 moved
+  day  67  you give   Kisnirluth        3 saw it, 4 remembered, 4 moved
+  day  68  you offer  Limsock           3 saw it, 4 remembered, 4 moved
+  day  69  you feed   Delrolfond        3 saw it, 4 remembered, 4 moved
+  day  70  you give   Kisnirluth        3 saw it, 4 remembered, 4 moved
+  day  71  you offer  Limsock           3 saw it, 4 remembered, 4 moved
+  day  72  you feed   Delrolfond        3 saw it, 4 remembered, 4 moved
+  day  73  you give   Kisnirluth        3 saw it, 4 remembered, 4 moved
+  day  74  you offer  Limsock           3 saw it, 4 remembered, 4 moved
+  day  75  you feed   Delrolfond        3 saw it, 4 remembered, 4 moved
+  day  76  you give   Kisnirluth        3 saw it, 4 remembered, 4 moved
+  day  77  you offer  Limsock           3 saw it, 4 remembered, 4 moved
+  day  78  you feed   Delrolfond        3 saw it, 4 remembered, 4 moved
+  day  79  you give   Kisnirluth        3 saw it, 4 remembered, 4 moved
+  day  80  you offer  Limsock           3 saw it, 4 remembered, 4 moved
+  day  81  you feed   Delrolfond        3 saw it, 4 remembered, 4 moved
+  day  82  you give   Kisnirluth        3 saw it, 4 remembered, 4 moved
+  day  83  you offer  Limsock           3 saw it, 4 remembered, 4 moved
+  day  84  you feed   Delrolfond        3 saw it, 4 remembered, 4 moved
+  day  85  you give   Kisnirluth        3 saw it, 4 remembered, 4 moved
+  day  86  you offer  Limsock           3 saw it, 4 remembered, 4 moved
+  day  87  you feed   Delrolfond        3 saw it, 4 remembered, 4 moved
+  day  88  you give   Kisnirluth        3 saw it, 4 remembered, 4 moved
+  day  89  you offer  Limsock           3 saw it, 4 remembered, 4 moved
+  day  90  you feed   Delrolfond        3 saw it, 4 remembered, 4 moved
+  day  91  you give   Kisnirluth        3 saw it, 4 remembered, 4 moved
+  day  92  you offer  Limsock           3 saw it, 4 remembered, 4 moved
+  day  93  you feed   Delrolfond        3 saw it, 4 remembered, 4 moved
+  day  94  you give   Kisnirluth        3 saw it, 4 remembered, 4 moved
+  day  95  you offer  Limsock           3 saw it, 4 remembered, 4 moved
+  day  96  you feed   Delrolfond        3 saw it, 4 remembered, 4 moved
+  day  97  you give   Kisnirluth        3 saw it, 4 remembered, 4 moved
+  day  98  you offer  Limsock           3 saw it, 4 remembered, 4 moved
+  day  99  you feed   Delrolfond        3 saw it, 4 remembered, 4 moved
+[23:50:22] [Server thread/INFO] [Namesake/]: [harness] PASS  SIMULATE the three session 07 commands emitted 34 line(s) through the real dispatcher
+[23:50:22] [Server thread/INFO] [Namesake/]: [harness] PASS  SIMULATE the widest line a player sees is 54 characters, against a 60-character chat width: |  earn    2.04 warmth/contact day at best, 0.04 median|
+[23:50:22] [Server thread/INFO] [Namesake/]: [harness] PASS  SIMULATE no line carries a carriage return, which Minecraft draws as a missing-glyph box
+[23:50:22] [Server thread/INFO] [Namesake/]: [harness] wrote 3 subject(s) to C:\MCA Reborn Rework\.claude\worktrees\namesake-authorization-layer-6c24f2\neoforge\run\namesake-harness-subjects.txt
+[23:50:22] [Server thread/INFO] [Namesake/]: 
+==== namesake attach-bet harness: phase setup ====
+  PASS  ATTACH spawned 3 villagers, found 3
+  PASS  ATTACH every villager carries a persona (3/3)
+  PASS  GENERATE 3/3 wilderness villagers were generated with a culture and no settlement
+  PASS  GENERATE no settlement was invented for a place with no bell (0)
+  PASS  UNLOAD test-site villagers unloaded (0 still resident)
+  PASS  CHUNK RELOAD personas identical after chunk unload/reload
+  PASS  ZOMBIFY persona rode the villager onto the zombie villager (minecraft:zombie_villager)
+  PASS  ZOMBIFY trait value intact across the conversion
+  PASS  CURE conversion started
+  PASS  CURE persona rode the zombie villager back onto a villager (minecraft:villager)
+  PASS  CURE trait value intact across the cure
+  PASS  NO STRAY registry holds 3 persona(s), was 3
+  PASS  SUBJECTS all three personas still correct
+  PASS  WIRE S2C the interaction token reached the client
+  PASS  WIRE the server holds an open interaction
+  PASS  WIRE C2S the forged greet reached the server's handler
+  PASS  GATE the forged token was refused (interaction expiry unmoved at 5783)
+  PASS  GATE the real token was accepted (interaction expiry moved 5783 -> 5785)
+  PASS  VILLAGE site is on real ground at y=63
+  PASS  SETTLEMENT exactly one settlement registered from the bell we placed (1)
+  PASS  SETTLEMENT centre is the bell at 800, 63, 300 (got 800, 63, 300)
+  PASS  SURVEY the workstation census read a farming town (got FARMING)
+  PASS  SURVEY needs: food 0, tools 34 - a farming town feeds itself and is short of a smith
+  PASS  SURVEY a compact village is defensible (82)
+  PASS  RESIDENTS 6/6 villagers were placed in the settlement the survey registered (6 villagers near the bell, 6 with a persona)
+  PASS  CULTURE one village, one culture (1 seen: [1])
+  PASS  HOUSEHOLDS two cells twenty blocks apart made two households (2)
+  PASS  HOUSEHOLDS everyone in a household shares one family name [[Gvirnsk], [Stuksk]]
+  PASS  HOUSEHOLDS the two households do not share a family name
+  PASS  WITNESS the cast is in place: five villagers inside the 24-block box, one forty blocks up outside it
+  PASS  WITNESS the scan found 3 witnesses; three could see it, one was behind a wall and one was out of range
+  PASS  DEED the villager who was fed gained +3 (trust 3, warmth 3)
+  PASS  DEED 3/3 witnesses who could see it gained +1
+  PASS  CANSEE the villager behind the wall recorded nothing, though it was five blocks away and well inside the box
+  PASS  RANGE the villager forty blocks up recorded nothing, though nothing at all was in its way
+  PASS  CAP nine feedings in one day left trust 8 and warmth 8, cap 8
+  PASS  CAP all nine landed on the same in-game day (0)
+  PASS  RING nine identical feedings left 1 memory rather than nine — the ring is content-addressed
+  PASS  RING a different kind of deed on the same day is a second memory (2)
+  PASS  RING the ring is ordered oldest first [FED_HUNGRY, GIFT_WANTED]
+  PASS  RING the subject and all 3 witnesses recorded it (4)
+  PASS  RING the gift moved 0 bonds — every allowance was already spent — and was remembered by 4 people regardless. Seeing something is not the same as it changing your mind about somebody
+  PASS  RING the villager behind the wall remembers nothing either — no bond and no memory
+  PASS  GOSSIP step 6: 5 story(s) entered the settlement's deque when the deeds were emitted
+  PASS  GOSSIP neither villager who could not see it knows anything yet
+  PASS  GOSSIP the drain ran on the server tick hook and spent every story: 0 left of 5
+  PASS  GOSSIP the villager behind the wall and the one forty blocks up were told about 7 thing(s) they could not possibly have seen
+  PASS  GOSSIP and not one of them at first hand — they were told, they did not see it
+  PASS  GOSSIP the whole world holds three confidences and no others: [49, 70, 100] — 100 watched it, 70 was told, 49 cannot name who
+  PASS  GOSSIP 4 unattributed rumour(s) in this village and not one bond about nobody — a story you cannot attribute moves no opinion
+  PASS  GOSSIP the empty-ring branch was rendered to a player before anybody was told anything — the state a real player meets first, and the one session 07 shipped over the chat width because no fixture ever reached it
+  PASS  GOSSIP the deed ring reached a player through the real dispatcher in 10 line(s), in both of its states
+  PASS  GOSSIP the widest deed row a player sees is 52 characters, against a 60-character chat width: |  they have not seen anything happen. That is a real|
+  PASS  GOSSIP no deed row carries a carriage return
+  PASS  SIMULATE a hundred in-game days emitted 100 deeds on the server thread in 15 ms
+  PASS  SIMULATE the run cost 15 ms, against a 500 ms ceiling. A tick is 50 ms and this machine's number belongs in the ledger with its conditions; a shared runner's does not
+  PASS  SIMULATE this world is untouched at 9/6/27 persona(s)/bond(s)/deed(s) — the simulation's registry is its own
+  PASS  SIMULATE the three session 07 commands emitted 34 line(s) through the real dispatcher
+  PASS  SIMULATE the widest line a player sees is 54 characters, against a 60-character chat width: |  earn    2.04 warmth/contact day at best, 0.04 median|
+  PASS  SIMULATE no line carries a carriage return, which Minecraft draws as a missing-glyph box
+==== ALL PASSED ====
+[23:50:23] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (namesake_attachbet): All chunks are saved
+[23:50:23] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (DIM1): All chunks are saved
+[23:50:23] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (DIM-1): All chunks are saved
+[23:50:23] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage: All dimensions are saved
+[23:50:23] [Server thread/INFO] [Namesake/]: [harness] HARNESS COMPLETE phase=setup result=PASS
+[23:50:23] [Server thread/INFO] [minecraft/MinecraftServer]: Stopping server
+[23:50:23] [Server thread/INFO] [minecraft/MinecraftServer]: Saving players
+[23:50:23] [Server thread/INFO] [minecraft/MinecraftServer]: Saving worlds
+[23:50:24] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[namesake_attachbet]'/minecraft:overworld
+[23:50:24] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[namesake_attachbet]'/minecraft:the_end
+[23:50:24] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[namesake_attachbet]'/minecraft:the_nether
+[23:50:24] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (namesake_attachbet): All chunks are saved
+[23:50:24] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (DIM1): All chunks are saved
+[23:50:24] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (DIM-1): All chunks are saved
+[23:50:24] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage: All dimensions are saved
+[23:50:24] [Render thread/WARN] [minecraft/ClientCommonPacketListenerImpl]: Client disconnected with reason: Server closed
+[23:50:24] [Render thread/INFO] [Namesake/]: [harness] closing the client
+[23:50:24] [Render thread/INFO] [minecraft/Minecraft]: Stopping!
+
+BUILD SUCCESSFUL in 39s
+8 actionable tasks: 4 executed, 4 up-to-date
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.6.1/userguide/configuration_cache_enabling.html

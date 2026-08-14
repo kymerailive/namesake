@@ -188,7 +188,8 @@ class DeedsTest {
         Persona holder = person(60, 4);
         Deed firstHand = doneTo(DeedType.DEFENDED_RAID, 4, holder);
         Deed secondHand = new Deed(firstHand.typeId(), firstHand.actor(), firstHand.subject(),
-                firstHand.settlementId(), firstHand.gameDay(), firstHand.severity(), (byte) 50);
+                firstHand.settlementId(), firstHand.gameDay(), firstHand.severity(), (byte) 50,
+                Deed.NO_ITEM);
 
         assertTrue(Deeds.deltaFor(secondHand, holder)[Bond.RESPECT]
                 < Deeds.deltaFor(firstHand, holder)[Bond.RESPECT]);

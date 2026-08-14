@@ -529,7 +529,7 @@ public final class NamesakeCommands {
         Persona persona = registry.persona(personaId).orElseThrow(NO_PERSONA::create);
         int today = Deed.dayOf(source.getLevel());
 
-        List<Deed> ring = registry.memories().of(personaId);
+        List<Memories.Slot> ring = registry.memories().slotsOf(personaId);
         String report = String.join("\n", deedRows(persona, ring, today));
         source.sendSuccess(() -> Component.literal(report), false);
         Namesake.LOGGER.info("[debug deeds] {}", report);
@@ -546,7 +546,7 @@ public final class NamesakeCommands {
      * branches — the ones a player meets first — were never rendered. {@code CommandLayoutTest}
      * enumerates the states this command has rather than sampling one.
      */
-    static List<String> deedRows(Persona persona, List<Deed> ring, int today) {
+    static List<String> deedRows(Persona persona, List<Memories.Slot> ring, int today) {
         List<String> lines = new ArrayList<>();
         // The name on a line of its own, which is not a style choice. Session 03's layout budget
         // allows a 27-character full name, and the header that used to carry the name and the
@@ -562,15 +562,30 @@ public final class NamesakeCommands {
             lines.add("  answer, not an empty table.");
             return lines;
         }
-        lines.add("  day  age  " + pad("deed", DEED_COLUMN) + pad("how", 8) + "by");
+        lines.add("  day  " + pad("deed", DEED_COLUMN) + pad("how", 8) + "by");
         for (int slot = ring.size() - 1; slot >= 0; slot--) {
             lines.add(describeDeed(ring.get(slot), persona, today));
         }
         return lines;
     }
 
-    /** Widest {@link DeedType} name — {@code STRUCK_RESIDENT} and {@code KILLED_RESIDENT}. */
-    static final int DEED_COLUMN = 17;
+    /**
+     * The deed cell: the type, how many times, and what it was about — <b>sharing one budget.</b>
+     *
+     * <p>Session 09 put two new things on this row and the row had no room for either. The age
+     * column paid for them: it was {@code today - day} printed next to {@code day}, which is a
+     * subtraction the reader can do and six characters on every row to save it. What replaced it is
+     * information the ring genuinely holds and nothing else can derive — <i>nine times</i>, and
+     * <i>bread</i>.
+     *
+     * <p><b>One column rather than three is what makes the row's width unconditional.</b> Laid out
+     * separately, the type, the count and the object each need their own worst case, and the worst
+     * cases do not co-occur in anything the mod can currently emit — a repeat is first-hand by
+     * construction, and an item only comes from a gift, which is always nominal severity. Budgeting
+     * on that would be budgeting on an invariant a future deed type could break silently. Sharing one
+     * clipped cell means the row is the same width whatever is in it.
+     */
+    static final int DEED_COLUMN = 24;
 
     /** Narrowest a name column may be, so a header of "who" still has a space after it. */
     private static final int MIN_NAME_COLUMN = 4;
@@ -591,8 +606,8 @@ public final class NamesakeCommands {
      * only when they are carrying some — which is also the moment they become the most interesting
      * thing on the row, so it is the right way round rather than a saving.
      */
-    private static String describeDeed(Deed deed, Persona holder, int today) {
-        int ago = today - deed.gameDay();
+    private static String describeDeed(Memories.Slot slot, Persona holder, int today) {
+        Deed deed = slot.deed();
         // Four ways to hold a deed, and they are exclusive rather than four columns: a thing that
         // happened *to* you is never something you heard about, and a story you cannot attribute is
         // not one you watched. Session 08 turns the last two on, and this column plus the `by` one
@@ -602,10 +617,9 @@ public final class NamesakeCommands {
                 : deed.confidence() == Deed.FIRST_HAND ? "saw it"
                 : deed.isAttributed() ? "heard" : "rumour";
 
-        StringBuilder row = new StringBuilder(String.format(Locale.ROOT, "  %3d %4s  %s%s%s",
+        StringBuilder row = new StringBuilder(String.format(Locale.ROOT, "  %3d  %s%s%s",
                 deed.gameDay(),
-                ago == 0 ? "" : "-" + ago + "d",
-                pad(deed.type().name(), DEED_COLUMN),
+                pad(deedCell(slot), DEED_COLUMN),
                 pad(how, 8),
                 // "Someone from the north" needs no field: the direction is a function of where the
                 // deed happened, which the deed carries, and where the holder lives, which their
@@ -623,6 +637,33 @@ public final class NamesakeCommands {
             row.append(" @s").append(deed.settlementId());
         }
         return row.toString();
+    }
+
+    /**
+     * What kind of deed, how many times, and what it was about — clipped to {@link #DEED_COLUMN}.
+     *
+     * <p>The order is the priority order, and it is stated because the clip is real. The type is
+     * always shown; the count is at most five characters and is the difference between <i>you were
+     * kind to me</i> and <i>you fed me, nine times, that day</i>; the object gets whatever is left,
+     * and its namespace is dropped because {@code minecraft:} on every row is ten characters of
+     * nothing. A count of one is not printed: {@code x1} on almost every row is the column reading
+     * the same thing over and over, which is what session 06 stripped three columns off this table
+     * for.
+     */
+    static String deedCell(Memories.Slot slot) {
+        StringBuilder cell = new StringBuilder(slot.deed().type().name());
+        if (!slot.happenedOnce()) {
+            cell.append(" x").append(slot.repeats());
+        }
+        String item = slot.deed().item();
+        if (!item.isEmpty()) {
+            String path = item.substring(item.indexOf(':') + 1);
+            int room = DEED_COLUMN - 1 - cell.length();
+            if (room >= 3) {
+                cell.append(' ').append(path.length() <= room ? path : path.substring(0, room));
+            }
+        }
+        return cell.length() <= DEED_COLUMN ? cell.toString() : cell.substring(0, DEED_COLUMN);
     }
 
     // --- session 07: what this world holds, and how fast it got there -----------------------------

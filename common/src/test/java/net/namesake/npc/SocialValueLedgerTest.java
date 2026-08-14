@@ -8,7 +8,10 @@ import net.namesake.social.Deed;
 import net.namesake.social.DeedBus;
 import net.namesake.social.Deeds;
 import net.namesake.social.DialogueStats;
+import net.namesake.social.GiftPolicy;
+import net.namesake.social.Memories;
 import net.namesake.social.Personality;
+import net.namesake.social.Residency;
 import net.namesake.testing.MethodBody;
 import net.namesake.testing.ModClasses;
 import net.namesake.testing.SessionLedger;
@@ -307,6 +310,39 @@ class SocialValueLedgerTest {
                             + "Deed.ATTRIBUTED the holder cannot name the actor, which stops the "
                             + "bond moving at all and stops the story travelling."),
 
+            // Session 09's "richer per memory", and the one field of the three this session added
+            // that gets an exemption rather than a consumer. That is the honest answer and it is
+            // written out here rather than resolved with a technicality, because the technicality
+            // was available and would have passed every check in this file.
+            //
+            // What reads "which item" today is a line of dialogue — you gave me bread when I was
+            // hungry — and net.namesake.dialogue is in DISPLAY_PACKAGES below precisely so that
+            // cannot be named. Three non-display readers were built and rejected:
+            //
+            //   * Deed.id(). Adding the item to the derivation makes a loaf and an apple two
+            //     memories, which sounds exactly like what "richer per memory" means and hands the
+            //     ring back its grindability through a door the daily cap does not watch: an
+            //     afternoon of eight different junk items would be eight entries where an afternoon
+            //     of one gift is one. Session 06 built the whole ring around that not being true.
+            //   * A gift-acceptance rule — a villager refusing a fourth of the same object. It is a
+            //     real `if`, and it is bypassed by alternating two objects, because a slot that
+            //     collects two objects honestly names neither (Memories.Slot.again). A guard whose
+            //     bypass is that trivial is a consumer on paper.
+            //   * Session 12's trade band, built early. That is this exemption, taken two sessions
+            //     ahead of the session that owns it, and it would perturb every earn-rate number
+            //     sessions 07 and 08 measured.
+            //
+            // So it is an exemption with a date, which is what exemptions are for. Session 12 either
+            // reads it or the field is deleted; moving this number is the thing this file exists to
+            // stop.
+            Entry.exemptUntilAfter(Deed.class, "item", List.of("item"), 12,
+                    "Session 12, the trade band: a villager given the thing they actually wanted is "
+                            + "DESIGN.md §12's 'whether one recipe is taught'. Every non-display "
+                            + "reader available at session 09 was either the deed id — which would "
+                            + "make the ring grindable — or a gate rule with a one-item bypass, so "
+                            + "this is an exemption rather than a technicality. If session 12 does "
+                            + "not read it, delete it rather than moving this number."),
+
             // --- Bond, new in session 05 -------------------------------------------------------
             //
             // Five exemptions, and that is the honest count rather than a comfortable one. Session
@@ -325,17 +361,43 @@ class SocialValueLedgerTest {
             // the cap and the decay change what the bond becomes. That is an `if` statement with a
             // consequence, which is all rule 5 asks for.
 
-            Entry.exemptUntilAfter(Bond.class, "trust", List.of("trust", "axis"), 9,
-                    "Session 09, the residency threshold: DESIGN.md §5 grants residency on a known "
-                            + "band with three residents or one significant deed, and residency is "
-                            + "a persisted state change — prices, office eligibility, and being a "
-                            + "valid subject of gossip — not a line of dialogue. Naming the pool "
-                            + "selection instead would be naming a display."),
+            // Paid off in session 09, exactly where the exemption said it would land. The band
+            // reads trust and not warmth, and that was measured rather than chosen: session 07
+            // found that no three residents ever reach 20 warmth in a hundred in-game days, and
+            // session 08 found that gossip does not change it at any mark. Residency is a state
+            // change with consequences a line of dialogue does not have — session 10's cross-
+            // settlement gossip about you, session 12's price band — and the pool selection, which
+            // is what this entry has warned against naming since session 05, is a display sitting
+            // downstream of it rather than the consumer.
+            Entry.consumedBy(Bond.class, "trust", List.of("trust", "axis"),
+                    Residency.class, "verdict",
+                    "Residency.verdict counts the residents holding TRUST_THRESHOLD or more and "
+                            + "grants DESIGN.md §5's band at three of them. The third resident "
+                            + "crosses 20 on day 28, measured. Trust does not decay, so residency "
+                            + "is earned by consistency rather than by intensity."),
 
-            Entry.exemptUntilAfter(Bond.class, "warmth", List.of("warmth", "axis"), 9,
-                    "Session 09, with trust: the same residency threshold reads both. Warmth is "
-                            + "also the only axis that decays, toward four tenths of its own high "
-                            + "water mark, which is why peakWarmth exists at all."),
+            // Paid off in session 09, and NOT by what its own exemption predicted — the second time
+            // this mechanism has caught a consumer that was named in good faith and was not one.
+            // This entry said "the same residency threshold reads both", and the owner ruled at the
+            // close of session 08 that it reads trust alone, which left warmth written by every
+            // kindness in the mod and read by nothing. That is the shape DESIGN.md §1 forbids,
+            // arriving from a direction session 05 did not predict: not "nobody got round to it"
+            // but "the consumer we were both relying on turned out to want the other axis".
+            //
+            // Both escapes were offered at the close of 08 and the owner declined both — moving the
+            // expiry to 12, and deleting the field — so session 09 owed warmth a real mechanic.
+            // GiftPolicy is it, and the reason it is warmth's rather than a consumer that happens
+            // to read warmth is that trust could not do this job: trust never decays, so a gate on
+            // it opens once and never closes. Warmth decays toward four tenths of its high-water
+            // mark, so this gate closes again if you stop turning up.
+            Entry.consumedBy(Bond.class, "warmth", List.of("warmth", "axis"),
+                    GiftPolicy.class, "verdict",
+                    "GiftPolicy.verdict refuses a gift the villager has no use for from somebody "
+                            + "below WARMTH_TO_ACCEPT_UNWANTED. The item does not change hands, no "
+                            + "deed is emitted, no bond moves and no memory is written. Feeding the "
+                            + "hungry and giving what they want are never gated, so onboarding and "
+                            + "the acceptance script's step 2 are untouched and there is no "
+                            + "deadlock — the two ungated routes are the two that raise warmth."),
 
             Entry.exemptUntilAfter(Bond.class, "respect", List.of("respect", "axis"), 12,
                     "Session 12, the standing bands: the trade price multiplier and whether one "
@@ -377,7 +439,43 @@ class SocialValueLedgerTest {
                     Bond.class, "decayedTo",
                     "The floor decay falls to, at four tenths of it. Somebody who mattered to you "
                             + "and then went away for a year is cooler when they come back, not a "
-                            + "stranger — and that is a different number for every bond.")
+                            + "stranger — and that is a different number for every bond."),
+
+            // --- Memories.Slot, new in session 09 ------------------------------------------------
+            //
+            // A ring slot is persisted state that DECLARES NO CODEC, because session 09 packs the
+            // ring into a fixed-width byte array rather than writing a compound per deed. So
+            // everyPersistedRecordIsLedgered — which discriminates "persisted" by the presence of a
+            // Codec — cannot see it, and would have let a new persisted social value through
+            // silently. That is a real gap in the mechanism and it is recorded rather than papered
+            // over: theRingSlotIsLedgered below pins this record by name, so a future refactor that
+            // drops these three lines turns the build red instead of quietly exempting a field.
+
+            Entry.identity(Memories.Slot.class, "id",
+                    "The key the ring is addressed by, and the only field here that is not on disk "
+                            + "at all: it is Deed.id() recomputed on load, carried in memory only "
+                            + "because recomputing a sixty-four bit mix of eight fields per slot per "
+                            + "lookup was three quarters of a hundred-day simulation run."),
+
+            Entry.consumedBy(Memories.Slot.class, "deed", List.of("deed"),
+                    Memories.class, "evictionWeight",
+                    "Which memory survives an overflow starts here: a harmful deed outranks every "
+                            + "kindness absolutely, so no quantity of bread displaces a killing. "
+                            + "Every field of the deed itself is ledgered above."),
+
+            // Session 09's repeat count, and the second of the owner's three memory-depth routes.
+            // Its consumer is deliberately NOT the line of dialogue that would say "nine times" —
+            // that is a display, and the shape Bond.trust's entry has warned against since 05. It is
+            // eviction, which session 07 flagged as the one question its numbers could not settle:
+            // "nothing in this run gave a villager a killing to keep, so nothing has yet tested
+            // whether thirty-two subsequent gifts push one out."
+            Entry.consumedBy(Memories.Slot.class, "repeats", List.of("repeats", "happenedOnce"),
+                    Memories.class, "evictionWeight",
+                    "An afternoon of nine gifts is held harder than a single one, up to "
+                            + "REPEATS_COUNTED — so overflow drops the single one and keeps the nine. "
+                            + "The cap is what stops the count reopening the grind content addressing "
+                            + "closed: five hundred repeats must not become the strongest memory a "
+                            + "villager has.")
     );
 
     /**
@@ -385,7 +483,16 @@ class SocialValueLedgerTest {
      * in something that shows them to a person.
      */
     private static final Set<String> DISPLAY_PACKAGES =
-            Set.of("net.namesake.command", "net.namesake.harness", "net.namesake.client");
+            Set.of("net.namesake.command", "net.namesake.harness", "net.namesake.client",
+                    // Added at session 09, before a line of dialogue was written, and it is the
+                    // single most load-bearing entry in this set. Session 09 is the first session
+                    // whose deliverable is words, and it arrived carrying three fields that needed a
+                    // reader with no obvious one that was not a line of dialogue. Bond.trust's own
+                    // entry has ruled since session 05 that naming the pool selection would be
+                    // naming a display; session 03 caught cultureId telling exactly that lie about
+                    // the syllable grammar. Listing the package makes it a build failure rather than
+                    // a thing somebody has to remember while under pressure to ship 160 lines.
+                    "net.namesake.dialogue");
 
     private static final List<String> DISPLAY_SUFFIXES =
             List.of("Renderer", "Screen", "Hud", "Widget", "Commands", "Harness");
@@ -582,6 +689,37 @@ class SocialValueLedgerTest {
                             + "save path is measurement data in a save file, which survives a change "
                             + "to the thing it counts and then describes a mod that no longer exists.");
         }
+    }
+
+    /**
+     * <b>The gap session 09 opened in {@link #everyPersistedRecordIsLedgered}, pinned rather than
+     * papered over.</b>
+     *
+     * <p>That check discriminates "persisted" by whether a record declares a {@link Codec}, which
+     * has been a good proxy for five sessions: {@code Bond}, {@code Deed} and {@code Settlement} all
+     * joined the ledger by doing nothing but existing. Session 09 packs the deed ring into a
+     * fixed-width byte array to make a hundred and twenty-eight slots fit, so {@code Memories.Slot}
+     * is <b>persisted state with no codec</b> — invisible to the scan, and carrying a new social
+     * value in {@code repeats}.
+     *
+     * <p>Fixing the scan properly would mean deciding what "persisted" means for a record somebody
+     * writes by hand, which is a bigger claim than this session can honestly make. Pinning the one
+     * record that has the shape is the small honest thing: delete its three ledger entries and this
+     * turns red naming it.
+     */
+    @Test
+    @DisplayName("a persisted record with no codec is still ledgered, by name")
+    void theRingSlotIsLedgered() {
+        Set<Class<?>> ledgered = LEDGER.stream().map(Entry::owner)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        assertTrue(ledgered.contains(Memories.Slot.class), """
+                Memories.Slot is written to namesake_npcs.dat and declares no Codec, so \
+                everyPersistedRecordIsLedgered cannot see it. It has to be listed in LEDGER by \
+                hand, and this test is what says so. DESIGN.md §1.""");
+        assertFalse(declaresACodec(Memories.Slot.class),
+                "Memories.Slot has gained a Codec, so everyPersistedRecordIsLedgered can find it on "
+                        + "its own now and this hand-written pin is no longer the only thing "
+                        + "holding it. Fold it back into the scan.");
     }
 
     @Test

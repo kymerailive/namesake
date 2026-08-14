@@ -58,8 +58,9 @@ import java.util.UUID;
  * <p><b>Step 4 is where {@code DESIGN.md}'s "max 2 hops" comes from, and nothing counts hops.</b>
  * {@link Deed#RETOLD} and {@link Deed#ATTRIBUTED} between them permit exactly two retellings —
  * 100 → 70 → 49 — so the bound is arithmetic rather than bookkeeping. That is not a trick to save a
- * field: a hop counter would be an eighth field on a record session 06 deliberately held at seven,
- * persisted in every ring in every save, deriving something a field already there answers.
+ * field: a hop counter would be another field on {@link Deed}, persisted in every ring in every
+ * save, deriving something a field already there answers. Session 09 added {@code Deed.item} and
+ * that argument is untouched — the test is whether a field can be derived, not how many there are.
  *
  * <h2>Nothing is invented</h2>
  *

@@ -107,11 +107,15 @@ class GossipTest {
     @DisplayName("a retelling degrades and never invents")
     void nothingIsEverInvented() {
         Deed firstHand = new Deed(DeedType.STRUCK_RESIDENT.id(), PLAYER, new UUID(7, 7),
-                VILLAGE, 12, (byte) 60, Deed.FIRST_HAND);
+                VILLAGE, 12, (byte) 60, Deed.FIRST_HAND, "minecraft:stick");
         Deed heard = firstHand.retold();
 
         assertEquals(firstHand.typeId(), heard.typeId());
         assertEquals(firstHand.subject(), heard.subject());
+        // Session 09's field, carried through untouched like every other one. A rumour cannot
+        // acquire a detail and must not lose one it has: "they hit him with a stick" survives the
+        // telling exactly as the day and the settlement do.
+        assertEquals(firstHand.item(), heard.item());
         assertEquals(firstHand.settlementId(), heard.settlementId());
         assertEquals(firstHand.gameDay(), heard.gameDay());
         assertEquals(firstHand.severity(), heard.severity(), "a story cannot grow in the telling");

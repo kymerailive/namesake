@@ -212,24 +212,26 @@ class DialogueStatsTest {
      *
      * <p>Session 06 declined to rule on the ring's depth or on its eviction policy against a
      * two-entry fixture. What a full ring can say for itself is how far back it still reaches, and
-     * that is the number: a ring holding thirty-two of forty deeds has forgotten the first eight and
-     * its oldest survivor is the ninth.
+     * that is the number: a ring holding a capacity's worth of eight more deeds has forgotten the
+     * first eight and its oldest survivor is the ninth.
      */
     @Test
     @DisplayName("a full ring reports how far back it still reaches, which is what it forgot")
     void aFullRingSaysHowFarBackItReaches() {
         NpcRegistry registry = village(1);
         Persona only = registry.all().iterator().next();
-        for (int day = 0; day < 40; day++) {
+        int emitted = Memories.RING_CAPACITY + 8;
+        for (int day = 0; day < emitted; day++) {
             registry.remember(only.id(), gift(only.id(), day));
         }
 
-        DialogueStats.Ring ring = DialogueStats.of(registry, PLAYER, 39).deepestRing().orElseThrow();
+        DialogueStats.Ring ring = DialogueStats.of(registry, PLAYER, emitted - 1)
+                .deepestRing().orElseThrow();
         assertTrue(ring.isFull());
         assertEquals(Memories.RING_CAPACITY, ring.slots());
         assertEquals(8, ring.oldestDay(), "the first eight days are gone");
-        assertEquals(39, ring.newestDay());
-        assertEquals(32, ring.reachDays());
+        assertEquals(emitted - 1, ring.newestDay());
+        assertEquals(Memories.RING_CAPACITY, ring.reachDays());
     }
 
     @Test

@@ -1,5 +1,11 @@
 package net.namesake.command;
 
+import net.namesake.culture.Culture;
+import net.namesake.dialogue.Dialogue;
+import net.namesake.dialogue.Lines;
+import net.namesake.dialogue.Pool;
+import net.namesake.dialogue.Register;
+import net.namesake.dialogue.Voice;
 import net.namesake.npc.NpcRegistry;
 import net.namesake.npc.Persona;
 import net.namesake.sim.PlayerModel;
@@ -61,19 +67,32 @@ class CommandLayoutTest {
     }
 
     /**
-     * The widest a deed row can be: the longest deed type, a three-digit age, and all three of the
-     * markers that only appear when a field is carrying information.
+     * The widest a deed row can be: the longest deed type, a saturated repeat count, an object with
+     * a long name, and all three of the markers that only appear when a field is carrying
+     * information.
+     *
+     * <p><b>Every one of those at once, including combinations the mod cannot currently emit.</b> A
+     * repeat is first-hand by construction and an object only comes from a gift, which is always
+     * nominal severity — so a row carrying a count, a confidence marker and a severity marker
+     * together is unreachable today. Budgeting on that would be budgeting on an invariant a future
+     * deed type could break without anybody noticing, which is why session 09 put the type, the
+     * count and the object into one clipped cell: the row is the same width whatever is in it.
      */
     private static String widestRow() throws Exception {
-        // A witness's row, so the subject is somebody else: half-strength, second-hand, and in
-        // another village — every marker on at once. The age is three digits because session 07's
-        // harness runs a hundred in-game days, which is the widest that column realistically gets.
         Deed worst = new Deed(DeedType.STRUCK_RESIDENT.id(), ACTOR, UUID.randomUUID(), 4, 12,
-                (byte) 60, (byte) 70);
+                (byte) 60, (byte) 70, "minecraft:enchanted_golden_apple");
+        return describeRow(new Memories.Slot(worst.id(), worst, Memories.MAX_REPEATS), 112);
+    }
+
+    private static String describeRow(Memories.Slot slot, int today) throws Exception {
         Method describe = NamesakeCommands.class.getDeclaredMethod(
-                "describeDeed", Deed.class, Persona.class, int.class);
+                "describeDeed", Memories.Slot.class, Persona.class, int.class);
         describe.setAccessible(true);
-        return (String) describe.invoke(null, worst, holder(), 112);
+        return (String) describe.invoke(null, slot, holder(), today);
+    }
+
+    private static Memories.Slot once(Deed deed) {
+        return new Memories.Slot(deed.id(), deed, 1);
     }
 
     @Test
@@ -86,13 +105,10 @@ class CommandLayoutTest {
     }
 
     @Test
-    @DisplayName("a nominal deed row carries no severity, confidence or settlement noise")
+    @DisplayName("a nominal deed row carries no severity, confidence, settlement or count noise")
     void aNominalRowIsQuiet() throws Exception {
         Deed nominal = Deed.of(DeedType.FED_HUNGRY, ACTOR, HOLDER, 3, 12);
-        Method describe = NamesakeCommands.class.getDeclaredMethod(
-                "describeDeed", Deed.class, Persona.class, int.class);
-        describe.setAccessible(true);
-        String row = (String) describe.invoke(null, nominal, holder(), 12);
+        String row = describeRow(once(nominal), 12);
 
         // Every deed anything currently emits is nominal severity, first-hand, and in the holder's
         // own settlement. A column that reads 100 on every row for two whole sessions is not
@@ -100,8 +116,33 @@ class CommandLayoutTest {
         assertFalse(row.contains("s100"), () -> "nominal severity must not print: " + row);
         assertFalse(row.contains("c100"), () -> "first-hand confidence must not print: " + row);
         assertFalse(row.contains("@s"), () -> "the holder's own settlement must not print: " + row);
+        // Session 09's rule, applied to session 09's own new column: almost every memory happened
+        // once, so "x1" on almost every row is the same noise session 06 stripped three columns for.
+        assertFalse(row.contains("x1"), () -> "a memory that happened once must not print a count: " + row);
         assertTrue(row.contains("FED_HUNGRY"));
         assertTrue(row.contains("to them"), "the holder is the subject of this one");
+    }
+
+    /**
+     * <b>Session 09's two new pieces of depth, on the row where a person actually reads them.</b>
+     *
+     * <p>The owner has asked for in-depth memories three times, and the two cheap routes are
+     * <i>which object</i> and <i>how many times</i>. A ring that holds them and a command that does
+     * not print them is the same as not holding them, from where the owner is sitting.
+     */
+    @Test
+    @DisplayName("a memory that happened nine times, with bread, says both and still fits")
+    void aRicherRowSaysWhatAndHowOften() throws Exception {
+        Deed fed = Deed.of(DeedType.FED_HUNGRY, ACTOR, HOLDER, 3, 12, "minecraft:bread");
+        String row = describeRow(new Memories.Slot(fed.id(), fed, 9), 12);
+
+        assertTrue(row.contains("FED_HUNGRY"), () -> row);
+        assertTrue(row.contains("x9"), () -> "nine times has to be on the row: " + row);
+        assertTrue(row.contains("bread"), () -> "and what it was: " + row);
+        assertFalse(row.contains("minecraft:"),
+                () -> "the namespace is ten characters of nothing on every row: " + row);
+        assertTrue(row.length() <= CHAT_WIDTH,
+                () -> "a richer deed row is " + row.length() + " characters:\n" + row);
     }
 
     @Test
@@ -132,12 +173,9 @@ class CommandLayoutTest {
         Deed heard = firstHand.retold();
         Deed rumour = heard.retold();
 
-        Method describe = NamesakeCommands.class.getDeclaredMethod(
-                "describeDeed", Deed.class, Persona.class, int.class);
-        describe.setAccessible(true);
-        String saw = (String) describe.invoke(null, firstHand, holder(), 12);
-        String told = (String) describe.invoke(null, heard, holder(), 12);
-        String rumoured = (String) describe.invoke(null, rumour, holder(), 12);
+        String saw = describeRow(once(firstHand), 12);
+        String told = describeRow(once(heard), 12);
+        String rumoured = describeRow(once(rumour), 12);
 
         assertTrue(saw.contains("saw it"), () -> saw);
         assertFalse(saw.contains(" c"), () -> "first-hand carries no confidence marker: " + saw);
@@ -249,9 +287,9 @@ class CommandLayoutTest {
     }
 
     @Test
-    @DisplayName("the ring header states the capacity, so 32 is never a number in prose")
+    @DisplayName("the ring header states the capacity, so 128 is never a number in prose")
     void theRingCapacityIsRead() {
-        assertEquals(32, Memories.RING_CAPACITY);
+        assertEquals(128, Memories.RING_CAPACITY);
     }
 
     // --- session 07's three commands ---------------------------------------------------------------
@@ -328,19 +366,85 @@ class CommandLayoutTest {
                 Map.entry("earnrate, an empty world", NamesakeCommands.earnRateRows(none, viewer)),
                 Map.entry("earnrate, no viewer", NamesakeCommands.earnRateRows(console, null)),
                 Map.entry("deeds, a full ring", NamesakeCommands.deedRows(holder,
-                        outcome.registry().memories().of(holder.id()), outcome.plan().days() - 1)),
+                        outcome.registry().memories().slotsOf(holder.id()), outcome.plan().days() - 1)),
                 Map.entry("deeds, a villager who has seen nothing",
                         NamesakeCommands.deedRows(holder, List.of(), 0)),
                 Map.entry("deeds, a story they were told", NamesakeCommands.deedRows(
-                        holder, List.of(firstHand, heard), 200)),
+                        holder, List.of(once(firstHand), once(heard)), 200)),
                 Map.entry("deeds, a story nobody can attribute", NamesakeCommands.deedRows(
-                        holder, List.of(rumour), 200)));
+                        holder, List.of(once(rumour)), 200)),
+                // Session 09's two new pieces of depth, in the states that carry them.
+                Map.entry("deeds, an afternoon that happened nine times",
+                        NamesakeCommands.deedRows(holder, List.of(new Memories.Slot(firstHand.id(),
+                                firstHand, 9)), 200)),
+                Map.entry("deeds, a gift with an object on it", NamesakeCommands.deedRows(holder,
+                        List.of(once(Deed.of(DeedType.GIFT_WANTED, viewer, holder.id(),
+                                holder.settlementId(), 198, "minecraft:enchanted_golden_apple"))),
+                        200)));
     }
+
+    /**
+     * <b>Every line a villager can say, in every state it can be said in.</b>
+     *
+     * <p>{@code WORKPLAN.md}'s instruction for session 09 was to add these rows to the guard that
+     * already enumerates rather than to write a fifth guard that samples one. Four pools × five
+     * registers × six cultures × two residency states × eight lines is 1,920 rendered sentences, and
+     * every one of them has to sit inside the chat width with a culture's opener in front of it, its
+     * tag question behind it, and a sixteen-character player name in the middle.
+     *
+     * <p>That is not paranoia about arithmetic. <b>This project has shipped a string nobody measured
+     * against the space it has to sit in six times</b> — session 02's action bar, session 03's name
+     * grammars, session 06's deed row, session 07's three absence branches, session 08's ring header
+     * — and five of the six were found by a person looking at a screen rather than by a test.
+     */
+    private static List<Map.Entry<String, List<String>>> everyLineAVillagerCanSay() {
+        List<Map.Entry<String, List<String>>> states = new java.util.ArrayList<>();
+        NpcRegistry registry = new NpcRegistry();
+        for (Pool pool : Pool.values()) {
+            for (Register register : Register.values()) {
+                List<String> rendered = new java.util.ArrayList<>();
+                for (Culture culture : Culture.values()) {
+                    Voice voice = Voice.of(culture);
+                    Persona speaker = Persona.create(new UUID(culture.id(), 7L), 0L)
+                            .placed(0, 4096, culture.id());
+                    for (String address : List.of(voice.strangerAddress(), LONGEST_PLAYER_NAME)) {
+                        for (String template : Lines.of(pool, register)) {
+                            String line = template.replace(Lines.ADDRESS, address);
+                            // Both coins forced on: the opener attached and the tag hung, which is
+                            // the widest a culture can make any sentence.
+                            String widest = voice.opener() + " " + (line.endsWith(".")
+                                    ? line.substring(0, line.length() - 1) + ", " + voice.tag()
+                                    : line);
+                            rendered.addAll(Dialogue.rows(speaker,
+                                    new Dialogue.Spoken(pool, register, address, widest)));
+                        }
+                    }
+                }
+                states.add(Map.entry("dialogue, " + pool + " " + register, rendered));
+            }
+        }
+        // And the real selector, so the rows above are not the only thing measured: what the engine
+        // actually produces for a villager who has met nobody.
+        Persona stranger = Persona.create(new UUID(11L, 11L), 0L).placed(0, 4096, Culture.VALE.id());
+        registry.put(stranger);
+        states.add(Map.entry("dialogue, as the selector actually renders it",
+                Dialogue.rows(stranger, Dialogue.speak(registry, stranger,
+                        UUID.fromString("0a0a0a0a-1111-2222-3333-444444444444"),
+                        LONGEST_PLAYER_NAME, 0, 0, 20260815L))));
+        return states;
+    }
+
+    /** Sixteen characters, which is vanilla's cap and {@code GreetVerb}'s budget. */
+    private static final String LONGEST_PLAYER_NAME = "Kymerailive_1234";
 
     @Test
     @DisplayName("every row of both commands fits the chat width, in every state they can be in")
     void bothCommandsFitInEveryState() {
-        for (Map.Entry<String, List<String>> state : everyStateOfBothCommands()) {
+        List<Map.Entry<String, List<String>>> states =
+                new java.util.ArrayList<>(everyStateOfBothCommands());
+        states.addAll(everyLineAVillagerCanSay());
+
+        for (Map.Entry<String, List<String>> state : states) {
             assertFalse(state.getValue().isEmpty(),
                     () -> state.getKey() + " printed nothing at all, which reads as a broken command");
             for (String row : state.getValue()) {

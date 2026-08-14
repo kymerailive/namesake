@@ -6,6 +6,11 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.npc.Villager;
+import net.namesake.dialogue.Conversations;
+import net.namesake.dialogue.Dialogue;
+import net.namesake.npc.NpcRegistry;
+import net.namesake.npc.Persona;
+import net.namesake.social.Deed;
 
 import java.util.Optional;
 
@@ -53,6 +58,16 @@ public final class GreetVerb extends ServerboundVerb<GreetPayload, NpcTarget> {
         return Authorization.allow();
     }
 
+    /**
+     * Long enough for any Minecraft username, and a bound rather than a hope.
+     *
+     * <p>Vanilla caps a name at sixteen characters, but the name reaching here has been through a
+     * {@code GameProfile}, and a display name is a thing other mods change. An unbounded name inside
+     * an authored line is a line nobody has measured against the space it has to sit in, which is the
+     * defect this project has shipped six times.
+     */
+    private static final int NAME_BUDGET = 16;
+
     @Override
     protected void run(ServerPlayer sender, NpcTarget target, GreetPayload payload) {
         Villager villager = (Villager) target.entity();
@@ -62,15 +77,29 @@ public final class GreetVerb extends ServerboundVerb<GreetPayload, NpcTarget> {
         level.playSound(null, villager.getX(), villager.getY(), villager.getZ(),
                 SoundEvents.VILLAGER_AMBIENT, SoundSource.NEUTRAL, 1.0F, 1.0F);
 
-        // Placeholder until session 09 owns what a villager says. It says something rather than
-        // nothing on purpose: an accepted verb with no visible effect is indistinguishable from a
-        // refused one during a playtest.
-        //
-        // Short on purpose. The action bar does not wrap and clips at both ends, so the full
-        // persona id — never mind the entity id in target.describe() — is unreadable there. Eight
-        // hex characters are enough to tell two villagers apart in a crowd, which is the only job
-        // this line has; /namesake debug persona prints the rest.
-        String label = target.personaId().toString().substring(0, 8);
-        sender.displayClientMessage(Component.literal("Villager " + label + " is listening."), true);
+        NpcRegistry registry = NpcRegistry.get(level);
+        Persona speaker = registry.persona(target.personaId()).orElse(null);
+        if (speaker == null || !speaker.isGenerated()) {
+            // A minted persona whose settlement is not yet known has no culture, so it has no voice
+            // to speak in — and substituting culture 0 is the quiet wrong the schema 2 → 3 fix
+            // exists to make visible. It says something rather than nothing, because an accepted
+            // verb with no visible effect is indistinguishable from a refused one in a playtest.
+            sender.displayClientMessage(
+                    Component.literal("They are still settling in. Nothing to say yet."), true);
+            return;
+        }
+
+        String name = sender.getGameProfile().getName();
+        Dialogue.Spoken spoken = Dialogue.speak(registry, speaker, sender.getUUID(),
+                name.length() <= NAME_BUDGET ? name : name.substring(0, NAME_BUDGET),
+                Conversations.turn(sender.getUUID(), target.personaId()),
+                Deed.dayOf(level), level.getGameTime());
+
+        // Chat rather than the action bar, which is where session 02's placeholder lived. The action
+        // bar does not wrap and clips at both ends, and this session's whole deliverable is a
+        // sentence somebody has to be able to read — including the moment it stops saying "stranger"
+        // and starts saying their name.
+        sender.sendSystemMessage(Component.literal(
+                String.join("\n", Dialogue.rows(speaker, spoken))));
     }
 }

@@ -98,6 +98,18 @@ public final class DeedBus {
      *                and everyone who saw it is a witness.
      */
     public static Result emit(ServerLevel level, DeedType type, LivingEntity actor, Villager subject) {
+        return emit(level, type, actor, subject, Deed.NO_ITEM);
+    }
+
+    /**
+     * The same, for a deed that was about a particular object.
+     *
+     * @param item the item's registry id, or {@link Deed#NO_ITEM}. Session 09's "richer per memory":
+     *             the difference between <i>you were kind to me</i> and <i>you gave me bread when I
+     *             was hungry</i>, which costs one field on the record and one byte in a packed ring.
+     */
+    public static Result emit(ServerLevel level, DeedType type, LivingEntity actor, Villager subject,
+                              String item) {
         if (Profiling.MOD_INERT) {
             // Checked here as well as in the full form below: hard rule 4's baseline is "the same
             // world with none of our code in it", and reaching the registry to work out where the
@@ -115,7 +127,7 @@ public final class DeedBus {
                 .map(Settlement::id)
                 .orElse(Persona.UNASSIGNED);
 
-        Deed deed = Deed.of(type, actor.getUUID(), subjectId, settlementId, Deed.dayOf(level));
+        Deed deed = Deed.of(type, actor.getUUID(), subjectId, settlementId, Deed.dayOf(level), item);
         return emit(level, deed, actor, subject, where);
     }
 

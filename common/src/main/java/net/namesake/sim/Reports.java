@@ -9,6 +9,7 @@ import net.namesake.social.DeedType;
 import net.namesake.social.DialogueStats;
 import net.namesake.social.Memories;
 import net.namesake.social.Personality;
+import net.namesake.social.Residency;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -632,20 +633,91 @@ public final class Reports {
     public static List<String> acrossModels(Simulation.Plan plan) {
         List<String> lines = new ArrayList<>();
         lines.add("--- earn rate by player model, " + plan.days() + " in-game days ---");
-        lines.add(String.format(Locale.ROOT, "  %-16s %6s %7s %7s %7s %7s %7s",
-                "model", "deeds", "warmth", "w p50", "trust", "t p50", "rings"));
+        lines.add(String.format(Locale.ROOT, "  %-16s %6s %7s %7s %7s %7s %7s %9s",
+                "model", "deeds", "warmth", "w p50", "trust", "t p50", "rings", "resident"));
         for (PlayerModel model : PlayerModel.values()) {
             Simulation.Outcome outcome = Simulation.run(plan.with(model));
             DialogueStats stats = statsOf(outcome);
-            lines.add(String.format(Locale.ROOT, "  %-16s %6d %7d %7d %7d %7d %7s",
+            int granted = residencyDay(outcome);
+            lines.add(String.format(Locale.ROOT, "  %-16s %6d %7d %7d %7d %7d %7s %9s",
                     model, outcome.chronicle().size(),
                     stats.observedMaximum(Bond.WARMTH), stats.percentile(Bond.WARMTH, 50),
                     stats.observedMaximum(Bond.TRUST), stats.percentile(Bond.TRUST, 50),
-                    stats.fullRings() + "/" + stats.rings().size()));
+                    stats.fullRings() + "/" + stats.rings().size(),
+                    granted < 0 ? "never" : "day " + granted));
         }
         lines.add("  warmth and trust are the maximum any resident reached; p50 is the median of");
         lines.add("  everyone who met the player at all. SATURATING is the ceiling by construction:");
         lines.add("  it is what Bond.DAILY_CAP is measured against, so nothing can beat that row.");
+        lines.addAll(residencyNote(plan));
+        return lines;
+    }
+
+    /**
+     * <b>The in-game day this player became a resident.</b> Session 09's column, and the one the
+     * owner asked for by name: <i>which day each of the five player models crosses the threshold is a
+     * claim about time, and that is the instrument session 07 built.</i>
+     *
+     * <p>Both of {@code DESIGN.md} §5's routes, evaluated as of each day rather than at the end:
+     * {@link Residency#RESIDENTS_REQUIRED} residents at {@link Residency#TRUST_THRESHOLD} trust, or
+     * one significant deed. The constants come out of {@link Residency} rather than being restated
+     * here, so a threshold that moves moves this table with it.
+     *
+     * <p><b>One honest difference from what a live world computes, stated rather than buried.</b>
+     * {@code Residency} counts the significant deeds a settlement <i>still remembers</i>; this counts
+     * the ones that <i>happened</i>, from the chronicle. The two only diverge once a ring has evicted
+     * one, which can make this column read a day or two early for a model that fills rings fast. The
+     * band route has no such gap — trust does not decay and the histories are exact — and it is the
+     * route the owner ruled.
+     *
+     * @return the day, or −1 for never
+     */
+    public static int residencyDay(Simulation.Outcome outcome) {
+        java.util.Set<Long> feedings = new java.util.LinkedHashSet<>();
+        boolean defended = false;
+        int deedFrom = -1;
+
+        for (int day = 0; day < outcome.plan().days(); day++) {
+            int at = day;
+            long atThreshold = outcome.histories().values().stream()
+                    .filter(history -> history.trustByDay()[at] >= Residency.TRUST_THRESHOLD)
+                    .count();
+            if (atThreshold >= Residency.RESIDENTS_REQUIRED) {
+                return day;
+            }
+            if (deedFrom >= 0) {
+                return deedFrom;
+            }
+            for (Simulation.Moment moment : outcome.chronicle()) {
+                if (moment.day() != day) {
+                    continue;
+                }
+                if (moment.type() == DeedType.DEFENDED_RAID) {
+                    defended = true;
+                } else if (moment.type() == DeedType.FED_HUNGRY) {
+                    feedings.add(moment.deedId());
+                }
+            }
+            if (defended || feedings.size() >= Residency.FEEDINGS_REQUIRED) {
+                deedFrom = day;
+            }
+        }
+        return deedFrom;
+    }
+
+    private static List<String> residencyNote(Simulation.Plan plan) {
+        List<String> lines = new ArrayList<>();
+        lines.add("");
+        lines.add(String.format(Locale.ROOT,
+                "  'resident' is DESIGN.md §5: %d resident(s) at %d trust, or one significant deed",
+                Residency.RESIDENTS_REQUIRED, Residency.TRUST_THRESHOLD));
+        lines.add("  (a raid defended, or " + Residency.FEEDINGS_REQUIRED + " hungry people fed). "
+                + "The band reads trust because");
+        lines.add("  warmth is unreachable: session 07 measured it never, at every mark, and");
+        lines.add("  session 08 measured gossip not fixing it. This is the day it flips, and it is");
+        lines.add("  the day a villager stops calling this player stranger and uses their name.");
+        lines.add("  The deed route is counted on deeds that happened rather than deeds still");
+        lines.add("  remembered, so it can read a day early where a live world's rings have evicted.");
         return lines;
     }
 
@@ -746,12 +818,16 @@ public final class Reports {
         lines.add(String.format(Locale.ROOT,
                 "    a wanted gift is worth x%.2f to them; their day is worth %d",
                 Personality.scale(holder, DeedType.GIFT_WANTED), Personality.allowance(holder)));
-        lines.add("    day   " + pad("deed", TYPE_COLUMN) + "how");
-        List<Deed> deeds = outcome.registry().memories().of(ring.holder());
-        for (int slot = deeds.size() - 1; slot >= 0; slot--) {
-            Deed deed = deeds.get(slot);
-            lines.add(String.format(Locale.ROOT, "    %3d   %s%s",
+        lines.add("    day   " + pad("deed", TYPE_COLUMN) + pad("times", 7) + "how");
+        List<Memories.Slot> slots = outcome.registry().memories().slotsOf(ring.holder());
+        for (int slot = slots.size() - 1; slot >= 0; slot--) {
+            Deed deed = slots.get(slot).deed();
+            lines.add(String.format(Locale.ROOT, "    %3d   %s%s%s",
                     deed.gameDay(), pad(deed.type().name(), TYPE_COLUMN),
+                    // Session 09's repeat count, printed because it is the number the eviction
+                    // policy reads and therefore the number that decides what this villager still
+                    // holds. A ring that says "x1" everywhere is a ring nothing repeated in.
+                    pad("x" + slots.get(slot).repeats(), 7),
                     holder.id().equals(deed.subject()) ? "to them" : "saw it"));
         }
         return lines;

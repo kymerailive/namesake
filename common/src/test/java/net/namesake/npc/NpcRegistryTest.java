@@ -410,7 +410,8 @@ class NpcRegistryTest {
         registry.put(stamped(personaId, 3, 1L, (byte) 0));
         registry.setDirty(false);
 
-        for (int day = 0; day < 40; day++) {
+        int emitted = Memories.RING_CAPACITY + 8;
+        for (int day = 0; day < emitted; day++) {
             registry.remember(personaId, Deed.of(DeedType.FED_HUNGRY, A_PLAYER, personaId, 3, day));
         }
 
@@ -420,23 +421,34 @@ class NpcRegistryTest {
 
         NpcRegistry reloaded = reload(registry.save(new CompoundTag(), null));
         List<Deed> ring = reloaded.memories().of(personaId);
-        assertEquals(Memories.RING_CAPACITY, ring.size(), "the newest 32 of 40");
+        assertEquals(Memories.RING_CAPACITY, ring.size(),
+                "the newest " + Memories.RING_CAPACITY + " of " + emitted);
         assertEquals(8, ring.get(0).gameDay());
-        assertEquals(39, ring.get(ring.size() - 1).gameDay());
+        assertEquals(emitted - 1, ring.get(ring.size() - 1).gameDay());
         assertEquals(registry.memories().of(personaId), ring, "every field, in the same order");
     }
 
     /**
      * The dirty flag is the difference between a memory and a rewrite of the whole world.
      *
-     * <p>Every emit tries to append to up to thirteen rings. If a duplicate marked the registry
-     * dirty, a player handing the same villager the same loaf twice would have Minecraft rewrite
-     * every persona, settlement, bond and ring in the save on the next autosave. This is
-     * {@code bind}'s rule, applied to the thing that is written far more often than a binding.
+     * <p>Every emit tries to append to up to thirteen rings, and a duplicate that marked the whole
+     * registry dirty would have Minecraft rewrite every persona, settlement, bond and ring in the
+     * save on the next autosave.
+     *
+     * <p><b>Session 09 moved this line and the movement is deliberate.</b> The owner ruled a repeat
+     * count at the close of session 08, so a second occurrence of the same deed genuinely <i>is</i> a
+     * change to what a villager holds and reports one. What remains true, and is what this test now
+     * pins, is the case where nothing changed: a <b>retelling</b> of something already known, and a
+     * repeat past {@link Memories#MAX_REPEATS}. Both leave the ring exactly as it was and neither
+     * touches the flag.
+     *
+     * <p>The cost of the case that did move is smaller than it looks: the first of nine identical
+     * feedings has already marked the registry dirty, and {@code setDirty} on an already-dirty
+     * registry is free. Only a repeat arriving after an autosave has cleaned the flag costs a write.
      */
     @Test
-    @DisplayName("a duplicate deed changes nothing and does not mark the registry dirty")
-    void aDuplicateDeedDoesNotDirtyTheRegistry() {
+    @DisplayName("a repeat is a change; a retelling of it is not, and does not dirty the registry")
+    void onlyARealChangeDirtiesTheRegistry() {
         NpcRegistry registry = new NpcRegistry();
         UUID personaId = UUID.randomUUID();
         Deed deed = Deed.of(DeedType.GIFT_WANTED, A_PLAYER, personaId, 3, 5);
@@ -444,9 +456,17 @@ class NpcRegistryTest {
         assertTrue(registry.remember(personaId, deed));
         registry.setDirty(false);
 
-        assertFalse(registry.remember(personaId, deed));
-        assertFalse(registry.isDirty());
+        // It happened again: one memory, a count of two, and a file that has to be written.
+        assertTrue(registry.remember(personaId, deed));
+        assertTrue(registry.isDirty());
         assertEquals(1, registry.memories().size());
+        assertEquals(2, registry.memories().slotsOf(personaId).get(0).repeats());
+
+        // Being told about it is not it happening again — session 06's sentence, still true.
+        registry.setDirty(false);
+        assertFalse(registry.remember(personaId, deed.retold()));
+        assertFalse(registry.isDirty());
+        assertEquals(2, registry.memories().slotsOf(personaId).get(0).repeats());
     }
 
     /**
@@ -491,10 +511,16 @@ class NpcRegistryTest {
         UUID personaId = UUID.randomUUID();
         good.put(stamped(personaId, 3, 1L, (byte) 0));
         good.remember(personaId, Deed.of(DeedType.FED_HUNGRY, A_PLAYER, personaId, 3, 1));
+        good.remember(personaId, Deed.of(DeedType.FED_HUNGRY, A_PLAYER, personaId, 3, 2));
         CompoundTag tag = good.save(new CompoundTag(), null);
 
-        tag.getList("memories", Tag.TAG_COMPOUND).getCompound(0)
-                .getList("ring", Tag.TAG_COMPOUND).add(new CompoundTag());
+        // Session 09's packed ring: a slot's actor is a palette index, so pointing the second one at
+        // nothing is what an unreadable deed now looks like. The compound-per-deed version of this
+        // breakage went away with the format, and the claim it was making did not.
+        CompoundTag entry = tag.getList("memories", Tag.TAG_COMPOUND).getCompound(0);
+        byte[] packed = entry.getByteArray("ring");
+        java.nio.ByteBuffer.wrap(packed).putInt(25 + 2, 9999);
+        entry.putByteArray("ring", packed);
 
         NpcRegistry reloaded = reload(tag);
 

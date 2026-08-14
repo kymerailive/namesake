@@ -1,6 +1,7 @@
 package net.namesake.sim;
 
 import net.namesake.social.Bond;
+import net.namesake.social.Deed;
 import net.namesake.social.DialogueStats;
 import net.namesake.social.Memories;
 import org.junit.jupiter.api.DisplayName;
@@ -203,31 +204,80 @@ class SimulationTest {
      * <b>{@code /namesake debug earnrate} on a live save cannot see past the ring, and this is by
      * how much.</b>
      *
-     * <p>A ring holds thirty-two deeds. A hundred days of contact does not fit, so the days a live
-     * save can count are fewer than the days that happened while the warmth is all of it — which
-     * makes a rate read off a real save an <i>over</i>-estimate. Session 12 has to know that before
-     * it sets a threshold from one.
+     * <p>A ring holds {@link Memories#RING_CAPACITY} deeds. A hundred days of contact does not fit,
+     * so the days a live save can count are fewer than the days that happened while the warmth is all
+     * of it — which makes a rate read off a real save an <i>over</i>-estimate. Session 12 has to know
+     * that before it sets a threshold from one.
+     *
+     * <h2>Session 09 found a second reason, in the other direction, and it is worth its place</h2>
+     *
+     * <p>Raising the ring to a hundred and twenty-eight slots turned this test red, and the cause was
+     * not the capacity: <b>a villager's ring counts days of contact the player never gave them.</b> A
+     * story drained into somebody's ring keeps the day it <i>happened</i> on, not the day they heard
+     * it, so a hearer's ring reports contact on a day the player was nowhere near them. At thirty-two
+     * slots eviction hid it; at a hundred and twenty-eight the ring reaches far enough back to show
+     * it.
+     *
+     * <p>So the claim is measured in two halves rather than weakened. The first-hand count — the days
+     * the player actually stood there — is what the ring truncates, and it can only fall short. The
+     * whole count is what {@code /namesake debug earnrate} reads, and gossip inflates it. Both push a
+     * live save's rate away from the truth, and this is the one place the two can be told apart.
      */
     @Test
-    @DisplayName("the ring-derived rate overstates the true one, and never understates it")
+    @DisplayName("a hundred days now fits the ring, and a saturating player still does not")
     void theRingOverstatesTheEarnRate() {
-        Simulation.Outcome outcome = Simulation.run(
-                Simulation.Plan.standard(SEED, 100, PlayerModel.ATTENTIVE));
+        // The capacity paying off. At thirty-two slots session 07 measured the error reaching +109%
+        // at a hundred days; at a hundred and twenty-eight this player loses nothing at all.
+        Truncation attentive = truncationUnder(PlayerModel.ATTENTIVE);
+        assertEquals(0, attentive.truncated(),
+                "a hundred days of one deed a day fits " + Memories.RING_CAPACITY + " slots, so a "
+                        + "live save's earn rate is no longer reading a window");
+
+        // And it still bites where the pressure actually is. Twelve deeds a day for a hundred days
+        // is more distinct events than any ring this side of consolidation can hold.
+        Truncation saturating = truncationUnder(PlayerModel.SATURATING);
+        assertTrue(saturating.truncated() > 0,
+                "a saturating player must still overflow a ring, or the eviction policy is "
+                        + "untested by this instrument");
+
+        assertTrue(attentive.inflated() > 0 || saturating.inflated() > 0,
+                "and gossip must give somebody a contact day the player never gave them, or the "
+                        + "second half of this test is asserting nothing");
+    }
+
+    /** How many rings lost a day they watched, and how many gained one they did not. */
+    private record Truncation(int truncated, int inflated) {
+    }
+
+    private Truncation truncationUnder(PlayerModel model) {
+        Simulation.Outcome outcome = Simulation.run(Simulation.Plan.standard(SEED, 100, model));
         DialogueStats stats = Reports.statsOf(outcome);
 
-        boolean anyTruncated = false;
+        int truncated = 0;
+        int inflated = 0;
         for (DialogueStats.Standing standing : stats.standings()) {
             Simulation.History history = outcome.histories().get(standing.holder());
             if (history == null || history.contactDays() == 0) {
                 continue;
             }
-            assertTrue(standing.contactDays() <= history.contactDays(),
-                    () -> standing.name() + "'s ring claims " + standing.contactDays()
-                            + " days of contact and only " + history.contactDays() + " happened");
-            anyTruncated |= standing.contactDays() < history.contactDays();
+            // Only the deeds they watched, which is exactly what the chronicle counts as reach.
+            long firstHand = outcome.registry().memories().of(standing.holder()).stream()
+                    .filter(deed -> deed.actor().equals(outcome.player()))
+                    .filter(deed -> deed.confidence() == Deed.FIRST_HAND)
+                    .map(Deed::gameDay)
+                    .distinct()
+                    .count();
+            assertTrue(firstHand <= history.contactDays(),
+                    () -> standing.name() + "'s ring claims " + firstHand
+                            + " days they watched and only " + history.contactDays() + " happened");
+            if (firstHand < history.contactDays()) {
+                truncated++;
+            }
+            if (standing.contactDays() > history.contactDays()) {
+                inflated++;
+            }
         }
-        assertTrue(anyTruncated, "a hundred days against a thirty-two entry ring must truncate "
-                + "somebody, or this test is asserting nothing about a full ring");
+        return new Truncation(truncated, inflated);
     }
 
     @Test

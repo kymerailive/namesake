@@ -1,5 +1,6 @@
 package net.namesake.social;
 
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -87,12 +88,6 @@ public final class SocialEvents {
         }
         ItemStack one = held.copyWithCount(1);
 
-        if (!villager.getInventory().canAddItem(one)) {
-            player.displayClientMessage(
-                    Component.literal("They have no room for that."), true);
-            return;
-        }
-
         DeedType type;
         if (Villager.FOOD_POINTS.containsKey(one.getItem()) && villager.wantsMoreFood()) {
             type = DeedType.FED_HUNGRY;
@@ -102,17 +97,50 @@ public final class SocialEvents {
             type = DeedType.GIFT_UNWANTED;
         }
 
+        // Session 09: whether they take it at all. A villager this mod has never met cannot have an
+        // opinion about anybody, so they behave as vanilla would — the gate needs a bond and there
+        // is nowhere for one to be. Minting on sight means that branch is unreachable in a real
+        // world; it exists because "unreachable" and "cannot happen" are different claims.
+        NpcRegistry registry = NpcRegistry.get(level);
+        boolean hasRoom = villager.getInventory().canAddItem(one);
+        GiftPolicy.Verdict verdict = PersonaService.personaOf(villager)
+                .map(persona -> GiftPolicy.verdict(registry, persona.id(), player.getUUID(), type,
+                        hasRoom, Deed.dayOf(level)))
+                .orElse(hasRoom ? GiftPolicy.Verdict.ACCEPTED : GiftPolicy.Verdict.NO_ROOM);
+
+        if (verdict != GiftPolicy.Verdict.ACCEPTED) {
+            // Both refusals say which one they are. A gift that silently does nothing reads as a
+            // broken gesture, which is what a player reports instead of the thing that is wrong.
+            player.displayClientMessage(Component.literal(
+                    verdict == GiftPolicy.Verdict.NO_ROOM
+                            ? "They have no room for that."
+                            : "They have no use for it, and no reason to take it from you."), true);
+            return;
+        }
+
         villager.getInventory().addItem(one);
         if (!player.getAbilities().instabuild) {
             held.shrink(1);
         }
 
-        DeedBus.Result result = DeedBus.emit(level, type, player, villager);
+        DeedBus.Result result = DeedBus.emit(level, type, player, villager, idOf(one));
         player.displayClientMessage(Component.literal(switch (type) {
             case FED_HUNGRY -> "They were hungry.";
             case GIFT_WANTED -> "They wanted that.";
             default -> "They take it, politely.";
         } + (result.witnesses() > 0 ? "  (" + result.witnesses() + " watching)" : "")), true);
+    }
+
+    /**
+     * The registry id of what changed hands — session 09's "richer per memory".
+     *
+     * <p>A string rather than an {@code Item}, because a ring outlives a modpack: an item removed
+     * between two sessions must leave the memory of it readable rather than turning a villager's
+     * whole ring into a load error. It is also what lets the record layer run with no registries at
+     * all, which is what session 07's headless simulation depends on.
+     */
+    private static String idOf(ItemStack stack) {
+        return BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
     }
 
     // --- violence ------------------------------------------------------------------------------
