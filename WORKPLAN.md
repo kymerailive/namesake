@@ -2385,6 +2385,14 @@ six minutes the witness phase already spends. They make three claims no `:common
 launches each, plus the cross-build load test above. **252 unit tests**, up from 218, real JUnit XML,
 `failures=0 errors=0 skipped=0`.
 
+**The verify count is 9 rather than 10 and that is a property of the save, not a lost leg.**
+`checkDataFixer` returns on its first line with a log entry when the world on disk is already at the
+current schema, so its assertion only exists on a run that actually migrates something — and session
+07 changed no schema, so nothing migrated on any of these four runs. Stated because the number moves
+and a bare count that shrinks reads exactly like a regression. Session 06's 44/10 was measured on a
+schema 4 → 5 migration; the 43 this session measured on `c8fe745` is the same phase with nothing to
+migrate.
+
 #### Carried into session 08
 
 - `$env:JAVA_HOME` still must be pinned to JDK 21. Kill the dev client between runs — and **delete
