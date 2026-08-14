@@ -3084,8 +3084,13 @@ and the blur's `if` statement, and §8's drain row given its bound. No changes t
 
 ### Session 09 — 2026-08-15 — dialogue pools and residency
 
-**Shipped.** `63cdc46..41a4e64` plus this correction, pushed to `origin/main`. CI green on all three
+**Shipped.** `63cdc46..b039a16` plus this correction, pushed to `origin/main`. CI green on all three
 jobs — build and test, and the attach-bet harness on each loader.
+
+**Four of those commits land after the ledger entry was first written, and that is worth a line
+rather than a tidied range.** Two are this document; two are the mod, and both came out of rendering
+the hundred and sixty lines and reading them — the tag question hung on an instruction, and the
+villager with a stutter. Neither was visible to any guard in the repo. See the defects section below.
 
 **A villager says your name because of something you did.** Walk into the Karsk village and Stodysk
 Stuksk says *"I don't know your business here."* Give three of their neighbours enough that the
