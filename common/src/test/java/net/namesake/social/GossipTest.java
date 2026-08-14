@@ -261,6 +261,32 @@ class GossipTest {
     }
 
     /**
+     * <b>The fixture the breakage pass found missing, and it is the third time in three sessions.</b>
+     *
+     * <p>Removing the blur guard from {@code DeedBus.deliver} turned <i>nothing</i> red, because
+     * {@code NpcRegistry.putBond} refuses a bond about nobody anyway — the second of the two doors —
+     * so the bond table looked identical either way. Two things were still wrong and neither had a
+     * fixture: the delivery <i>reported</i> a bond it had not written, and every rumour in the world
+     * would spend a {@code Deeds.deltaFor} and an ERROR line on the way to being refused.
+     */
+    @Test
+    @DisplayName("delivering an unattributed rumour reports that it moved no bond")
+    void anUnattributedDeliveryReportsNoBondMoved() {
+        NpcRegistry registry = village(4);
+        Persona hearer = residentsOf(registry).get(0);
+        Deed rumour = aKilling(0).retold().retold();
+        assertFalse(rumour.isAttributed(), "the fixture has to actually be blurred");
+
+        DeedBus.Delivery delivery = DeedBus.deliver(registry, rumour, hearer, 0);
+
+        assertTrue(delivery.remembered(), "they remember that it happened, because it did");
+        assertFalse(delivery.bondMoved(),
+                "a delivery that reports a bond it did not write is a count that lies — and the "
+                        + "path it takes to get there logs an ERROR for every rumour in the world");
+        assertEquals(0, registry.bonds().size());
+    }
+
+    /**
      * The one case the deed id cannot catch on its own.
      *
      * <p>A blurred copy is a different deed by construction, so without an explicit guard the
