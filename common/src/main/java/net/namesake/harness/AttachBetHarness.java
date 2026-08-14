@@ -626,6 +626,19 @@ public final class AttachBetHarness {
                                 && registry.memories().of(witnessOutOfRange).isEmpty(),
                         "GOSSIP neither villager who could not see it knows anything yet");
 
+                // The absence branch, rendered here rather than after the drain — because after the
+                // drain there may be nobody left in the village who has seen nothing, and a state
+                // that has nobody to render is a state nobody has measured. That is session 07's
+                // defect exactly, and the first attempt at this walked into it: the guard reported
+                // honestly that it had found no empty ring, which is better than a false green and
+                // is still not a measurement. Right now the wall villager's ring is empty by
+                // assertion, one line above.
+                emptyRingRows.clear();
+                boundEntity(server, witnessBehindAWall).ifPresent(entity ->
+                        server.getCommands().performPrefixedCommand(
+                                capturing(server, player, emptyRingRows),
+                                "namesake debug deeds " + entity.getUUID()));
+
                 // Five stories, two drains each, one drain per settlement per 250 ticks. Waiting on
                 // game time rather than on chunk IO, so sprinting is the right instrument here —
                 // and it is a poll against the condition with a deadline, never a blind sprint,
@@ -638,6 +651,9 @@ public final class AttachBetHarness {
 
     /** How many stories the settlement had to tell before the drain was given any ticks. */
     private static int gossipQueuedAtStart;
+
+    /** What a villager who has seen nothing looks like on a screen. Captured before the drain runs. */
+    private static final List<String> emptyRingRows = new ArrayList<>();
 
     /**
      * <b>Session 08's one leg, and it is the claim no unit test in {@code :common} can make.</b>
@@ -704,23 +720,18 @@ public final class AttachBetHarness {
         // it, and one of a villager who has seen nothing. The second is the state a player is in
         // for their first hour.
         ServerPlayer player = player(server);
-        List<String> emitted = new ArrayList<>();
-        CommandSourceStack capturing = capturing(server, player, emitted);
+        List<String> emitted = new ArrayList<>(emptyRingRows);
         boundEntity(server, witnessBehindAWall).ifPresent(entity ->
                 server.getCommands().performPrefixedCommand(
-                        capturing, "namesake debug deeds " + entity.getUUID()));
-        villagersAt(level).stream()
-                .filter(villager -> PersonaLink.get().personaId(villager)
-                        .map(id -> registry.memories().of(id).isEmpty()).orElse(false))
-                .findFirst()
-                .ifPresentOrElse(
-                        empty -> server.getCommands().performPrefixedCommand(
-                                capturing, "namesake debug deeds " + empty.getUUID()),
-                        () -> Namesake.LOGGER.info("[harness] every loaded villager remembers "
-                                + "something, so the empty-ring branch had nobody to render"));
+                        capturing(server, player, emitted),
+                        "namesake debug deeds " + entity.getUUID()));
 
+        record(emptyRingRows.stream().anyMatch(line -> line.contains("have not seen anything")),
+                "GOSSIP the empty-ring branch was rendered to a player before anybody was told "
+                        + "anything — the state a real player meets first, and the one session 07 "
+                        + "shipped over the chat width because no fixture ever reached it");
         record(!emitted.isEmpty(), "GOSSIP the deed ring reached a player through the real "
-                + "dispatcher in " + emitted.size() + " line(s)");
+                + "dispatcher in " + emitted.size() + " line(s), in both of its states");
         String widest = emitted.stream().max(Comparator.comparingInt(String::length)).orElse("");
         record(widest.length() <= Reports.CHAT_WIDTH,
                 "GOSSIP the widest deed row a player sees is " + widest.length() + " characters, "

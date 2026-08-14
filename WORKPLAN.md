@@ -3,7 +3,20 @@
 **The ledger.** What happens next, in order, with exit criteria. Read first, update last.
 Where any other document disagrees on sequence, this wins.
 
-- **Status:** session 07 complete, **and time runs forward**. A settlement of nine can be advanced a
+- **Status:** session 08 complete, **and a deed now reaches people who were not standing there.** Feed
+  a villager in a square and within two in-game days **78% of the village holds it** — at three
+  descending confidences, and at least one of them can no longer say who did it. The villager behind
+  a wall records nothing when it happens and has heard about it an hour later, which is the wall
+  stopping them seeing and not stopping the village talking. It clears 60% **with nobody watching at
+  all**, in eleven villages of twelve, so the criterion does not rest on the one input nobody has
+  measured. The session opened on a contradiction session 06 had already proved — at
+  `confidence × 0.85` and max two hops the blur can never fire — and closed it by moving the
+  retention to **0.70** and nothing else, because that is the only one of the four available levers
+  that does not break session 10's ship-or-kill. **Nothing counts hops:** the two-hop bound falls out
+  of the retention and the attribution floor, so `Deed` still has seven fields. And it hands session
+  09 an answer rather than a problem: **gossip does not make the residency threshold reachable on
+  warmth** — never, both ways, at every mark — while trust arrives four days sooner.
+  Before that: session 07, **and time runs forward**. A settlement of nine can be advanced a
   hundred in-game days in **six to eight milliseconds on a live server thread**, through the shipped
   record layer rather than a copy of it, and it dumps a chronicle, an earn-rate report and a real
   deed ring. It immediately found a threshold nobody could ever have crossed: `DESIGN.md` §5 grants
@@ -42,8 +55,8 @@ Where any other document disagrees on sequence, this wins.
 | 05 | Bonds and deeds | **done** — 2026-08-14 |
 | 06 | Episodic memory | **done** — 2026-08-14 |
 | 07 | Headless simulation harness | **done** — 2026-08-14 |
-| 08 | Gossip and distortion | **NEXT** |
-| 09 | Dialogue pools and residency | pending |
+| 08 | Gossip and distortion | **done** — 2026-08-14 |
+| 09 | Dialogue pools and residency | **NEXT** |
 | 10 | Roads and propagation — **SHIP-OR-KILL** | pending |
 | 11 | Notice Board | pending |
 | 12 | Standing bands | pending |
@@ -2421,7 +2434,7 @@ and a bare count that shrinks reads exactly like a regression. Session 06's 44/1
 schema 4 → 5 migration; the 43 this session measured on `c8fe745` is the same phase with nothing to
 migrate.
 
-#### Carried into session 08
+#### Carried into session 08 *(all four addressed — see the session 08 entry)*
 
 - `$env:JAVA_HOME` still must be pinned to JDK 21. Kill the dev client between runs — and **delete
   `<loader>/run/saves/namesake_attachbet`, not `namesake_harness`**, which cost one confusing red run
@@ -2451,3 +2464,378 @@ rule 5 honest. Three decisions added to `DESIGN.md` §2 — the personality magn
 unit, and that measurement data is never persisted — taking the count 49 → 52. A fifth verification
 instrument recorded above, and it is the first one that is *in* CI, by the same argument that keeps
 the profiler out. No changes to the 16-session shape.
+
+### Session 08 — 2026-08-14 — gossip and distortion
+
+**Shipped.** `72ae69e..HEAD` plus this ledger commit, pushed to `origin/main`. CI green on all three
+jobs — build and test, and the attach-bet harness on each loader.
+
+**A deed now reaches people who were not standing there.** Feed a villager in a square and within two
+in-game days **78% of the village holds it**, at three descending confidences, and at least one of
+them can no longer say who did it. The villager behind a wall records nothing when it happens —
+session 05's leg, unchanged — and has heard about it an in-game hour later. **The wall stops them
+seeing it. It does not stop the village talking.**
+
+#### The contradiction the session opened on, and why the retention was the only thing that moved
+
+`DESIGN.md` §4 step 7 carried three clauses written before there was any code to run them against:
+`confidence × 0.85` per hop, **max 2 hops**, and **identity blurs below 50**. Session 06 did the
+arithmetic and wrote the consequence into `Deed.id()`: at 0.85 a two-hop story stands at 72, so the
+blur could never fire and one of the three clauses was dead code with a comment on it. This session's
+exit criterion asks for a holder who cannot name the actor, and the design as ruled could not produce
+one.
+
+**Three of the four available ways out break session 10, which is the whole argument.**
+
+| | What it costs |
+|---|---|
+| **Raise the hop cap** | 0.85 needs **five** hops to cross 50. A story five settlements deep is a different mod, and §4 rules two. |
+| **Raise the blur threshold** | To catch 72 it has to sit above it — which makes a *two-hop* story anonymous. The acceptance script's step 5 is *"someone says they've heard your name, referencing A"*, and that is a two-hop story. **This one fails ship-or-kill directly.** |
+| **Change the exit criterion** | Ships a distortion mechanic that never distorts, and a blur branch nothing can reach. |
+| **Lower the retention** | Changes what a rumour is worth. |
+
+**The fourth is the only lever that moves the two hops in *opposite* directions relative to the
+threshold**, which is why it is the answer rather than the cheapest option. The window is arithmetic
+rather than taste: hop one must stay attributed and hop two must not, so `r >= 0.50` and `r^2 < 0.50`
+— which is `[0.50, 0.707)`. **Seven tenths is the top of that window and therefore the gentlest
+change that works: 100 -> 70 -> 49.**
+
+What it costs is real and smaller than it looks. `Deeds.deltaFor` scales the whole delta by
+confidence, so a rumour is worth 0.70 of first-hand where it was 0.85 — but that number is dominated
+by the witness share (a third for a gift) and by the outsider weight, so the visible effect on a bond
+is usually the same integer. Where it is not, 0.70 is the more defensible figure anyway: hearing about
+a murder should not move you 85% as much as watching one.
+
+**And nothing counts hops.** A story is retold while it can still be attributed, so `max 2 hops` falls
+out of the retention and the attribution floor rather than needing a counter. That is not a trick to
+save a field — a hop count would be an eighth field on a record session 06 deliberately held at seven,
+persisted in every ring in every save, deriving something a field already there answers.
+`GossipTest.theHopBoundFallsOutOfTheArithmetic` walks the chain and turns red if the derived answer
+and `DESIGN.md`'s ruled one ever disagree.
+
+#### The other two decisions the brief named, ruled
+
+**1. Which copy survives when two arrivals disagree: the better-attested one wins, and it does not
+move.** Both halves are load-bearing. Better attested wins because a memory should be the best account
+of an event a person actually has — somebody told about a killing at 70 who then *watches* a
+hundred-confidence copy arrive knows it first-hand from that moment. It does not move because session
+06's reason stands unchanged and is the half that protects the ring: refreshing a slot would let a
+retelling push first-hand memories out simply by being repeated.
+
+**The cost the brief named is real and is bounded.** It makes `remember` a read-modify-write, and it
+does let a retelling touch a ring — but only *upward*. A copy that knows less changes nothing at all,
+and the two doors into the method are an emit (first-hand, a hundred) and a drain (strictly less than
+whatever it was retold from), so nothing gossip does can degrade a memory. **No path in the mod as it
+stands produces the case at all**, because a deed reaches its witnesses at emit and enters the deque
+afterwards — first-hand always arrives first. That is stated rather than relied on: the rule is here
+so that session 10's second settlement and session 16's NPC actors meet a ring that already behaves
+correctly instead of one that behaves correctly by accident.
+
+**2. The deque is persisted, and hard rule 1 was paid first.** The tear argument applies here where
+session 07's `DialogueStats` said it did not: **a queued rumour *is* a `Deed`**, which references
+personas and settlements by id. The deciding argument is session 10's rather than the tear, though:
+§4 step 7's cross-settlement hop carries a **1200-6000 tick delay**, which makes an in-flight story
+certain to cross a save — so a volatile deque now means a schema bump during ship-or-kill, which is
+the worst available time for one. **Build it so 10 is one more edge, not a rewrite.**
+
+**Schema 6 cost no new persisted record, and that is the part worth recording.** A queued rumour is a
+`Deed`: the same seven fields and the same codec that have been on disk since schema 5. **Session 08
+added no field to any persisted record** — the confidence a story has left was already there, and the
+hop count that would have needed one is derived from it. So `SocialValueLedgerTest` gained no entries
+and lost none, for the second session running, and the migration adds a table and nothing else.
+
+**3. The first thing in this mod that polls, bounded by construction rather than measured.**
+`DESIGN.md` §8's 250-tick cadence, wired through both loaders' existing server-tick hook. On 249 ticks
+in every 250 the hook reads `getTickCount()` and returns; on the 250th it returns on its third line
+unless something has happened somewhere recently. **A settlement is in the drain's map only while it
+has an unspent story, and a story is spent after two drains** — so the map is sized by recent events
+rather than by the world, and with one player it holds one.
+
+Measuring it instead was considered and rejected on session 06's own grounds: a wall-clock number
+taken on the owner's machine while they are working on it is the confident-wrong kind.
+`GossipTest.theDrainVisitsOnlySettlementsWithSomethingToSay` pins the bound instead, over a
+two-hundred-settlement registry, deterministically, in CI — including that a whole in-game day of
+drains over a quiet world visits nothing at all.
+
+#### What the exit criteria actually showed
+
+**The propagation half, out of the headless simulation.** One deed, emitted on day 0 in a settlement
+of nine, and then nobody visits:
+
+| witnesses / gossip | day 0 | day 1 | day 2 | of village | unnamed |
+|---|---|---|---|---|---|
+| 0% seen it, told | 7 | 7 | 7 | **78%** | 2 |
+| 35% seen it, told | 7 | 7 | 7 | **78%** | 1 |
+| 100% seen it, told | 9 | 9 | 9 | 100% | 0 |
+| **35% seen it, silent** | **4** | **4** | **4** | **44%** | **0** |
+
+The last row is the control, and it is the sentence this session exists to make false: with step 7
+off, a deed reaches the people who were standing there and stops.
+
+**The row that matters most is the first.** The criterion's 60% is partly paid by the witnesses, and
+session 07 called the witness fraction the least grounded input in the whole instrument — so a
+criterion that only clears because of a guess is one that has to wait for session 15's playtest.
+**This one clears at 0% witnesses**, from gossip alone.
+
+**Measured across twelve villages rather than the one it was written against**, because this project's
+signature defect is a claim measured against a fixture. At 0% witnesses, coverage by day 2:
+`67% 67% 67% 100% 67% 44% 67% 67% 67% 78% 100% 67%` — **eleven of twelve clear 60%**, and eleven of
+twelve produce a holder who cannot name the actor. The one that does not is the transfer coin over a
+nine-person village, and it is reported rather than tuned away.
+
+**Descending, and every step of the ladder occupied.** The village holds one story at three
+confidences and no others: **100 (watched it) x 4, 70 (was told) x 2, 49 (someone from the north)
+x 1**. A fourth value would mean the hop bound had moved.
+
+**The owner's half, on screen in a running game.** `/namesake debug deeds` on a villager who was
+behind a wall, read out of a real client through the real dispatcher:
+
+```
+Krutirgyst Stuksk
+  3 of 32 remembered, newest first, day 0
+  day  age  deed             how     by
+    0       FED_HUNGRY       heard   4e36b848 c70
+    0       GIFT_WANTED      heard   4e36b848 c70
+```
+
+and, on a run where the blur fired:
+
+```
+    0       FED_HUNGRY       rumour  nobody   c49
+    0       GIFT_WANTED      heard   af25fa27 c70
+```
+
+Four states in one column — `to them`, `saw it`, `heard`, `rumour` — and the `by` column reading
+`nobody` when nobody knows. **"Someone from the north" needed no field:** the direction is a function
+of where the deed happened, which the deed already carries, and where the holder lives, which their
+persona already carries. Session 06 declined an eighth field on `Deed`; session 08 declined a ninth,
+for the same reason and after the same look at what it would have bought.
+
+**Both loaders, every leg green:** **60** in `setup` (49 before this session) and 9 in `verify`, in
+two launches each, plus the cross-build load test below. **285 unit tests**, up from 252, real JUnit
+XML, `failures=0 errors=0 skipped=0`.
+
+#### The answer session 09 is handed instead of the problem
+
+Session 07 found that **no three residents ever reach 20 warmth in a hundred in-game days**, because a
+witness's share of a gift is one point and warmth decays one a day — the two cancel exactly. Gossip
+was the plausible fix, and testing it cost one column.
+
+**It is not the fix.** The in-game day the third resident crossed each mark, same plan, run both ways:
+
+| axis | gossip | 20 | 40 | 60 | 80 | 100 |
+|---|---|---|---|---|---|---|
+| warmth | off | never | never | never | never | never |
+| trust | off | 29 | 60 | 89 | never | never |
+| **warmth** | **on** | **never** | **never** | **never** | **never** | **never** |
+| **trust** | **on** | **28** | **56** | **84** | never | never |
+
+Gossip moves the village's median warmth from **0 to 1** and its maximum from 56 to 60, and takes four
+days off every trust mark. **It does not come close to making a warmth threshold reachable, and it was
+never going to** — a hearer's share of a gift is smaller than a witness's, and the decay is the same
+point a day either way. So session 09's ruling stands where session 07 left it, with one option now
+closed: **read trust, or read peak warmth, or raise the witness share.** Gossip is not a fourth
+option.
+
+Nothing was changed on the strength of this. Tuning a decay curve to make a threshold reachable is
+tuning the measurement to fit the answer.
+
+#### What the run found that nobody asked it
+
+**1. Gossip costs memory depth, and the number is worth having before session 09 rules on ring
+capacity.** A villager's ring now fills with what happened to their neighbours as well as what
+happened in front of them, so it reaches *less far back* in the same number of days. Under a
+saturating player over a hundred days the deepest ring reaches back **19 days without propagation and
+13 with it**. That is a real consequence rather than a defect — the ring is thirty-two slots and
+gossip is competition for them — and it is a printed number rather than a threshold, because it is the
+owner's to rule. It also sharpens session 07's finding: the deepest ring was already shallow because
+twenty of its rows said the same thing, and now some of those rows belong to other people.
+
+**2. The blur fires on a coin, so it does not fire on every run, and the harness says so rather than
+pretending.** Whether one villager takes one telling is a hash of the story and the hearer, over
+persona ids a real game mints at random. Across **twelve** in-game runs the whole village held
+`[49, 70, 100]` on ten of them and `[70, 100]` on two — those two villages' pair of candidates
+happened to take everything at the first telling and left nobody for the second. The leg asserts the
+lawful *set* rather than a particular member of it, which is why it is not a 17%-flaky check running
+on every push. The deterministic proof lives in `GossipTest` and in the simulation, and a playtest
+should feed three or four different villagers rather than concluding from one.
+
+**3. A rumour reaches you on the day you hear it, and nothing before this session could have said
+so.** `Bond.apply` stamps `lastSeenDay` with the day it is handed, and a story queued before midnight
+can be drained after it — so handing the bond the day the *deed* happened would set that stamp
+backwards, and the next read would run the lazy decay over days it had already decayed. Nothing in the
+emit path can produce it, which is exactly why it needed looking for. `DeedBus.applyTo` takes the later
+of the two, and `GossipTest.aLateTellingDoesNotRewindTheBond` is the fixture.
+
+#### Hard rule 1, and the pre-change half done first
+
+The attach-bet `setup` phase was run on commit `ac01af7` — schema 5, the session 07 head — on **both
+loaders before a line of session 08 was written**, and both saves were archived. The schema-6 build
+then loaded them:
+
+```
+NPC registry datafixer: schema 5 -> 6 (settlement gossip deques added; nothing to
+rewrite, an absent table means no rumour was in flight) rewrote 0 record(s)
+Loaded 9 persona(s), 9 bound to an entity, 1 settlement(s), 4 bond(s),
+8 deed(s) across 4 ring(s), 0 rumour(s) in 0 settlement(s) (schema 6)
+```
+
+**This is the additive kind, and saying so out loud is the point — for the third time running.** What
+makes it checkable is stronger than it was at 5, and it is the thing session 08 could most easily have
+made false: **no persisted record gained a field.** A queued rumour is a `Deed` with the codec it has
+had since schema 5, so there is no older shape of anything on disk to reconcile.
+
+The assertion is on what would actually break rather than on the rewrite count — zero is also what a
+fixer that does nothing at all returns, which session 03 broke the 2 -> 3 fix into on purpose and
+turned the build red for. Read as damage, the registry goes read-only and a world that has been played
+for a week silently stops saving its personas, settlements, bonds *and* rings, because there is one
+file:
+
+```
+PASS  DATAFIXER 5->6 the 8 deed(s) across 4 ring(s) the schema-5 build wrote came through intact
+PASS  DATAFIXER 5->6 a world written before schema 6 has no rumours in flight, and an absent
+      gossip table reads as that rather than as damage (0)
+PASS  DATAFIXER 5->6 the registry is writable, so the migrated file will be written back at
+      schema 6 rather than migrating again on every load
+```
+
+**Then each world was loaded a second time**, which is the only way session 01's defect 1 is ever
+caught: `no migration expected: world is already at schema 6`, on both loaders. The fix reached disk.
+
+#### Rule 3: twenty deliberate breakages, each watched to fail and removed
+
+| Breakage | Result |
+|---|---|
+| The retention put back to 0.85 | **4+ red**, including the contradiction by name: *"nobody lost the actor's name … session 08 lowered `Deed.RETOLD` to 0.70 precisely so that two hops lands at 49 rather than at 72"* |
+| The blur threshold raised to 80, catching a one-hop story | **6+ red**, across the layout, the simulation and the hop bound |
+| An unattributed rumour allowed to move a bond | **NOTHING FAILED.** `putBond` refuses it anyway — see below |
+| …the same breakage, after the fixture that reaches it | **Red.** *"a delivery that reports a bond it did not write is a count that lies"* |
+| The witness re-tell guard removed | **Red.** *"a witness is not told a rumour about the thing they watched"* |
+| Step 6 removed: a deed never enters the deque | **6 red**, including both simulation criteria |
+| The deque dedupe removed | **2 red.** *"repeating yourself is one rumour, not thirty-two"* |
+| The drain requeuing whatever it just told, attributed or not | **3 red** — the hop bound, by three routes |
+| An absent gossip table read as damage | **2 red**, one of them the schema ladder |
+| `setDirty` removed from the drain | **NOTHING FAILED.** A hearer's ring marked it dirty instead |
+| …the same breakage, after the fixture where nobody is left to tell | **Red.** *"a drain marks the file dirty even when there is nobody left to tell"* |
+| A duplicate rumour allowed to mark the registry dirty | **Red** |
+| The ring keeping the first copy however badly attested | **2 red** — the session 08 ruling, both halves |
+| An upgrade refreshing the slot instead of replacing it in place | **Red.** The half that protects the ring |
+| A bond stamped with the day the deed happened rather than the day it was heard | **Red** |
+| The registry accepting a bond about nobody | **Red** |
+| Everybody takes every telling | **4 red**, including the transfer rate |
+| The schema bumped to 7 with no matching fix | **6+ red.** *"the fix chain has a hole"* |
+| A blurred deed row printing the actor it blurred | **Red.** *"a blurred row must not leak the actor it blurred"* |
+| The deed header back to one line with the name on it | **Red.** *"a row of 'deeds, a full ring' is 64 characters"* |
+
+**Two of the twenty rows reported NOTHING FAILED, and both are the same shape as session 05's fifth
+row and session 07's two: a guard that exists and a fixture that never reaches it.** Both are recorded
+because the reasons are different and both are instructive.
+
+The first is **two doors hiding each other.** Removing the blur guard from `DeedBus.deliver` changed
+nothing observable, because `NpcRegistry.putBond` refuses a bond about nobody anyway — so the bond
+table looked identical either way. Two things were still wrong and neither had a fixture: the delivery
+*reported* a bond it had not written, and every rumour in the world would spend a `Deeds.deltaFor` and
+an ERROR line on the way to being refused. Two doors is the right design and is why the guard is not
+redundant; it is also why the obvious fixture proves nothing.
+
+The second is **a fixture that was too generous.** Removing `setDirty` from the drain changed nothing,
+because somebody heard the story and `NpcRegistry.remember` marks the file dirty on its own. The case
+the drain's own flag protects is the one where *nobody* is left to tell: the village's copy degrades
+and not one ring changes, and without the flag that degradation never reaches the disk — so a story
+reloads with the confidence it had an hour ago and travels further than the design permits.
+
+#### The width defect this session shipped and caught, and where it was caught
+
+**The deed ring's header was 64 characters against a sixty-character chat width**, in the *populated*
+state, and it had been there since session 06. It was invisible until this session made `debug deeds`
+measurable at all: session 06 measured `describeDeed` and nothing else, so the header — a name plus
+five counts on one line — was never rendered by a test. The name is on a line of its own now.
+
+**That is the sixth instance of this project's signature defect and the first one caught by a guard
+rather than by the owner**, which is what `CommandLayoutTest.everyStateOfBothCommands` was extended
+for: it enumerates twelve states across three commands now rather than eight across two, and session
+08's rows went into it rather than into a fifth guard sampling one state.
+
+**And the same lesson arrived a second time, in the harness, where the first attempt walked into it.**
+The empty-ring branch was originally rendered *after* the drain, and on the first real run there was
+nobody left in the village who had seen nothing — so the branch had nobody to render. The guard
+reported that honestly rather than passing, which is better than a false green and is still not a
+measurement. It is rendered before the drain now, when the villager behind the wall is empty by
+assertion one line above.
+
+#### One harness leg, and why it is one rather than none
+
+`WORKPLAN.md` rules that the propagation curve — 60% of a village within two in-game days — is a claim
+about *time*, which is session 07's instrument, and it is measured there. What only a running game can
+show is everything on the other side of the seam: that a loader's server-tick hook is wired to
+`Gossip.onServerTick`, that the 250-tick cadence fires against a real server's tick count, and that a
+deque written by an emit is spent by a *tick* rather than by a test calling a method.
+
+**And the assertion is the thesis in one line.** Session 05 proved the villager behind a wall records
+nothing, five blocks away and well inside the box. This proves that an in-game hour later they have
+heard about it anyway, at a confidence that says they were told rather than that they saw it.
+
+Three more feedings are emitted first, and that is not padding: whether one villager takes one telling
+is a coin over persona ids a real game mints at random, and a leg that runs on every push cannot be a
+3% coin. Five stories against two hearers is twenty independent flips, which puts "nobody heard
+anything" at two in ten thousand.
+
+#### Two things the brief offered and this session declined
+
+**`Simulation.Plan` was not extended to more than one settlement.** The brief said to do it *if
+propagation needs it*, and session 08's propagation is same-settlement by definition — a second
+settlement with no cross-settlement mechanic would add a report column reading zero for two sessions,
+which is the noise session 06 removed from the deed row. What session 10 actually needs is that the
+machinery be shared rather than the fixture be pre-built, and it is: the simulation drives the shipped
+`Gossip.drain` at the shipped cadence, so session 10 adds an edge and a second settlement rather than
+a mechanism.
+
+**`Personas.STILL_UNSETTLED` is parked again, and this session adds evidence rather than none.** The
+branch that scans the whole settlement table on every chunk load has now fired **zero times in three
+real worlds on both loaders**, and session 08's propagation does not touch it — gossip runs over
+residents of a settlement, which is the case the branch does not cover. Session 04 recorded the index
+as session 08's problem *at the earliest*; it is not this session's, and the honest note is that
+nothing has yet produced a world where it fires.
+
+#### One cost this session found in its own code and paid
+
+**A ring slot now carries the id it is addressed by.** `Memories`' own note claimed a lookup was "a
+linear walk of at most 32 long comparisons" — true of the comparison and false of what it took to get
+there, because `Deed.id()` is a sixty-four-bit mix of eight fields and was being run once per slot per
+walk. That cost nothing while the only caller was an emit, at most thirteen times in the tick
+something happened. **The drain asks the same question of every resident on every drain**, which
+turned it into about ninety microseconds of one tick in every two hundred and fifty.
+
+Found by effect rather than by reading: the headless simulation's hundred-day run went from 8 ms to
+27 ms on a live server thread. With the id carried it is **21 ms on Fabric and 23 on NeoForge**, and
+warm in a JVM under test it went 2.06 ms to 1.24 ms. Derived and never persisted, so it is not the
+kind of cache session 03 deleted `Settlement.culture` for — it cannot disagree with the deed beside
+it, because both are filled in from the same record at the same moment and neither is ever mutated.
+
+#### Carried into session 09
+
+- `$env:JAVA_HOME` still must be pinned to JDK 21. Kill the dev client between runs, and delete
+  `<loader>/run/saves/namesake_attachbet` before a `setup`.
+- **The warmth-decay finding is still session 09's biggest problem, and gossip is no longer one of the
+  answers.** The table above is the one to rule against: warmth is `never` at every mark with
+  propagation on, and trust reaches 20 on day 28.
+- **A deed ring is now competition for slots rather than only a record of what a player did to one
+  person.** Session 06's four routes to depth are unchanged, but the *pressure* has moved: the deepest
+  ring loses six days of reach to propagation. Session 09 is where a line of dialogue first depends on
+  what a ring holds, which is where that becomes a decision rather than a number.
+- **`Deed.RETOLD` is the number session 10 will be tempted to move**, because a cross-settlement hop
+  at 0.15 arriving at 70 confidence is a strong rumour. It is held by `GossipTest` to a window rather
+  than to a value: hop one attributed, hop two not. Move it inside `[0.50, 0.707)` freely; moving it
+  outside changes what the mod is, and the build turns red saying so.
+- **The blur fires on a coin.** A playtest may see it on the first villager or on the fourth. Feed
+  three or four different villagers and wait an in-game hour rather than concluding from one.
+- `DeedBus.witnessScan` and `DeedBus.emit` **still have meters pointed at nothing**, unchanged from
+  session 07 and for the same reason: the simulation replaces the spatial query. `Gossip.drain` has
+  one now and it has the same problem in reverse — it is bounded by construction, so measuring it
+  would confirm a number the construction already gives.
+
+**Ledger change.** Session 08 → done, session 09 → NEXT. **No risk changes and no exemption movement**
+— none fell due, and for the third session running the forcing function was not what kept rule 5
+honest. Three decisions added to `DESIGN.md` §2 — the gossip retention, gossip storage, and which copy
+of an event wins a ring slot — taking the count 52 → 55, plus §4 step 7 rewritten around the retention
+and the blur's `if` statement, and §8's drain row given its bound. No changes to the 16-session shape.
