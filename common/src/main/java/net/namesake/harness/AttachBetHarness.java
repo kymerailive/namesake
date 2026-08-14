@@ -30,7 +30,10 @@ import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.AABB;
 import net.namesake.Namesake;
+import net.namesake.culture.Culture;
 import net.namesake.culture.Names;
+import net.namesake.dialogue.Dialogue;
+import net.namesake.dialogue.Voice;
 import net.namesake.npc.NpcRegistry;
 import net.namesake.npc.NpcSchema;
 import net.namesake.npc.Persona;
@@ -47,6 +50,7 @@ import net.namesake.social.DeedBus;
 import net.namesake.social.DeedType;
 import net.namesake.social.Gossip;
 import net.namesake.social.Personality;
+import net.namesake.social.Residency;
 import net.namesake.verb.ClientInteractionState;
 import net.namesake.verb.ClientPacketSink;
 import net.namesake.verb.GreetPayload;
@@ -746,6 +750,8 @@ public final class AttachBetHarness {
         record(emitted.stream().noneMatch(line -> line.contains("\r")),
                 "GOSSIP no deed row carries a carriage return");
 
+        runResidencyCheck(server, player);
+
         // Recorded here rather than at the end of step 17, so the verify phase compares against the
         // state gossip actually left behind. That makes the existing ring-reload check cover a
         // schema-6 world with rumours in it for free.
@@ -754,6 +760,139 @@ public final class AttachBetHarness {
         runTheSimulation(server, player);
         writeSubjects(level);
         advance(server, 5);
+    }
+
+    // --- session 09: the name swap, in a running game ----------------------------------------------
+
+    /**
+     * <b>Residency earned, and the sentence changing because of it.</b> Session 09's one leg.
+     *
+     * <p>{@code WORKPLAN.md} draws the line and this session sits right on it. The residency
+     * arithmetic is pure and is a unit test; the pool and register selection are pure and are a unit
+     * test; every one of the hundred and sixty lines is measured against the chat width by
+     * {@code CommandLayoutTest}. <b>What only a running game can show is that a threshold crossed on
+     * one day is still crossed after the world has been to disk and back at a new schema, and that
+     * the villager's line is different on the other side.</b> That is what this records and what the
+     * verify phase checks.
+     *
+     * <p>The deeds go through {@code DeedBus.record} — the shipped door, the one session 07's
+     * simulation uses — rather than through a bond written by hand, because "the villager trusts you"
+     * and "the villager trusts you <i>because of something you did</i>" are different claims and only
+     * the second one is the mod working.
+     *
+     * <p><b>Gifts rather than feedings, deliberately.</b> {@code DESIGN.md} §5 grants residency two
+     * ways, and {@code FED_HUNGRY} ×3 is the other one — so feeding would satisfy the deed route
+     * within three days and this leg would never exercise the band the owner ruled. A wanted gift is
+     * neither of §5's significant deeds, so the only thing that can grant residency here is three
+     * residents crossing {@link Residency#TRUST_THRESHOLD}.
+     */
+    private static void runResidencyCheck(MinecraftServer server, ServerPlayer player) {
+        NpcRegistry registry = NpcRegistry.get(server);
+        if (registeredSettlement == null) {
+            Namesake.LOGGER.info("[harness] no settlement registered; skipping the residency legs");
+            return;
+        }
+        int settlementId = registeredSettlement.id();
+        UUID viewer = player.getUUID();
+        String playerName = player.getGameProfile().getName();
+
+        List<Persona> locals = registry.all().stream()
+                .filter(persona -> persona.settlementId() == settlementId)
+                .filter(Persona::isGenerated)
+                .sorted(Comparator.comparing(persona -> persona.id().toString()))
+                .toList();
+        if (locals.size() < Residency.RESIDENTS_REQUIRED + 1) {
+            record(false, "RESIDENCY the village has " + locals.size() + " generated resident(s), "
+                    + "which is too few to earn residency from and still have a stranger to ask");
+            return;
+        }
+
+        // The speaker is deliberately NOT one of the three the player befriends. What is being shown
+        // is a villager who has personally never met you using your name because the village has
+        // taken you in — DESIGN.md §5's swap belongs to the settlement, not to one relationship.
+        Persona speaker = locals.get(locals.size() - 1);
+        List<Persona> befriended = locals.subList(0, Residency.RESIDENTS_REQUIRED);
+
+        int today = Deed.dayOf(server.overworld());
+        residencySpeaker = speaker.id();
+        residencyPlayer = viewer;
+        residencyName = playerName;
+        residencySettlement = settlementId;
+        String before = String.join(" | ", speakLines(registry, speaker, viewer, playerName, today));
+        String strangerWord = Voice.of(Culture.byId(speaker.cultureId())).strangerAddress();
+
+        record(!Residency.isResident(registry, settlementId, viewer, today),
+                "RESIDENCY the village has not taken this player in yet");
+        record(before.contains(strangerWord) && !before.contains(playerName),
+                "RESIDENCY before it, " + Names.of(speaker).full() + " calls them '" + strangerWord
+                        + "' and not by name: " + before);
+
+        // Four gifts an in-game day is what it takes to fill a typical villager's allowance, and the
+        // loop runs until three of them are over the threshold rather than for a number of days
+        // somebody guessed: how long it takes is a property of their personalities.
+        int days = 0;
+        while (days < RESIDENCY_DAY_LIMIT
+                && !Residency.isResident(registry, settlementId, viewer, today + days)) {
+            for (Persona resident : befriended) {
+                for (int gift = 0; gift < 4; gift++) {
+                    DeedBus.record(registry, Deed.of(DeedType.GIFT_WANTED, viewer, resident.id(),
+                                    settlementId, today + days, "minecraft:bread"),
+                            List.of(resident), 0);
+                }
+            }
+            days++;
+            // Spent through the shipped drain rather than left in the deque, so the state written to
+            // disk is a settled one. The tick hook is already proven by the gossip legs above; this
+            // is the same method it calls, run to exhaustion so nothing is still travelling when the
+            // world is saved.
+            for (int drain = 0; drain < Gossip.DRAINS_PER_DAY && !registry.gossip().isEmpty(); drain++) {
+                Gossip.drainEverySettlement(registry, today + days);
+            }
+        }
+
+        Residency.Verdict verdict = Residency.verdict(registry, settlementId, viewer, today + days);
+        record(verdict.granted() && verdict.route() == Residency.Route.BAND,
+                "RESIDENCY granted after " + days + " in-game day(s) of gifts, by the band: "
+                        + verdict.residentsAtThreshold() + " resident(s) at "
+                        + Residency.TRUST_THRESHOLD + " trust, and not by a significant deed ("
+                        + verdict.feedings() + " feeding(s), raid " + verdict.defendedARaid() + ")");
+
+        List<String> after = speakLines(registry, speaker, viewer, playerName, today + days);
+        String said = String.join(" | ", after);
+        record(said.contains(playerName),
+                "RESIDENCY and now " + Names.of(speaker).full() + " uses their name: " + said);
+        record(!said.contains(strangerWord),
+                "RESIDENCY and has stopped calling them '" + strangerWord + "'");
+        record(after.stream().allMatch(line -> line.length() <= Reports.CHAT_WIDTH),
+                "RESIDENCY the widest thing they say is "
+                        + after.stream().mapToInt(String::length).max().orElse(0)
+                        + " characters, against a " + Reports.CHAT_WIDTH + "-character chat width");
+        record(after.stream().noneMatch(line -> line.contains("\r")),
+                "RESIDENCY no line carries a carriage return");
+
+        // On the screen as well as in the verdict file, so a run leaves behind what a player sees.
+        after.forEach(line -> player.sendSystemMessage(Component.literal(line)));
+    }
+
+    /** However many in-game days it takes; a bound so a bad roll cannot hang the run. */
+    private static final int RESIDENCY_DAY_LIMIT = 90;
+
+    /** Which villager the verify phase should ask again after the reload. */
+    private static UUID residencySpeaker;
+    private static UUID residencyPlayer;
+    private static String residencyName;
+    private static int residencySettlement = Persona.UNASSIGNED;
+
+    /**
+     * What this villager says, through the same two calls {@code GreetVerb} makes.
+     *
+     * <p>The packet path is already proven by the WIRE and GATE legs and is not what this is about;
+     * what is being checked is that the <i>sentence</i> changes, and that it fits.
+     */
+    private static List<String> speakLines(NpcRegistry registry, Persona speaker, UUID viewer,
+                                           String playerName, int day) {
+        return Dialogue.rows(speaker, Dialogue.speak(registry, speaker, viewer, playerName,
+                0, day, 20260815L));
     }
 
     // --- session 07: the simulation, inside a real server ------------------------------------------
@@ -1383,6 +1522,7 @@ public final class AttachBetHarness {
                 checkSettlementSurvivedReload(registry);
                 checkBondsSurvivedReload(registry);
                 checkMemoriesSurvivedReload(registry);
+                checkResidencySurvivedReload(server, registry);
                 // The exit criterion's instrument, run where there is something to read: through
                 // the real dispatcher, so argument parsing and the permission gate are covered too,
                 // and into the log so a run leaves behind what a player would have seen.
@@ -1545,6 +1685,52 @@ public final class AttachBetHarness {
     }
 
     /**
+     * <b>Session 09's leg, on the far side of the disk.</b>
+     *
+     * <p>Everything about residency that is arithmetic is a unit test. This is the half that is not:
+     * a threshold crossed in one session, written to a file at a <i>new schema version</i>, and read
+     * back by a fresh server — with the villager's sentence different on the other side.
+     *
+     * <p><b>The villager asked is one who never met the player</b>, which is what makes the swap
+     * worth a leg rather than a comment: residency belongs to the settlement, so the proof is a
+     * stranger using your name because three of their neighbours decided you live here.
+     *
+     * <p>Skipped, with a line, when the world on disk predates session 09 — the cross-build migration
+     * run loads a schema-6 save whose subjects file has no residency row, and failing that run for a
+     * reason that has nothing to do with migration is what session 03's settlement legs already
+     * taught this harness not to do.
+     */
+    private static void checkResidencySurvivedReload(MinecraftServer server, NpcRegistry registry) {
+        if (residencySpeaker == null) {
+            Namesake.LOGGER.info("[harness] no residency recorded in this save; skipping the "
+                    + "residency legs");
+            return;
+        }
+        Optional<Persona> speaker = registry.persona(residencySpeaker);
+        if (speaker.isEmpty()) {
+            record(false, "RESIDENCY the villager who used the player's name is gone from the save");
+            return;
+        }
+
+        int today = Deed.dayOf(server.overworld());
+        Residency.Verdict verdict =
+                Residency.verdict(registry, residencySettlement, residencyPlayer, today);
+        record(verdict.granted() && verdict.route() == Residency.Route.BAND,
+                "RESIDENCY survived save -> quit -> reload at schema " + NpcSchema.CURRENT + ": "
+                        + verdict.residentsAtThreshold() + " resident(s) still hold "
+                        + Residency.TRUST_THRESHOLD + " trust");
+
+        List<String> said = speakLines(registry, speaker.get(), residencyPlayer, residencyName, today);
+        String line = String.join(" | ", said);
+        record(line.contains(residencyName),
+                "RESIDENCY and on the other side of the reload " + Names.of(speaker.get()).full()
+                        + " still uses their name: " + line);
+        record(!line.contains(Voice.of(Culture.byId(speaker.get().cultureId())).strangerAddress()),
+                "RESIDENCY and has not gone back to calling them a stranger");
+        said.forEach(row -> Namesake.LOGGER.info("[harness] {}", row));
+    }
+
+    /**
      * If the world on disk predates the current schema, prove the fixer ran <i>and</i> that the
      * data it touched actually changed. "It loaded without crashing" is not evidence of a
      * migration; a fixer that silently does nothing loads without crashing too.
@@ -1566,7 +1752,10 @@ public final class AttachBetHarness {
                 + ", this build understands " + NpcSchema.CURRENT);
 
         if (onDisk >= 3) {
-            checkAdditiveMigration(registry, onDisk);
+            if (onDisk < 6) {
+                checkAdditiveMigration(registry, onDisk);
+            }
+            checkRepackMigration(registry, onDisk);
             return;
         }
 
@@ -1594,6 +1783,46 @@ public final class AttachBetHarness {
                 "DATAFIXER " + culture + "/" + SUBJECTS.size() + " records now read as having no "
                         + "culture (" + Persona.UNASSIGNED_CULTURE + ") rather than as Vale; "
                         + "schema 2 wrote 0");
+    }
+
+    /**
+     * <b>Schema 6 → 7, and it is the first migration since schema 3 that rewrites rather than
+     * assumes.</b>
+     *
+     * <p>Three additive ones ran in a row and each of them said out loud that "additive" is a claim
+     * rather than a default. This one is the other kind: the owner ruled the deed ring from
+     * thirty-two slots to a hundred and twenty-eight at the close of session 08, session 08 had
+     * already priced the readable encoding at 6.26 MB against a 2 MB ceiling, and so the format
+     * changed. Every ring on disk is converted.
+     *
+     * <p><b>What it would look like if it were wrong is the reason this is a leg rather than only a
+     * unit test.</b> Vanilla's {@code CompoundTag.getByteArray} returns an <i>empty array</i> for a
+     * key holding the wrong tag type — so a ring the fixer did not convert loads as a villager who
+     * remembers nothing. No error, no crash, and then written back that way at the next autosave.
+     * That is MCA's failure exactly, in a save file rather than a release note, so the evidence has
+     * to be that the deeds a previous build wrote are <i>here</i>, on a writable registry, read back
+     * through a real load path.
+     */
+    private static void checkRepackMigration(NpcRegistry registry, int onDisk) {
+        String step = onDisk + "->" + NpcSchema.CURRENT;
+        if (onDisk >= 5) {
+            record(registry.memories().size() > 0,
+                    "DATAFIXER " + step + " the " + registry.memories().size() + " deed(s) across "
+                            + registry.memories().holders() + " ring(s) the schema-" + onDisk
+                            + " build wrote came through the repack — an unconverted ring reads as "
+                            + "a villager who remembers nothing, silently");
+            record(registry.memories().of(registry.all().stream()
+                            .filter(persona -> !registry.memories().of(persona.id()).isEmpty())
+                            .map(Persona::id).findFirst().orElse(UUID.randomUUID()))
+                            .stream().allMatch(deed -> deed.item().isEmpty()),
+                    "DATAFIXER " + step + " and every converted deed carries the only two values a "
+                            + "schema-6 build could have meant: no particular object, and it "
+                            + "happened once");
+        }
+        record(!registry.isReadOnly(),
+                "DATAFIXER " + step + " the registry is writable, so the repacked file will be "
+                        + "written back at schema " + NpcSchema.CURRENT + " rather than migrating "
+                        + "again on every load");
     }
 
     /**
@@ -1871,6 +2100,12 @@ public final class AttachBetHarness {
             // Name last on the line: it contains a space, and everything before it does not.
             lines.add("resident " + resident.personaId() + " " + resident.name());
         }
+        if (residencySpeaker != null) {
+            // Player name last, for the same reason a villager's is: everything before it is a
+            // token with no spaces in it.
+            lines.add("residency " + registeredSettlement.id() + " " + residencyPlayer + " "
+                    + residencySpeaker + " " + residencyName);
+        }
         try {
             Files.write(SUBJECT_FILE, lines);
             Namesake.LOGGER.info("[harness] wrote {} subject(s) to {}",
@@ -1894,6 +2129,10 @@ public final class AttachBetHarness {
         MEMORIES.clear();
         villageSite = null;
         registeredSettlement = null;
+        residencySpeaker = null;
+        residencyPlayer = null;
+        residencyName = null;
+        residencySettlement = Persona.UNASSIGNED;
         for (String line : lines) {
             String[] parts = line.split(" ");
             switch (parts[0]) {
@@ -1922,6 +2161,13 @@ public final class AttachBetHarness {
                         List.of(java.util.Arrays.copyOfRange(parts, 2, parts.length))));
                 case "resident" -> RESIDENTS.add(new Resident(UUID.fromString(parts[1]),
                         String.join(" ", java.util.Arrays.copyOfRange(parts, 2, parts.length))));
+                case "residency" -> {
+                    residencySettlement = Integer.parseInt(parts[1]);
+                    residencyPlayer = UUID.fromString(parts[2]);
+                    residencySpeaker = UUID.fromString(parts[3]);
+                    residencyName = String.join(" ",
+                            java.util.Arrays.copyOfRange(parts, 4, parts.length));
+                }
                 default -> Namesake.LOGGER.warn("[harness] unrecognised subject line '{}'", line);
             }
         }
