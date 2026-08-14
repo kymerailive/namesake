@@ -589,4 +589,33 @@ class GossipTest {
         Gossip.drain(registry, ELSEWHERE, 0);
         assertFalse(registry.isDirty(), "and a drain that finds nothing changes nothing");
     }
+
+    /**
+     * <b>The second fixture the breakage pass found missing.</b>
+     *
+     * <p>Removing {@code setDirty} from the drain turned nothing red, because in the fixture above
+     * somebody heard the story and {@code NpcRegistry.remember} marks the file dirty on its own. The
+     * case the drain's own flag actually protects is the one where <i>nobody</i> is left to tell —
+     * the village's copy is worse attested than it was and not one ring changed. Without it that
+     * degradation never reaches the disk, and a story reloads with the confidence it had an hour ago
+     * and travels further than the design permits.
+     */
+    @Test
+    @DisplayName("a drain marks the file dirty even when there is nobody left to tell")
+    void aDrainThatTellsNobodyStillDegradesTheStory() {
+        NpcRegistry registry = village(5);
+        List<Persona> residents = residentsOf(registry);
+        // Everybody watched it, so the drain has nobody to reach and no ring can change.
+        DeedBus.record(registry, aKilling(0), residents, residents.size() - 1);
+
+        registry.setDirty(false);
+        Gossip.Drained drained = Gossip.drain(registry, VILLAGE, 0);
+
+        assertEquals(0, drained.heard(), "the fixture has to leave nobody to tell, or it proves nothing");
+        assertEquals(70, registry.gossip().of(VILLAGE).get(0).confidence(),
+                "the village's own copy is worse attested than it was a moment ago");
+        assertTrue(registry.isDirty(),
+                "and that has to reach the disk, or the story reloads with the confidence it had an "
+                        + "hour ago and travels further than DESIGN.md permits");
+    }
 }
