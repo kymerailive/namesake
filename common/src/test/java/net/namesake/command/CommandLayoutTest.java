@@ -14,6 +14,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
 
@@ -303,6 +304,35 @@ class CommandLayoutTest {
                     () -> "a simulate summary row is " + row.length() + " characters, over the "
                             + CHAT_WIDTH + "-character budget:\n" + row);
         }
+    }
+
+    /**
+     * <b>The defect the harness found, held where a unit test can hold it.</b>
+     *
+     * <p>{@code /namesake debug simulate} told chat where it had written its report, as an absolute
+     * path. In a development worktree that is 130 characters against a sixty-character chat width,
+     * so the last line of the message arrived as three rows with the directory split across two of
+     * them. Every unit test in the repo was green: the path depends on where the game is running and
+     * nothing in {@code :common} knows it.
+     *
+     * <p>So the line is built by a method that can be handed a path far worse than any real one,
+     * and the guard is that it does not grow with it. Put {@code toAbsolutePath()} back and this
+     * turns red.
+     */
+    @Test
+    @DisplayName("chat is told the report's name, never its path, however deep the path is")
+    void theReportLineDoesNotGrowWithThePath() {
+        Path buried = Path.of("C:", "a directory with a long name", "and another one",
+                "and a third for luck", "worktrees", "headless-simulation-harness-46e01a",
+                "fabric", "run", "namesake-simulation-report.txt");
+        assertTrue(buried.toString().length() > CHAT_WIDTH,
+                "the fixture path has to be over the budget or this proves nothing");
+
+        String line = NamesakeCommands.reportLine(buried);
+        assertTrue(line.length() <= CHAT_WIDTH,
+                () -> "the report line is " + line.length() + " characters:\n" + line);
+        assertTrue(line.contains("namesake-simulation-report.txt"),
+                () -> "it still has to say which file:\n" + line);
     }
 
     /**

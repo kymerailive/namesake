@@ -501,6 +501,17 @@ public final class Reports {
                 "  the %s ring - %s, %d/%d slots, days %d to %d (%d days of reach)",
                 which, ring.name(), ring.slots(), Memories.RING_CAPACITY,
                 ring.oldestDay(), ring.newestDay(), ring.reachDays()));
+
+        // What the eviction ruling is actually about, and the one number a live save can never
+        // produce: a deed pushed out of a ring leaves no trace of having been there. The
+        // simulation kept the chronicle, so it can say how much of this villager's life they no
+        // longer hold.
+        long reached = outcome.chronicle().stream()
+                .filter(moment -> moment.reached().contains(ring.holder()))
+                .count();
+        lines.add(String.format(Locale.ROOT,
+                "    %d deed(s) happened in front of them; they hold %d and have forgotten %d",
+                reached, ring.slots(), Math.max(0, reached - ring.slots())));
         StringBuilder mix = new StringBuilder("    mix:");
         for (Map.Entry<DeedType, Integer> entry : ring.byFrequency()) {
             mix.append(' ').append(entry.getKey()).append(' ').append(entry.getValue());

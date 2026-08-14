@@ -828,11 +828,18 @@ public final class NamesakeCommands {
 
         try {
             Files.write(SIMULATION_REPORT, file);
-            chat.add("  full report: " + SIMULATION_REPORT.toAbsolutePath());
+            // The file NAME in chat and the absolute path in the log, which is the opposite of the
+            // obvious way round and is the fourth time this project has shipped a line nobody
+            // measured. An absolute path in a development worktree is 130 characters; chat wraps at
+            // about sixty, so it arrives as three rows of a two-row message. The harness caught this
+            // one, which is exactly what it is for — every unit test in the repo was green.
+            chat.add(reportLine(SIMULATION_REPORT));
+            Namesake.LOGGER.info("[debug simulate] report written to {}",
+                    SIMULATION_REPORT.toAbsolutePath());
         } catch (IOException e) {
             Namesake.LOGGER.error("[debug simulate] could not write {}",
                     SIMULATION_REPORT.toAbsolutePath(), e);
-            chat.add("  could not write the report file: " + e.getMessage());
+            chat.add("  could not write the report file, see the log");
         }
 
         String summary = String.join("\n", chat);
@@ -843,6 +850,23 @@ public final class NamesakeCommands {
 
     /** Where the full report lands. The run directory, exactly as the profiler's report does. */
     private static final Path SIMULATION_REPORT = Path.of("namesake-simulation-report.txt");
+
+    /**
+     * How chat is told where the report went.
+     *
+     * <p><b>The file name, never the path, and this is the fourth time this project has shipped the
+     * lesson.</b> An absolute path in a development worktree is 130 characters; chat wraps at about
+     * sixty, so a two-line message arrives as four rows with a directory split across two of them.
+     * Every unit test in the repo was green when it shipped, and the harness caught it in a running
+     * game — which is what the harness is for and why the assertion measures what the dispatcher
+     * emits rather than what the builder returns.
+     */
+    static String reportLine(Path report) {
+        // Thirty characters of file name leaves thirty for everything else, so the prose is as short
+        // as it can be while still saying which of the two report files this is. The absolute path
+        // goes to the log, where width costs nothing.
+        return "  written to " + report.getFileName();
+    }
 
     /**
      * How wide the name column has to be for <i>this</i> report, rather than for the widest name a
