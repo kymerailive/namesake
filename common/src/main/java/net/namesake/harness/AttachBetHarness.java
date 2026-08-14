@@ -780,12 +780,6 @@ public final class AttachBetHarness {
                 "GOSSIP no deed row carries a carriage return");
 
         runResidencyCheck(server, player);
-
-        // Recorded here rather than at the end of step 17, so the verify phase compares against the
-        // state gossip actually left behind. That makes the existing ring-reload check cover a
-        // schema-6 world with rumours in it for free.
-        recordBonds(registry, player.getUUID());
-        recordMemories(registry);
         runTheSimulation(server, player);
         writeSubjects(level);
         advance(server, 5);
@@ -1289,6 +1283,19 @@ public final class AttachBetHarness {
                 }
                 checkTheFarVillageHeard(server, level, far);
                 checkTheRoadExists(server, level);
+
+                // The bonds and rings the verify phase will be held to, snapshotted <b>here</b>
+                // rather than at the end of the gossip section — which is where session 08 put it
+                // and where session 10 found it, red, on the first verify run. Nothing was wrong
+                // with the mod: this section feeds six more villagers and every one of those bonds
+                // and rings moved after the snapshot was taken. <b>A snapshot taken before the
+                // state stops moving is not a snapshot</b>, and this project has now written that
+                // sentence about a cached instrument three times.
+                //
+                // Taking it last is also strictly stronger: the ring-reload check now covers deeds
+                // that crossed a border, which is the thing this session added.
+                recordBonds(registry, player(server).getUUID());
+                recordMemories(registry);
                 writeSubjects(level);
                 advance(server, 5);
             }
