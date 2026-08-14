@@ -308,6 +308,43 @@ class DialogueTest {
         }
     }
 
+    /**
+     * <b>"Ah! Ah, friend."</b> — Meridian's opener meeting the known pool's greeting.
+     *
+     * <p>Found by reading the rendered sample, not by reasoning about the mechanism. The rule is
+     * general rather than a rewritten line: a hundred and sixty lines against six openers is a grid
+     * nobody re-checks by hand when a seventh culture arrives, and the collision exists only in the
+     * concatenation rather than in either half of it.
+     */
+    @Test
+    @DisplayName("a culture never opens with a word the sentence already opens with")
+    void noVillagerStutters() {
+        boolean anyCollision = false;
+        for (Culture culture : Culture.values()) {
+            Voice voice = Voice.of(culture);
+            for (Pool pool : Pool.values()) {
+                for (Register register : Register.values()) {
+                    for (String template : Lines.of(pool, register)) {
+                        String line = template.replace(Lines.ADDRESS, voice.strangerAddress());
+                        anyCollision |= voice.opensOnTheSameWord(line);
+                        for (long seed = 0; seed < 8; seed++) {
+                            String spoken = voice.inflect(line, register, seed);
+                            assertFalse(spoken.startsWith(voice.opener() + " " + voice.opener()),
+                                    () -> culture + " stutters: " + spoken);
+                            if (voice.opensOnTheSameWord(line)) {
+                                assertFalse(spoken.startsWith(voice.opener() + " "),
+                                        () -> culture + " opened on a word the line already had: "
+                                                + spoken);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        assertTrue(anyCollision, "no line collides with any opener, so this test proves nothing — "
+                + "if the pools changed, check whether the rule is still earning its place");
+    }
+
     /** Every line a villager can actually say, rendered, with nothing hung where it does not belong. */
     @Test
     @DisplayName("no parting and no one-word line comes out as a question")

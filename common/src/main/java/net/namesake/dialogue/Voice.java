@@ -99,7 +99,7 @@ public record Voice(String opener, String tag, String strangerAddress, float for
      */
     public String inflect(String line, Register register, long seed) {
         String spoken = line;
-        if (coin(seed) < formality) {
+        if (coin(seed) < formality && !opensOnTheSameWord(line)) {
             spoken = opener + " " + spoken;
         }
         if (canTag(spoken, register) && coin(mix(seed)) < 1.0F - formality) {
@@ -122,6 +122,37 @@ public record Voice(String opener, String tag, String strangerAddress, float for
         return spoken.endsWith(".")
                 && register != Register.PARTING
                 && spoken.length() >= TAGGABLE_LENGTH;
+    }
+
+    /**
+     * <b>A culture does not open with a word the sentence already opens with.</b>
+     *
+     * <p>Meridian's opener is <i>Ah!</i> and the known pool greets with <i>"Ah, {you}."</i>, which
+     * concatenates to <b>"Ah! Ah, friend."</b> — a villager with a stutter. Found by reading the
+     * rendered sample rather than by reasoning about the mechanism, which is the third time in this
+     * session that has been where a defect came from.
+     *
+     * <p>A rule rather than a rewritten line, for session 03's reason in a new place: a hundred and
+     * sixty authored lines against six openers is a grid nobody will re-check by hand when a seventh
+     * culture arrives, and the collision only exists in the rendered string rather than in either
+     * half of it. Compared on the first word with its punctuation stripped, so <i>Ah!</i> and
+     * <i>Ah,</i> are the same word — which is the case that actually occurs.
+     */
+    boolean opensOnTheSameWord(String line) {
+        return firstWord(opener).equals(firstWord(line));
+    }
+
+    private static String firstWord(String text) {
+        StringBuilder word = new StringBuilder(8);
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (Character.isLetter(c)) {
+                word.append(Character.toLowerCase(c));
+            } else if (word.length() > 0) {
+                break;
+            }
+        }
+        return word.toString();
     }
 
     /** A number in {@code [0, 1)} from a seed. Deterministic: a report and a game must agree. */
