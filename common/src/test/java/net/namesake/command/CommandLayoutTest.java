@@ -1,8 +1,13 @@
 package net.namesake.command;
 
+import net.namesake.npc.NpcRegistry;
 import net.namesake.npc.Persona;
+import net.namesake.sim.PlayerModel;
+import net.namesake.sim.Reports;
+import net.namesake.sim.Simulation;
 import net.namesake.social.Deed;
 import net.namesake.social.DeedType;
+import net.namesake.social.DialogueStats;
 import net.namesake.social.Memories;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -202,5 +207,143 @@ class CommandLayoutTest {
     @DisplayName("the ring header states the capacity, so 32 is never a number in prose")
     void theRingCapacityIsRead() {
         assertEquals(32, Memories.RING_CAPACITY);
+    }
+
+    // --- session 07's three commands ---------------------------------------------------------------
+
+    /**
+     * A settlement with more people and more days than any playtest will produce, so the columns are
+     * measured at the width real numbers reach rather than at the width a two-villager fixture does.
+     *
+     * <p>That distinction is the whole reason this file exists. Session 06's deed row passed every
+     * test in the repo and wrapped in a running game, because the tests measured fixtures and the
+     * game measured a village.
+     */
+    private static Simulation.Outcome atScale() {
+        Simulation.Plan plan = new Simulation.Plan(20260814L, 200, 40, 8,
+                net.namesake.culture.Culture.KARSK.id(),
+                net.namesake.settlement.Specialty.MASONRY.id(), (byte) 40,
+                PlayerModel.SATURATING, 3, 0.9F);
+        return Simulation.run(plan);
+    }
+
+    private static DialogueStats statsAtScale(Simulation.Outcome outcome) {
+        return DialogueStats.of(outcome.registry(), outcome.player(), outcome.plan().days() - 1);
+    }
+
+    @Test
+    @DisplayName("every row of debug stats fits the chat width, at scale")
+    void theStatsTableFits() {
+        Simulation.Outcome outcome = atScale();
+        List<String> rows = NamesakeCommands.statRows(
+                statsAtScale(outcome), outcome.registry(), outcome.player());
+
+        assertFalse(rows.isEmpty(), "a report with nothing in it reads as a broken command");
+        for (String row : rows) {
+            assertTrue(row.length() <= CHAT_WIDTH,
+                    () -> "a stats row is " + row.length() + " characters, over the " + CHAT_WIDTH
+                            + "-character budget:\n" + row);
+        }
+    }
+
+    @Test
+    @DisplayName("every row of debug earnrate fits the chat width, at scale")
+    void theEarnRateTableFits() {
+        Simulation.Outcome outcome = atScale();
+        List<String> rows = NamesakeCommands.earnRateRows(statsAtScale(outcome), outcome.player());
+
+        assertFalse(rows.isEmpty());
+        for (String row : rows) {
+            assertTrue(row.length() <= CHAT_WIDTH,
+                    () -> "an earnrate row is " + row.length() + " characters, over the " + CHAT_WIDTH
+                            + "-character budget:\n" + row);
+        }
+    }
+
+    @Test
+    @DisplayName("the simulate summary fits the chat width; the rest of it goes to a file")
+    void theSimulateSummaryFits() {
+        // Only the summary is held to the budget. The chronicle, the earn-rate table and the ring
+        // dump are all wider than chat by design and go to a file — which is the right answer rather
+        // than a compromise, because squeezing a ring dump into sixty characters would cost the
+        // thing it is for.
+        for (String row : Reports.summary(atScale())) {
+            assertTrue(row.length() <= CHAT_WIDTH,
+                    () -> "a simulate summary row is " + row.length() + " characters, over the "
+                            + CHAT_WIDTH + "-character budget:\n" + row);
+        }
+    }
+
+    /**
+     * Session 06's defect, at the class level rather than at the instance level.
+     *
+     * <p>{@code String.format("%n")} is the platform separator and emits {@code \r\n} on Windows;
+     * Minecraft draws a carriage return as a missing-glyph box. It was invisible in the log, in every
+     * test that read the string, and perfectly obvious on the screen. So every line session 07 adds
+     * is checked, not only the one somebody remembered to check.
+     */
+    @Test
+    @DisplayName("no session 07 output contains a carriage return")
+    void nothingNewEmitsACarriageReturn() {
+        Simulation.Outcome outcome = atScale();
+        List<String> everything = new java.util.ArrayList<>();
+        everything.addAll(NamesakeCommands.statRows(
+                statsAtScale(outcome), outcome.registry(), outcome.player()));
+        everything.addAll(NamesakeCommands.earnRateRows(statsAtScale(outcome), outcome.player()));
+        everything.addAll(Reports.full(outcome));
+        everything.addAll(Reports.acrossModels(outcome.plan()));
+        everything.addAll(Reports.witnessSensitivity(outcome.plan()));
+
+        for (String line : everything) {
+            assertFalse(line.contains("\r"),
+                    () -> "Minecraft draws a carriage return as a missing-glyph box. Use \\n, never "
+                            + "%n:\n" + line);
+            assertFalse(line.contains("\n"),
+                    () -> "a report line must be one line, or the caller's join produces a row that "
+                            + "is not a row:\n" + line);
+        }
+    }
+
+    /**
+     * {@code DESIGN.md} §11: <b>every section prints its own absence.</b>
+     *
+     * <p>An empty report that says nothing reads as a broken command, and a broken command is what a
+     * player will report instead of the thing that is actually wrong. Session 03's settlements
+     * command and session 06's deed ring both carry this; these two have to as well, because a fresh
+     * world is exactly when somebody runs them.
+     */
+    @Test
+    @DisplayName("an empty world says so rather than printing an empty table")
+    void everySectionPrintsItsOwnAbsence() {
+        NpcRegistry empty = new NpcRegistry();
+        UUID viewer = UUID.fromString("0a0a0a0a-1111-2222-3333-444444444444");
+        DialogueStats stats = DialogueStats.of(empty, viewer, 0);
+
+        String statsReport = String.join("\n", NamesakeCommands.statRows(stats, empty, viewer));
+        assertTrue(statsReport.contains("nobody in this world has met you"),
+                () -> "an empty stats report must say so:\n" + statsReport);
+        assertTrue(statsReport.contains("nobody remembers anything yet"),
+                () -> "an empty ring section must say so:\n" + statsReport);
+
+        String earnReport = String.join("\n", NamesakeCommands.earnRateRows(stats, viewer));
+        assertTrue(earnReport.contains("nobody has met you"),
+                () -> "an empty earn-rate report must say so:\n" + earnReport);
+
+        // And from the console, where there is no "you" at all.
+        assertTrue(String.join("\n", NamesakeCommands.statRows(
+                        DialogueStats.of(empty, null, 0), empty, null)).contains("no viewer"),
+                "run from the console there is no viewer, and that is a different absence");
+    }
+
+    @Test
+    @DisplayName("the earn rate's unit is stated on the report, not only in a javadoc")
+    void theUnitIsPrinted() {
+        // The unit becomes what every session 12 threshold is expressed in. A number whose unit
+        // lives only in a comment is a number somebody will read in a different one.
+        Simulation.Outcome outcome = atScale();
+        String report = String.join("\n",
+                NamesakeCommands.earnRateRows(statsAtScale(outcome), outcome.player()));
+        assertTrue(report.contains("warmth per in-game day of contact"),
+                () -> "the unit has to be on the report:\n" + report);
     }
 }

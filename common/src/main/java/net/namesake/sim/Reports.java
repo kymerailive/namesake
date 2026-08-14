@@ -115,18 +115,22 @@ public final class Reports {
                 stats.observedMaximum(Bond.TRUST), stats.percentile(Bond.TRUST, 50),
                 stats.observedMaximum(Bond.RESPECT)));
         float[] rates = stats.ratesPerContactDay();
-        lines.add(String.format(Locale.ROOT, "  earn    %.2f warmth per in-game day of contact",
-                rates.length == 0 ? 0F : rates[rates.length / 2]));
+        float best = rates.length == 0 ? 0F : rates[rates.length - 1];
+        lines.add(String.format(Locale.ROOT, "  earn    %.2f warmth/contact day at best, %.2f median",
+                best, rates.length == 0 ? 0F : rates[rates.length / 2]));
         lines.add(String.format(Locale.ROOT, "  rings   %d full of %d, %d%% of all slots used",
                 stats.fullRings(), stats.rings().size(),
                 Math.round(stats.ringOccupancy() * 100F)));
         stats.deepestRing().ifPresent(ring -> lines.add(String.format(Locale.ROOT,
                 "  deepest %d/%d slots, reaching back %d days",
                 ring.slots(), Memories.RING_CAPACITY, ring.reachDays())));
-        lines.add("  days of contact to reach, at the median rate:");
+        // The best rate rather than the median, because the median is routinely zero — a bystander
+        // gains one warmth and the decay takes it back the next day — and a row of "never" tells
+        // you nothing about how long the fastest relationship in the village takes.
+        lines.add("  contact days to reach, at the fastest rate here:");
         StringBuilder ladder = new StringBuilder("   ");
         for (int target : DialogueStats.LADDER) {
-            int days = stats.contactDaysTo(target);
+            int days = best <= 0F ? -1 : (int) Math.ceil(target / best);
             ladder.append(String.format(Locale.ROOT, " %d:%s", target, days < 0 ? "never" : days));
         }
         lines.add(ladder.toString());

@@ -29,12 +29,20 @@ import net.namesake.platform.Platform;
 import net.namesake.platform.PersonaLink;
 import net.namesake.settlement.Need;
 import net.namesake.settlement.Settlement;
+import net.namesake.sim.PlayerModel;
+import net.namesake.sim.Reports;
+import net.namesake.sim.Simulation;
 import net.namesake.social.Bond;
 import net.namesake.social.Deed;
 import net.namesake.social.DeedType;
+import net.namesake.social.DialogueStats;
 import net.namesake.social.Memories;
 import net.namesake.social.Personality;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -69,6 +77,9 @@ public final class NamesakeCommands {
 
     private static final SimpleCommandExceptionType UNKNOWN_AXIS = new SimpleCommandExceptionType(
             Component.literal("Unknown trait axis."));
+
+    private static final SimpleCommandExceptionType UNKNOWN_MODEL = new SimpleCommandExceptionType(
+            Component.literal("Unknown player model. See PlayerModel for the five."));
 
     private static final double SEARCH_RADIUS = 16.0;
 
@@ -118,6 +129,33 @@ public final class NamesakeCommands {
                                 .then(Commands.argument("target", EntityArgument.entity())
                                         .executes(context -> dumpDeeds(context,
                                                 EntityArgument.getEntity(context, "target")))))
+                        // Session 07's two instruments over a *live* world. Read-only, derived from
+                        // the registry and storing nothing, so they stay available outside a
+                        // development environment — which is the point of them: they are how a real
+                        // playthrough gets held against the simulation's numbers.
+                        .then(Commands.literal("stats")
+                                .executes(NamesakeCommands::dumpStats))
+                        .then(Commands.literal("earnrate")
+                                .executes(NamesakeCommands::dumpEarnRate))
+                        // And the simulation itself. Development-only: it writes a report file to
+                        // the server's working directory, which is an instrument's behaviour rather
+                        // than a command's, and it exists to be run by whoever is tuning rather than
+                        // by whoever is playing.
+                        .then(Commands.literal("simulate")
+                                .requires(NamesakeCommands::isDevelopment)
+                                .executes(context -> simulate(context, 100, "ATTENTIVE"))
+                                .then(Commands.argument("days", IntegerArgumentType.integer(1, 1000))
+                                        .executes(context -> simulate(context,
+                                                IntegerArgumentType.getInteger(context, "days"),
+                                                "ATTENTIVE"))
+                                        .then(Commands.argument("model", StringArgumentType.word())
+                                                .suggests((context, builder) ->
+                                                        SharedSuggestionProvider.suggest(
+                                                                java.util.Arrays.stream(PlayerModel.values())
+                                                                        .map(Enum::name).toList(), builder))
+                                                .executes(context -> simulate(context,
+                                                        IntegerArgumentType.getInteger(context, "days"),
+                                                        StringArgumentType.getString(context, "model"))))))
                         // settrait and prune both write. An op on a live server could rewrite any
                         // villager's personality, or delete personas whose entities are merely
                         // unloaded — permission level 2 is not a meaningful gate on either. They
@@ -562,6 +600,221 @@ public final class NamesakeCommands {
         return row.toString();
     }
 
+    // --- session 07: what this world holds, and how fast it got there -----------------------------
+
+    /**
+     * <b>What this world's social state actually looks like.</b>
+     *
+     * <p>The instrument LNK never had. It set skill gates at 35–205 against an observed maximum
+     * affinity of 32, zero players ever reached the lowest gate, and nobody noticed for months —
+     * because nothing in that codebase could answer "what do players actually earn". The
+     * {@code max} column here is that question, and every threshold session 12 sets has to be read
+     * against it before it is written down.
+     *
+     * <p>Derived from the registry and storing nothing. See {@link DialogueStats} for why that is a
+     * ruling rather than an omission, and for the one thing it costs.
+     */
+    private static int dumpStats(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        NpcRegistry registry = NpcRegistry.get(source.getServer());
+        UUID viewer = source.getEntity() == null ? null : source.getEntity().getUUID();
+        int day = Deed.dayOf(source.getLevel());
+        DialogueStats stats = DialogueStats.of(registry, viewer, day);
+
+        List<String> lines = statRows(stats, registry, viewer);
+        String report = String.join("\n", lines);
+        source.sendSuccess(() -> Component.literal(report), false);
+        Namesake.LOGGER.info("[debug stats] {}", report);
+        return stats.rings().size();
+    }
+
+    /**
+     * The rows of {@code /namesake debug stats}, as strings.
+     *
+     * <p>Package-visible and taking values rather than a command context, so
+     * {@code CommandLayoutTest} measures the real rows against the chat width directly rather than
+     * through reflection or through a formula restated in the test. This project has shipped a table
+     * that wrapped mid-row three times and every instrument in the repo reads these commands out of
+     * a log file, which has no width.
+     */
+    static List<String> statRows(DialogueStats stats, NpcRegistry registry, UUID viewer) {
+        List<String> lines = new ArrayList<>();
+        lines.add(String.format(Locale.ROOT, "day %d - %d persona(s), %d settlement(s), %d bond(s)",
+                stats.today(), stats.personas(), registry.settlements().size(),
+                registry.bonds().size()));
+        if (viewer == null) {
+            // Every section prints its own absence — DESIGN.md §11's rule, applied early.
+            lines.add("  (no viewer - run this as a player to see what they feel about you)");
+        } else if (stats.metTheViewer() == 0) {
+            lines.add("  nobody in this world has met you. That is a real answer.");
+        } else {
+            lines.add(String.format(Locale.ROOT, "  %d of %d have met you",
+                    stats.metTheViewer(), stats.personas()));
+            for (int axis = 0; axis < Bond.AXIS_COUNT; axis++) {
+                lines.add(String.format(Locale.ROOT, "  %-8s max %4d  p50 %4d  min %4d",
+                        Bond.AXIS_NAMES[axis], stats.observedMaximum(axis),
+                        stats.percentile(axis, 50), stats.observedMinimum(axis)));
+            }
+        }
+
+        lines.add(String.format(Locale.ROOT, "  rings    %d hold %d deed(s), %d full at %d",
+                stats.rings().size(), stats.deedsHeld(), stats.fullRings(), Memories.RING_CAPACITY));
+        stats.deepestRing().ifPresent(ring -> lines.add(String.format(Locale.ROOT,
+                "  deepest  %s %d/%d back to day %d",
+                clip(ring.name(), 20), ring.slots(), Memories.RING_CAPACITY, ring.oldestDay())));
+        if (stats.rings().isEmpty()) {
+            lines.add("  nobody remembers anything yet. Nothing has happened in front of them.");
+        }
+        for (Map.Entry<DeedType, Integer> entry : stats.deedMix()) {
+            lines.add(String.format(Locale.ROOT, "    %-17s %5d", entry.getKey(), entry.getValue()));
+        }
+        return lines;
+    }
+
+    /**
+     * <b>How fast this world's bonds are actually moving, in the unit session 12's thresholds are
+     * written in.</b>
+     *
+     * <p>Warmth per in-game day of contact — {@link DialogueStats} rules the unit and says why the
+     * two alternatives are worse. The second column is the same warmth per day <i>elapsed</i>, which
+     * is what the decay bites into and what somebody who visits rarely actually experiences.
+     *
+     * <p><b>What it cannot see, said on the report rather than in a comment.</b> A ring holds
+     * {@link Memories#RING_CAPACITY} deeds, so on a playthrough longer than that the days this can
+     * count are fewer than the days that happened while the warmth is all of it — which makes a rate
+     * read off a long save an over-estimate. The simulation knows the truth and
+     * {@code Reports.ringTruncation} measures the gap.
+     */
+    private static int dumpEarnRate(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        NpcRegistry registry = NpcRegistry.get(source.getServer());
+        UUID viewer = source.getEntity() == null ? null : source.getEntity().getUUID();
+        int day = Deed.dayOf(source.getLevel());
+        DialogueStats stats = DialogueStats.of(registry, viewer, day);
+
+        List<String> lines = earnRateRows(stats, viewer);
+        String report = String.join("\n", lines);
+        source.sendSuccess(() -> Component.literal(report), false);
+        Namesake.LOGGER.info("[debug earnrate] {}", report);
+        return stats.metTheViewer();
+    }
+
+    /** The rows of {@code /namesake debug earnrate}. Measured by {@code CommandLayoutTest}. */
+    static List<String> earnRateRows(DialogueStats stats, UUID viewer) {
+        List<String> lines = new ArrayList<>();
+        lines.add(String.format(Locale.ROOT, "day %d - warmth per in-game day of contact",
+                stats.today()));
+        if (viewer == null) {
+            lines.add("  (no viewer - run this as a player)");
+            return lines;
+        }
+
+        List<DialogueStats.Standing> met = stats.standings().stream()
+                .filter(DialogueStats.Standing::hasMetTheViewer)
+                .toList();
+        if (met.isEmpty()) {
+            lines.add("  nobody has met you, so nobody is earning anything. Go and be seen.");
+            return lines;
+        }
+
+        int nameColumn = Math.max(4, met.stream()
+                .mapToInt(standing -> Math.min(EARN_NAME_MAX, standing.name().length()))
+                .max().orElse(4) + 1);
+        lines.add("  " + pad("who", nameColumn)
+                + String.format(Locale.ROOT, "%6s %5s %9s %9s", "warm", "days", "/contact", "/elapsed"));
+        for (DialogueStats.Standing standing : met) {
+            lines.add("  " + pad(clip(standing.name(), EARN_NAME_MAX), nameColumn)
+                    + String.format(Locale.ROOT, "%6d %5d %9.2f %9.2f",
+                    standing.bond().warmth(), standing.contactDays(),
+                    standing.perContactDay(), standing.perElapsedDay()));
+        }
+
+        float[] rates = stats.ratesPerContactDay();
+        float best = rates.length == 0 ? 0F : rates[rates.length - 1];
+        lines.add(String.format(Locale.ROOT, "  observed max warmth %d of 100",
+                stats.observedMaximum(Bond.WARMTH)));
+        lines.add("  a threshold above that is a band nobody is ever in.");
+        lines.add("  contact days to reach, at the fastest rate here:");
+        StringBuilder ladder = new StringBuilder("   ");
+        for (int target : DialogueStats.LADDER) {
+            int days = best <= 0F ? -1 : (int) Math.ceil(target / best);
+            ladder.append(String.format(Locale.ROOT, " %d:%s", target, days < 0 ? "never" : days));
+        }
+        lines.add(ladder.toString());
+        if (stats.rings().stream().anyMatch(DialogueStats.Ring::isFull)) {
+            lines.add("  a full ring hides older contact, so these rates read high.");
+        }
+        return lines;
+    }
+
+    /** Names are clipped rather than padded to the widest a generator can make. Session 06's fix. */
+    private static final int EARN_NAME_MAX = 18;
+
+    /**
+     * <b>Runs the headless simulation and hands back the report.</b> Session 07's exit criterion.
+     *
+     * <p>The chat gets a summary; the whole thing goes to a file, because the chronicle, the earn
+     * rate table and the ring dump are all wider than chat and a table that wraps mid-row reads as
+     * two rows. That is the defect this project has shipped three times.
+     *
+     * <p><b>It proves it did not touch this world, rather than asserting it.</b> The simulation
+     * builds its own {@link NpcRegistry} with {@code new} and never hands it to a
+     * {@code DimensionDataStorage}, so it has no path to disk at all — but "structurally cannot" is
+     * a claim, and this session's whole discipline is to query rather than to claim. So the live
+     * registry's counts are read before and after and printed either way.
+     */
+    private static int simulate(CommandContext<CommandSourceStack> context, int days, String modelName)
+            throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        if (!Platform.get().isDevelopmentEnvironment()) {
+            throw DEV_ONLY.create();
+        }
+        PlayerModel model;
+        try {
+            model = PlayerModel.valueOf(modelName.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw UNKNOWN_MODEL.create();
+        }
+
+        NpcRegistry live = NpcRegistry.get(source.getServer());
+        String before = live.size() + "/" + live.bonds().size() + "/" + live.memories().size();
+
+        Simulation.Plan plan = Simulation.Plan.standard(
+                source.getLevel().getSeed(), days, model);
+        Simulation.Outcome outcome = Simulation.run(plan);
+
+        List<String> file = new ArrayList<>(Reports.full(outcome));
+        file.add("");
+        file.addAll(Reports.acrossModels(plan));
+        file.add("");
+        file.addAll(Reports.witnessSensitivity(plan));
+        file.add("");
+        file.addAll(Reports.chronicleInFull(outcome));
+
+        String after = live.size() + "/" + live.bonds().size() + "/" + live.memories().size();
+        List<String> chat = new ArrayList<>(Reports.summary(outcome));
+        chat.add(before.equals(after)
+                ? "  this world is untouched: " + before + " personas/bonds/deeds"
+                : "  THIS WORLD CHANGED: " + before + " -> " + after);
+
+        try {
+            Files.write(SIMULATION_REPORT, file);
+            chat.add("  full report: " + SIMULATION_REPORT.toAbsolutePath());
+        } catch (IOException e) {
+            Namesake.LOGGER.error("[debug simulate] could not write {}",
+                    SIMULATION_REPORT.toAbsolutePath(), e);
+            chat.add("  could not write the report file: " + e.getMessage());
+        }
+
+        String summary = String.join("\n", chat);
+        source.sendSuccess(() -> Component.literal(summary), false);
+        Namesake.LOGGER.info("[debug simulate]\n{}", String.join("\n", file));
+        return outcome.chronicle().size();
+    }
+
+    /** Where the full report lands. The run directory, exactly as the profiler's report does. */
+    private static final Path SIMULATION_REPORT = Path.of("namesake-simulation-report.txt");
+
     /**
      * How wide the name column has to be for <i>this</i> report, rather than for the widest name a
      * generator can produce.
@@ -603,6 +856,10 @@ public final class NamesakeCommands {
 
     private static String pad(String value, int width) {
         return value.length() >= width ? value : value + " ".repeat(width - value.length());
+    }
+
+    private static String clip(String value, int width) {
+        return value.length() <= width ? value : value.substring(0, width);
     }
 
     // --- targeting -----------------------------------------------------------------------------

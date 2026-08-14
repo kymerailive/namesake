@@ -7,6 +7,7 @@ import net.namesake.social.Bond;
 import net.namesake.social.Deed;
 import net.namesake.social.DeedBus;
 import net.namesake.social.Deeds;
+import net.namesake.social.DialogueStats;
 import net.namesake.social.Personality;
 import net.namesake.testing.MethodBody;
 import net.namesake.testing.ModClasses;
@@ -534,6 +535,44 @@ class SocialValueLedgerTest {
         assertTrue(session > stale.exemptAfterSession(), "a stale exemption must read as expired");
         assertFalse(session > current.exemptAfterSession(),
                 "an exemption for the session in progress must not read as expired");
+    }
+
+    /**
+     * <b>Measurement data must not become persisted state without this conversation happening.</b>
+     *
+     * <p>{@code WORKPLAN.md} session 07 specifies "{@code DialogueStats} SavedData", and it is not
+     * one. The brief's own warning is why: a {@code DialogueStats} whose named consumer is
+     * {@code /namesake debug stats} is a display, {@code DISPLAY_PACKAGES} already contains
+     * {@code net.namesake.command}, and this file would refuse it — correctly. The two ways round
+     * that are both dishonest. An exemption is a promise that a mechanic will read the field, and no
+     * mechanic reads a histogram. A {@code PRESENTATION} classification means "ruled in
+     * {@code DESIGN.md} as existing to be drawn", which is true of {@code Persona.appearanceSeed} and
+     * would be a lie here.
+     *
+     * <p>So the honest answer was to have nothing to classify: every number
+     * {@code DialogueStats} reports is derived from bonds and rings that are already persisted and
+     * already ledgered above. This is what stops that quietly reverting. It fails if the class ever
+     * declares a codec, and it fails if {@code NpcRegistry}'s save or load path ever mentions it —
+     * because a tally reachable from the save path is a tally on its way into a file, whatever it
+     * happens to be called that week.
+     */
+    @Test
+    @DisplayName("the measurement instrument is not on the save path, and declares no codec")
+    void measurementDataIsNotPersisted() {
+        assertFalse(declaresACodec(DialogueStats.class),
+                "DialogueStats declares a Codec, so it is on its way into a save file. Every number "
+                        + "in it is derivable from bonds and rings that are already persisted and "
+                        + "already ledgered here; storing it as well is a cache, and session 03 "
+                        + "deleted Settlement.culture for being exactly that. If it genuinely has to "
+                        + "be persisted, add it to LEDGER above and name the mechanic that reads it "
+                        + "— and hard rule 1 then owes a schema bump, a datafixer and a load test.");
+
+        for (String method : List.of("save", "load")) {
+            assertFalse(MethodBody.of(NpcRegistry.class, method).mentions(DialogueStats.class),
+                    () -> "NpcRegistry." + method + " reaches DialogueStats. Measurement data on the "
+                            + "save path is measurement data in a save file, which survives a change "
+                            + "to the thing it counts and then describes a mod that no longer exists.");
+        }
     }
 
     @Test

@@ -89,6 +89,20 @@ public final class MethodBody {
     }
 
     /**
+     * True if the method touches {@code owner} at all — a call, a field access, or a {@code new}.
+     *
+     * <p>Broader than {@link #invokes} on purpose, because it answers a different shape of question.
+     * {@code invokes} proves a consumer is real; this proves a class is <i>absent</i> from a code
+     * path, which is the claim {@code SocialValueLedgerTest.measurementDataIsNotPersisted} makes
+     * about {@code NpcRegistry}'s save path. A negative has to be checked more widely than a
+     * positive, or the first way round it that somebody reaches for is the one it does not see.
+     */
+    public boolean mentions(Class<?> owner) {
+        String internal = Type.getInternalName(owner);
+        return invocations.stream().anyMatch(entry -> entry.startsWith(internal + "#"));
+    }
+
+    /**
      * True if the method reads at least one of its declared parameters.
      *
      * @param descriptor the method descriptor, e.g. {@code (Lnet/minecraft/…/ServerPlayer;L…;)L…;}
@@ -139,6 +153,18 @@ public final class MethodBody {
                     invocations.add(handle.getOwner() + "#" + handle.getName());
                 }
             }
+        }
+
+        @Override
+        public void visitFieldInsn(int opcode, String owner, String name, String descriptor) {
+            // For mentions(): a class reached only through one of its static fields is still reached.
+            invocations.add(owner + "#" + name);
+        }
+
+        @Override
+        public void visitTypeInsn(int opcode, String type) {
+            // And a `new DialogueStats(...)` names the class before it calls anything on it.
+            invocations.add(type + "#<type>");
         }
 
         @Override
