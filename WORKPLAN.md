@@ -3084,7 +3084,8 @@ and the blur's `if` statement, and §8's drain row given its bound. No changes t
 
 ### Session 09 — 2026-08-15 — dialogue pools and residency
 
-**Shipped.** `63cdc46..HEAD`, pushed to `origin/main`. CI green on all three jobs.
+**Shipped.** `63cdc46..41a4e64` plus this correction, pushed to `origin/main`. CI green on all three
+jobs — build and test, and the attach-bet harness on each loader.
 
 **A villager says your name because of something you did.** Walk into the Karsk village and Stodysk
 Stuksk says *"I don't know your business here."* Give three of their neighbours enough that the
