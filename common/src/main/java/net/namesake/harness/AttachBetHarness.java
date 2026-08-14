@@ -446,7 +446,7 @@ public final class AttachBetHarness {
             case 13, 14, 15 -> runSettlementCheck(server, level);
             case 16, 17 -> runWitnessCheck(server, level);
             case 18 -> runGossipCheck(server, level);
-            case 19, 20, 21, 22, 23 -> runRoadCheck(server, level);
+            case 19, 20, 21, 22, 23, 24 -> runRoadCheck(server, level);
             default -> finish(server, true);
         }
     }
@@ -1282,8 +1282,32 @@ public final class AttachBetHarness {
                     return;
                 }
                 checkTheFarVillageHeard(server, level, far);
+                // The road is on its own wait, because it is on its own thread. See case 24.
+                beginAwait(9000);
+            }
+            case 24 -> {
+                // <b>CI found this and this machine could not have.</b> The router runs one edge per
+                // tick on Util.backgroundExecutor(), which a dedicated runner shares with world
+                // generation — so on a two-core machine the route had not come back by the time the
+                // border legs finished, and the road legs read `the router answered 0 edge(s)`.
+                // Nothing was wrong with the road; the leg had simply assumed a thing had happened
+                // rather than waiting for it, which is session 01's rule and the fifth time this
+                // project has been bitten by it.
+                //
+                // Sprinting is right here: what is being waited on is server ticks (the materialiser
+                // spends a budget per tick) and a background job, not chunk IO — and the chunks
+                // between the two villages are held by the player standing between them.
+                if (stillWaiting(server, () -> !RoadNetwork.progress().isEmpty()
+                                && RoadNetwork.columnsLaid() > 0, true,
+                        "the router to answer and the road to be laid ("
+                                + RoadNetwork.progress().size() + " routed, "
+                                + RoadNetwork.unrouted().size() + " waiting, "
+                                + RoadNetwork.columnsLaid() + " column(s) laid)")) {
+                    return;
+                }
                 checkTheRoadExists(server, level);
 
+                NpcRegistry registry2 = NpcRegistry.get(server);
                 // The bonds and rings the verify phase will be held to, snapshotted <b>here</b>
                 // rather than at the end of the gossip section — which is where session 08 put it
                 // and where session 10 found it, red, on the first verify run. Nothing was wrong
@@ -1294,8 +1318,8 @@ public final class AttachBetHarness {
                 //
                 // Taking it last is also strictly stronger: the ring-reload check now covers deeds
                 // that crossed a border, which is the thing this session added.
-                recordBonds(registry, player(server).getUUID());
-                recordMemories(registry);
+                recordBonds(registry2, player(server).getUUID());
+                recordMemories(registry2);
                 writeSubjects(level);
                 advance(server, 5);
             }

@@ -3736,7 +3736,7 @@ costing more than six times flat ground is not laid — an ocean crossing, measu
 answer: the graph is the social geography and the road is the physical one. Making the thesis wait on
 a background job would have been the worse mistake, and the simulation could not have modelled it.
 
-#### Five defects, and two of them were found by rendering the lines and reading them
+#### Six defects, and two of them were found by rendering the lines and reading them
 
 That is the third session running where that has been the instrument, and this time it was on the
 sentence ship-or-kill is made of.
@@ -3763,7 +3763,17 @@ sentence ship-or-kill is made of.
    every villager in the village and waits for every story to be told out: thirty-six independent
    flips, which puts "nobody there heard anything" at three in a thousand. **Session 08 wrote this
    lesson down and it still had to be applied deliberately rather than remembered.**
-5. **And one of mine, in the tooling, and it is the worst kind because the ledger already warned about
+5. **CI turned `origin/main` red after the push, on a leg that could not fail on this machine.**
+   `FAIL ROAD the router answered 0 edge(s)`, Fabric only. Nothing was wrong with the road: the
+   router runs one edge per tick on `Util.backgroundExecutor()`, which a dedicated runner **shares
+   with world generation**, so on a two-core machine the route had not come back by the time the
+   border legs finished. The road leg had *assumed* the routing had happened rather than waiting for
+   it — which is session 01's rule, and **the fifth time this project has been bitten by asserting on
+   a world that had not finished arriving.** It is its own awaited step now, polling for the router
+   to answer and for a column to be laid, with a deadline. This machine is the wrong instrument for
+   that class and CI is the right one; session 08's log says the runner is 3–4× slower and this is
+   what that buys.
+6. **And one of mine, in the tooling, and it is the worst kind because the ledger already warned about
    it.** The breakage script below restored the tree with `git checkout -- .` between rows, and took
    two documents' worth of uncommitted work with it — twice, because killing the wrapper left the
    script running. `CLAUDE.md`'s own note is *"session 09 lost a finished fix by running git checkout
@@ -3828,7 +3838,7 @@ reaction is flat there are three layers it could be. That is stated rather than 
 chat through a running game on both loaders and the verdict file quotes what was sent; the register
 that selected it is asserted rather than assumed; the line is measured against the chat width, is
 plain ASCII and carries no carriage return; and the report now prints a page of what the far village
-says, which is how two of this session's five defects were found. **None of that is a judgement about
+says, which is how two of this session's six defects were found. **None of that is a judgement about
 whether a person looks up from the screen.**
 
 - **10's:** feed three or four villagers in one village, wait an in-game day, then walk to the next
