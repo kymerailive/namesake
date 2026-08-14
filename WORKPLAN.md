@@ -2846,8 +2846,36 @@ Derived and never persisted, so it is not the kind of cache session 03 deleted `
 for: it cannot disagree with the deed beside it, because both are filled in from the same record at
 the same moment and neither is ever mutated.
 
+#### Not ruled at close, and it is the one thing this session did not do
+
+**`CLAUDE.md`'s working agreement is that the owner playtests and rules on feel. They could not this
+time, so session 08 closes without an owner ruling — the first since session 02.** That is recorded
+rather than implied, because session 07's own lesson is that an instrument measures the states
+somebody thought to write down and a person opening the game finds the state nobody thought of. The
+outstanding half is narrow and is listed so it cannot be quietly absorbed:
+
+- **Whether a second-hand line reads as second-hand.** The row says `heard` or `rumour`, prints `c70`
+  or `c49`, and says `nobody` where a name would be. Twelve command states are measured against the
+  chat width and none of that is an opinion about whether it *reads*.
+- **Whether 0.70 is the right price for a rumour**, as opposed to the right arithmetic. It is held to
+  a window rather than a value precisely so this stays cheap to change: anything in `[0.50, 0.707)`
+  keeps every ruled clause true.
+- **Three interpretive calls this session made from §4's wording**, any of which is cheap to overrule
+  now and expensive after session 10 builds on them: the 0.35 transfer read as a chance *per hearer*
+  rather than per drain; "4 an in-game hour" read as one story per settlement per 250 ticks; and the
+  blur read as **moving no bond at all** rather than as a caption on a bond that still moves. The
+  third is the substantive one — it means a village that hears about a killing at two hops feels
+  nothing about the player, because nobody there can say it was them.
+
+**The playtest is owed and is carried into session 09 rather than closed.** The script is three or
+four different villagers fed, an in-game hour waited, then `/namesake debug deeds` on somebody who was
+not watching — three or four because the blur fires on a coin and one villager is not a sample.
+
 #### Carried into session 09
 
+- **Session 08's playtest is owed**, and with it the three interpretive calls above. Session 09 has a
+  playtest of its own (the name swap is the whole pitch in one line), so the two can be run together
+  — but 09's exit criterion must not be allowed to stand in for 08's.
 - `$env:JAVA_HOME` still must be pinned to JDK 21. Kill the dev client between runs, and delete
   `<loader>/run/saves/namesake_attachbet` before a `setup`.
 - **The warmth-decay finding is still session 09's biggest problem, and gossip is no longer one of the
