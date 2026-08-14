@@ -786,53 +786,97 @@ public final class AttachBetHarness {
      * neither of §5's significant deeds, so the only thing that can grant residency here is three
      * residents crossing {@link Residency#TRUST_THRESHOLD}.
      */
+    /**
+     * The "before" half, captured the moment the village exists and <b>before anybody has been
+     * fed</b>.
+     *
+     * <p><b>This ran later on the first attempt and the leg turned red, which is the leg working.</b>
+     * Session 05's witness legs feed a villager nine times and then feed three more, and
+     * {@code DESIGN.md} §5's <i>second</i> route grants residency on {@code FED_HUNGRY} ×3 — so by
+     * the time the gossip legs are finished this player is already a resident, by the deed route,
+     * with no trust band anywhere near. The stranger state is real and it is early, so this is where
+     * it has to be read.
+     */
+    private static void recordStrangerBefore(MinecraftServer server) {
+        NpcRegistry registry = NpcRegistry.get(server);
+        ServerPlayer player = player(server);
+        if (registeredSettlement == null || player == null) {
+            return;
+        }
+        Persona speaker = residencySpeakerIn(registry, registeredSettlement.id());
+        if (speaker == null) {
+            return;
+        }
+        int settlementId = registeredSettlement.id();
+        int today = Deed.dayOf(server.overworld());
+
+        residencySpeaker = speaker.id();
+        residencyPlayer = player.getUUID();
+        residencyName = player.getGameProfile().getName();
+        residencySettlement = settlementId;
+
+        Dialogue.Spoken spoken = Dialogue.speak(registry, speaker, residencyPlayer, residencyName,
+                0, today, RESIDENCY_SEED);
+        String strangerWord = Voice.of(Culture.byId(speaker.cultureId())).strangerAddress();
+
+        record(!Residency.isResident(registry, settlementId, residencyPlayer, today),
+                "RESIDENCY nobody in this village has done anything with the player yet, so it has "
+                        + "not taken them in");
+        record(strangerWord.equals(spoken.address()),
+                "RESIDENCY before it, " + Names.of(speaker).full() + " calls them '"
+                        + spoken.address() + "' — this culture's word for somebody from elsewhere");
+        record(spoken.pool() == net.namesake.dialogue.Pool.STRANGER,
+                "RESIDENCY and speaks to them out of the stranger pool: "
+                        + String.join(" | ", Dialogue.rows(speaker, spoken)));
+    }
+
+    /**
+     * <b>Residency earned by the band, and the sentence changing because of it.</b>
+     *
+     * <p>The stranger half is {@link #recordStrangerBefore}, which runs before session 05's legs feed
+     * anybody. This is the other end: gifts until three residents cross
+     * {@link Residency#TRUST_THRESHOLD}, and then the same villager asked again.
+     *
+     * <p><b>Gifts rather than feedings, deliberately.</b> {@code DESIGN.md} §5 grants residency two
+     * ways, and {@code FED_HUNGRY} ×3 is the other one — which the harness's own earlier legs have
+     * already satisfied by this point, and which is a finding rather than an inconvenience: the deed
+     * route is <i>much</i> cheaper than the band, and it is recorded here as a number. A wanted gift
+     * is neither of §5's significant deeds, so the only thing it can move is the band the owner
+     * ruled at the close of session 08.
+     */
     private static void runResidencyCheck(MinecraftServer server, ServerPlayer player) {
         NpcRegistry registry = NpcRegistry.get(server);
-        if (registeredSettlement == null) {
+        if (registeredSettlement == null || residencySpeaker == null) {
             Namesake.LOGGER.info("[harness] no settlement registered; skipping the residency legs");
             return;
         }
         int settlementId = registeredSettlement.id();
         UUID viewer = player.getUUID();
         String playerName = player.getGameProfile().getName();
-
-        List<Persona> locals = registry.all().stream()
-                .filter(persona -> persona.settlementId() == settlementId)
-                .filter(Persona::isGenerated)
-                .sorted(Comparator.comparing(persona -> persona.id().toString()))
-                .toList();
-        if (locals.size() < Residency.RESIDENTS_REQUIRED + 1) {
-            record(false, "RESIDENCY the village has " + locals.size() + " generated resident(s), "
-                    + "which is too few to earn residency from and still have a stranger to ask");
+        Persona speaker = registry.persona(residencySpeaker).orElse(null);
+        if (speaker == null) {
+            record(false, "RESIDENCY the villager the stranger line was read from is gone");
             return;
         }
 
-        // The speaker is deliberately NOT one of the three the player befriends. What is being shown
-        // is a villager who has personally never met you using your name because the village has
-        // taken you in — DESIGN.md §5's swap belongs to the settlement, not to one relationship.
-        Persona speaker = locals.get(locals.size() - 1);
+        List<Persona> locals = localsOf(registry, settlementId);
         List<Persona> befriended = locals.subList(0, Residency.RESIDENTS_REQUIRED);
-
         int today = Deed.dayOf(server.overworld());
-        residencySpeaker = speaker.id();
-        residencyPlayer = viewer;
-        residencyName = playerName;
-        residencySettlement = settlementId;
-        String before = String.join(" | ", speakLines(registry, speaker, viewer, playerName, today));
-        String strangerWord = Voice.of(Culture.byId(speaker.cultureId())).strangerAddress();
 
-        record(!Residency.isResident(registry, settlementId, viewer, today),
-                "RESIDENCY the village has not taken this player in yet");
-        record(before.contains(strangerWord) && !before.contains(playerName),
-                "RESIDENCY before it, " + Names.of(speaker).full() + " calls them '" + strangerWord
-                        + "' and not by name: " + before);
+        // The finding this leg turned up on its first run, kept as evidence rather than tidied away.
+        Residency.Verdict already = Residency.verdict(registry, settlementId, viewer, today);
+        record(already.granted() && already.route() == Residency.Route.DEED,
+                "RESIDENCY §5's second route is much the cheaper of the two: " + already.feedings()
+                        + " hungry people fed has already granted it, with only "
+                        + already.residentsAtThreshold() + " resident(s) at "
+                        + Residency.TRUST_THRESHOLD + " trust");
 
-        // Four gifts an in-game day is what it takes to fill a typical villager's allowance, and the
-        // loop runs until three of them are over the threshold rather than for a number of days
-        // somebody guessed: how long it takes is a property of their personalities.
+        // Four gifts an in-game day is what fills a typical villager's allowance, and the loop runs
+        // until three of them are over the threshold rather than for a number of days somebody
+        // guessed: how long it takes is a property of their personalities.
         int days = 0;
-        while (days < RESIDENCY_DAY_LIMIT
-                && !Residency.isResident(registry, settlementId, viewer, today + days)) {
+        while (days < RESIDENCY_DAY_LIMIT && Residency.verdict(registry, settlementId, viewer,
+                today + days).residentsAtThreshold() < Residency.RESIDENTS_REQUIRED) {
             for (Persona resident : befriended) {
                 for (int gift = 0; gift < 4; gift++) {
                     DeedBus.record(registry, Deed.of(DeedType.GIFT_WANTED, viewer, resident.id(),
@@ -851,18 +895,22 @@ public final class AttachBetHarness {
         }
 
         Residency.Verdict verdict = Residency.verdict(registry, settlementId, viewer, today + days);
-        record(verdict.granted() && verdict.route() == Residency.Route.BAND,
-                "RESIDENCY granted after " + days + " in-game day(s) of gifts, by the band: "
+        record(verdict.residentsAtThreshold() >= Residency.RESIDENTS_REQUIRED
+                        && verdict.route() == Residency.Route.BAND,
+                "RESIDENCY and the band is met too after " + days + " in-game day(s) of gifts: "
                         + verdict.residentsAtThreshold() + " resident(s) at "
-                        + Residency.TRUST_THRESHOLD + " trust, and not by a significant deed ("
-                        + verdict.feedings() + " feeding(s), raid " + verdict.defendedARaid() + ")");
+                        + Residency.TRUST_THRESHOLD + " trust, which is the route session 08 ruled");
 
-        List<String> after = speakLines(registry, speaker, viewer, playerName, today + days);
-        String said = String.join(" | ", after);
-        record(said.contains(playerName),
-                "RESIDENCY and now " + Names.of(speaker).full() + " uses their name: " + said);
-        record(!said.contains(strangerWord),
-                "RESIDENCY and has stopped calling them '" + strangerWord + "'");
+        Dialogue.Spoken spoken = Dialogue.speak(registry, speaker, viewer, playerName,
+                0, today + days, RESIDENCY_SEED);
+        record(playerName.equals(spoken.address()),
+                "RESIDENCY and now " + Names.of(speaker).full() + " calls them '" + spoken.address()
+                        + "' rather than '"
+                        + Voice.of(Culture.byId(speaker.cultureId())).strangerAddress() + "'");
+
+        List<String> after = withTheirName(registry, speaker, viewer, playerName, today + days);
+        record(String.join(" ", after).contains(playerName),
+                "RESIDENCY on screen, in a running game: " + String.join(" | ", after));
         record(after.stream().allMatch(line -> line.length() <= Reports.CHAT_WIDTH),
                 "RESIDENCY the widest thing they say is "
                         + after.stream().mapToInt(String::length).max().orElse(0)
@@ -874,8 +922,58 @@ public final class AttachBetHarness {
         after.forEach(line -> player.sendSystemMessage(Component.literal(line)));
     }
 
+    /**
+     * The speaker: deliberately the resident the player will <b>not</b> befriend.
+     *
+     * <p>What is being shown is a villager who has personally never met you using your name because
+     * the village has taken you in. {@code DESIGN.md} §5's swap belongs to the settlement rather than
+     * to one relationship, and that is the thesis in miniature — what one villager did changed what a
+     * different one calls you.
+     */
+    private static Persona residencySpeakerIn(NpcRegistry registry, int settlementId) {
+        List<Persona> locals = localsOf(registry, settlementId);
+        if (locals.size() < Residency.RESIDENTS_REQUIRED + 1) {
+            record(false, "RESIDENCY the village has " + locals.size() + " generated resident(s), "
+                    + "which is too few to earn residency from and still have a stranger to ask");
+            return null;
+        }
+        return locals.get(locals.size() - 1);
+    }
+
+    private static List<Persona> localsOf(NpcRegistry registry, int settlementId) {
+        return registry.all().stream()
+                .filter(persona -> persona.settlementId() == settlementId)
+                .filter(Persona::isGenerated)
+                .sorted(Comparator.comparing(persona -> persona.id().toString()))
+                .toList();
+    }
+
+    /**
+     * A line that actually contains the address, for the log and the screen.
+     *
+     * <p>Not every authored line carries {@code {you}} — plenty of them are "Back, are you?" — so a
+     * run that happened to land on one of those would print a perfectly correct sentence that shows
+     * nothing. The <i>assertion</i> is on {@code Spoken.address()}, which is the swap itself; this is
+     * for the human reading the verdict file, and it says so rather than pretending the search is
+     * part of the test.
+     */
+    private static List<String> withTheirName(NpcRegistry registry, Persona speaker, UUID viewer,
+                                              String playerName, int day) {
+        for (long seed = 0; seed < 64; seed++) {
+            Dialogue.Spoken spoken = Dialogue.speak(registry, speaker, viewer, playerName, 0, day, seed);
+            if (spoken.line().contains(playerName)) {
+                return Dialogue.rows(speaker, spoken);
+            }
+        }
+        return Dialogue.rows(speaker, Dialogue.speak(registry, speaker, viewer, playerName,
+                0, day, RESIDENCY_SEED));
+    }
+
     /** However many in-game days it takes; a bound so a bad roll cannot hang the run. */
     private static final int RESIDENCY_DAY_LIMIT = 90;
+
+    /** One seed, so the before and the after are the same villager saying the same kind of thing. */
+    private static final long RESIDENCY_SEED = 20260815L;
 
     /** Which villager the verify phase should ask again after the reload. */
     private static UUID residencySpeaker;
@@ -883,17 +981,6 @@ public final class AttachBetHarness {
     private static String residencyName;
     private static int residencySettlement = Persona.UNASSIGNED;
 
-    /**
-     * What this villager says, through the same two calls {@code GreetVerb} makes.
-     *
-     * <p>The packet path is already proven by the WIRE and GATE legs and is not what this is about;
-     * what is being checked is that the <i>sentence</i> changes, and that it fits.
-     */
-    private static List<String> speakLines(NpcRegistry registry, Persona speaker, UUID viewer,
-                                           String playerName, int day) {
-        return Dialogue.rows(speaker, Dialogue.speak(registry, speaker, viewer, playerName,
-                0, day, 20260815L));
-    }
 
     // --- session 07: the simulation, inside a real server ------------------------------------------
 
@@ -1183,6 +1270,8 @@ public final class AttachBetHarness {
                                 + registeredSettlement.defensibility() + ")");
 
                 collectResidents(server, level);
+                // Before session 05's legs feed anybody. See recordStrangerBefore.
+                recordStrangerBefore(server);
                 writeSubjects(level);
                 advance(server, 5);
             }
@@ -1720,13 +1809,16 @@ public final class AttachBetHarness {
                         + verdict.residentsAtThreshold() + " resident(s) still hold "
                         + Residency.TRUST_THRESHOLD + " trust");
 
-        List<String> said = speakLines(registry, speaker.get(), residencyPlayer, residencyName, today);
-        String line = String.join(" | ", said);
-        record(line.contains(residencyName),
+        Dialogue.Spoken spoken = Dialogue.speak(registry, speaker.get(), residencyPlayer,
+                residencyName, 0, today, RESIDENCY_SEED);
+        record(residencyName.equals(spoken.address()),
                 "RESIDENCY and on the other side of the reload " + Names.of(speaker.get()).full()
-                        + " still uses their name: " + line);
-        record(!line.contains(Voice.of(Culture.byId(speaker.get().cultureId())).strangerAddress()),
-                "RESIDENCY and has not gone back to calling them a stranger");
+                        + " still calls them '" + spoken.address() + "' rather than '"
+                        + Voice.of(Culture.byId(speaker.get().cultureId())).strangerAddress() + "'");
+
+        List<String> said = withTheirName(registry, speaker.get(), residencyPlayer, residencyName, today);
+        record(String.join(" ", said).contains(residencyName),
+                "RESIDENCY and it reaches a sentence: " + String.join(" | ", said));
         said.forEach(row -> Namesake.LOGGER.info("[harness] {}", row));
     }
 

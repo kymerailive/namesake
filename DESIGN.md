@@ -1,7 +1,7 @@
 # DESIGN — Namesake
 
 What we are building and why. `WORKPLAN.md` owns *what happens next*; this owns *what it is*.
-57 decisions ruled, 0 open.
+61 decisions ruled, 0 open.
 
 **The thesis:** a deed witnessed by one villager changes what a different villager, in a different
 settlement, says to you later.
@@ -64,13 +64,16 @@ Enforce with a failing test, not intention.
 | Measurement data | **Never persisted.** Every number the instruments report is derived from bonds and rings that are already on disk and already ledgered; storing a tally as well is a cache, and a stored tally survives a change to the thing it counts and then describes a mod that no longer exists. It also puts §1 in an impossible position — a histogram's only consumer is a display, an exemption is a promise a mechanic will read the field, and no mechanic reads a histogram. The cost is real and accepted: a deed evicted from a ring leaves no trace, so nothing can report what was forgotten, only how far back the ring still reaches. |
 | Daily allowance | **8 for a typical villager, scaled by the same personality weight.** Personality controls the **ceiling, not the step**: scaling only what one deed is worth is erased the moment a player gives enough to fill the cap — everybody converges on the same number and personality decides nothing but how many gifts it took. Read off the benign columns only; the cap limits positives, so a short temper must not raise anybody's capacity for warmth. |
 | Deed id | **Derived from the deed's own six identity fields, never assigned.** Two identical feedings on the same day are therefore one deed. That is what stops a ring being ground out by repetition — the daily cap's job, one level up, through a door the cap cannot see — and it costs zero persisted bytes, because it is a pure function of fields already on disk. **Confidence is deliberately outside it**, so session 08's retelling dedupes against the deed it retells instead of becoming a second row for one murder. |
-| Deed storage | **A 32-entry ring per persona, in a side table inside `namesake_npcs.dat`** — beside the bonds, never a field on `Persona`. A persona is durable identity and is rebuilt whole on every write; and one malformed deed inside a persona record would cost that villager their name, culture and traits, where a table of its own costs one memory. Oldest out on overflow. Worst case measured: 1.57 MB of NBT, 46 KB on disk, held there by a test. |
+| Deed storage | **A 128-entry ring per persona, in a side table inside `namesake_npcs.dat`, packed** — beside the bonds, never a field on `Persona`. A persona is durable identity and is rebuilt whole on every write; and one malformed deed inside a persona record would cost that villager their name, culture and traits, where a table of its own costs one memory. Each slot is a fixed 25-byte record behind an actor palette and an item palette, because two UUIDs are two thirds of a readable deed and a village's rings hold the same few people. Worst case measured at session 09: **1,303,029 B of NBT and 153,437 B gzipped** — 25.4 B a deed against session 06's 122.3 — held there by a test. The tag-tree ceiling stayed at 2 MB; the compressed one was re-ruled 100 KB → 200 KB with the measurement in hand, set so the next capacity raise trips it. |
+| Ring eviction | **Weakest out, not oldest out.** A harmful deed outranks every kindness absolutely, so no quantity of bread displaces a killing; within a class the memory that happened more often is held harder, up to `Bond.DAILY_CAP`; ties go to the oldest, which is what keeps "the newest N survive" true for a ring of single kindnesses. Session 07 flagged this as the one question its numbers could not settle — *nothing in that run gave a villager a killing to keep* — and until session 09 the answer was that a player could bury what they did under enough of what they did afterwards, one day at a time. The repeat cap is load-bearing: without it five hundred identical gifts would be the strongest benign memory a villager has for ever, which is the grind content addressing closed reopening through a new door. |
+| Gift acceptance | **A villager will not take something they have no use for from somebody they do not yet like.** Reads `Bond.warmth` against a threshold of 4 — one feeding is +3, so it costs a second act of kindness and nothing more, against an observed maximum of 56–60 and a village median of 0–1. Feeding the hungry and giving what vanilla says they want are **never** gated, so §10's acceptance script step 2 is untouched and there is no deadlock: the two ungated routes are exactly the two that raise the axis the gate reads. **Warmth rather than trust, and that is the whole point** — trust never decays, so a gate on it opens once and never closes; warmth decays toward four tenths of its high-water mark, so this one closes again when you stop turning up. It is the one thing warmth can express that no other axis can. |
 | Bond UI | Bands + the deed ring. **Never raw integers.** |
 | Gossip | Distorts, never lies. Confidence degrades; identity blurs below 50. Nothing in the pipeline can add a detail to a story — every field of a retold deed but two is carried through untouched, and those two only move one way. |
 | Gossip retention | **`confidence × 0.70` per hop, not 0.85.** The three clauses this section carried — 0.85, max 2 hops, blur below 50 — were written before there was code, and session 06 proved they were inconsistent: at 0.85 two hops lands at 72, so the blur could never fire. Of the four ways out, three break session 10 — five hops is a different mod, a higher blur threshold makes the two-hop story in the acceptance script's step 5 anonymous, and leaving it ships a distortion mechanic that never distorts. Lowering the retention is the only lever that moves the two hops in *opposite* directions relative to the threshold, and the window is arithmetic: hop one must stay attributed and hop two must not, so `r ∈ [0.50, 0.707)`. Seven tenths is the top of it and therefore the gentlest change that works. |
 | Gossip storage | **Inside `namesake_npcs.dat`, under one `NpcSchema` version** — settlements' argument for the fourth time, and it applies here where session 07's `DialogueStats` said it did not: a queued rumour *is* a `Deed`, which references personas and settlements by id. Persisted rather than volatile because session 10's cross-settlement hop carries a 1200–6000 tick delay, which makes an in-flight story certain to cross a save — and a schema bump during a ship-or-kill session is the worst available time for one. A queued rumour needs no new record, so the migration adds a table and nothing else. |
 | Residency axis | **The threshold reads `trust`, not warmth.** Ruled by the owner at the close of session 08 against session 07's table and session 08's: a witness's share of a gift is one point and warmth decays one a day, so no three residents ever reach 20 warmth in a hundred in-game days — and gossip, measured both ways, does not change that at any mark. Trust does not decay, so it only ever climbs: the third resident crosses 20 on **day 28**. Residency is therefore earned by consistency rather than by intensity, which is the right reading of a player who has decided they live here. |
-| Memory depth | **Richer per memory, a repeat count, and 32 → 128 slots — all three.** Ruled by the owner at the close of session 08, the third time they have asked for in-depth memories. The evidence points at the first two: after a hundred in-game days the deepest ring holds thirty-two slots and **three distinct sentences**, so it is shallow because twenty rows say the same thing rather than because it ran out of room. The capacity half is the expensive one — 128 slots puts the worst case at 6.26 MB of NBT against a 2 MB ceiling, so it needs the packed fixed-width ring, a re-ruled ceiling *with the measurement in hand*, and hard rule 1 in full. And both new fields owe a **non-display** consumer: the natural reader is a line of dialogue, and pool selection is already ruled a display. |
+| Memory depth | **Richer per memory, a repeat count, and 32 → 128 slots — all three, shipped at session 09.** Ruled by the owner at the close of session 08, the third time they had asked for in-depth memories. The evidence pointed at the first two: after a hundred in-game days the deepest ring held thirty-two slots and **three distinct sentences**, so it was shallow because twenty rows said the same thing rather than because it ran out of room. `Deed.item` is *which* object; `Memories.Slot.repeats` is *how many times*, on the slot rather than on the deed because two villagers who watched the same afternoon can have seen different amounts of it. **`item` is deliberately outside `Deed.id()`**: putting it in is the obvious reading of "richer per memory" and hands the ring back its grindability, because an afternoon of eight different junk items would be eight entries where an afternoon of one gift is one. The cost of leaving it out is the honest one — a slot that collects two objects can name neither, and says so. |
+| Dialogue | **Selected from authored pools by struct state; a model may only decorate a line that is already complete and shippable, never produce one.** Four pools × five registers × eight lines, plus per-culture openers, tag questions, address terms and a formality bias that decides how often each tic attaches. Every register has a state that selects it, because an authored register nothing can select is dead content — the same failure as a persisted field nothing reads, one layer up. `net.namesake.dialogue` is in the rule 5 ledger's display packages, so **no persisted field can ever name anything in it as a consumer** and the build says so. |
 | Ring collisions | **The better-attested copy of an event wins a ring slot, and it does not move.** Confidence is outside `Deed.id()`, so two copies of one event can meet in a ring holding different numbers. Better attested wins because a memory should be the best account a person actually has; it does not move because refreshing a slot would let a retelling push first-hand memories out of a ring simply by being repeated. The door only opens upward, so nothing gossip does can degrade a memory. |
 | Grievance notification | None — you must notice. Board is the backstop. |
 | Player as grievance subject | Yes, including romantic rivalry over you |
@@ -95,7 +98,7 @@ Enforce with a failing test, not intention.
 | Art | Solo, no artist. ~25 greyscale textures + colormaps. Vanilla humanoid model. |
 | Prosperity display | Clothing tier + culture palette saturation |
 | Speech | Floating text above head for ambient; GUI for menus |
-| Culture voice | Shared ~400 templates + per-culture tics and register tuning |
+| Culture voice | Shared pools + per-culture tics and register tuning. Session 09 ships **160 lines** — four pools × five registers × eight — with six cultures' openers, tag questions, stranger address terms and formality biases over them. A formal culture opens and rarely tags; an informal one does the reverse, so the *rate* is a per-culture number rather than a per-culture string, and a test measures the realised rate rather than the table. |
 | Standing split | 80% personal / 20% shared, server-configurable |
 | Absent players | Footprint persists — stationed guards, offices, banners |
 | Party propagation | Top-3 by magnitude; negatives capped 0.15, positives 0.25 |
@@ -127,10 +130,13 @@ record Bond(
     short gainedToday,   // 4 nibbles, cap 8/axis/day, reset lazily on write
     byte  peakWarmth)    // decay target = peak * 0.4
 
-record Deed(                        // ~24 B; 32-entry ring per NPC ≈ 768 B
+record Deed(                        // 25 B packed; 128-entry ring per NPC ≈ 3.2 kB
     short typeId, UUID actor, UUID subject,
     int settlementId, int gameDay,
-    byte severity, byte confidence)  // 100 = witnessed first-hand
+    byte severity, byte confidence,  // 100 = witnessed first-hand
+    String item)                     // registry id, or "" — session 09, and NOT part of Deed.id()
+
+record Slot(long id, Deed deed, int repeats)   // one ring entry; repeats saturates at 255
 
 record Grievance(
     int id, UUID instigator, UUID target,
@@ -204,11 +210,25 @@ A witness's share of a gift is one point and warmth decays one a day, so the two
 change that at any mark. Trust does not decay, so the third resident crosses 20 on **day 28**.
 Residency is therefore earned by consistency rather than by intensity.
 
-**Which leaves the second route as `warmth`'s to claim, and session 09 owes it one.** Warmth is
-written by every kindness and read by nothing once the band reads trust — the exact shape §1 forbids —
-and its exemption expires at the close of 09. The second route, or whether a villager will accept a
-gift at all, are the candidates. **Its consumer may not be the dialogue pool selection**, which is a
-display.
+**Derived, never persisted.** There is no residency flag and no grant ceremony: three residents at
+twenty trust, or one significant deed, computed from bonds and rings that are already on disk. A
+stored flag would be a persisted social value whose only consumer today is a line of dialogue, which
+§1 forbids and the rule 5 ledger would refuse; deriving it means there is nothing to classify and
+nothing that can disagree with the bonds justifying it. It costs one thing, recorded rather than
+found later: the deed route reads the rings, and a ring evicts — bounded by trust never decaying, by
+the eviction policy holding a `DEFENDED_RAID` above the gifts that would displace it, and by session
+09 raising the ring to a hundred and twenty-eight slots.
+
+**And the second route turns out to be much the cheaper of the two, which is a finding rather than a
+plan.** Session 09's harness leg reached residency by `FED_HUNGRY` ×3 before the trust band was
+anywhere near — three hungry people fed, against twenty-eight in-game days for the band. Vanilla's
+own `wantsMoreFood` gates it in real play, so it is not free; but the band the ruling is about is the
+slower path, and whether that is the right balance is the owner's.
+
+**`warmth`'s consumer is the gift gate, not this.** §5's second route was one of the two candidates
+offered at the close of session 08 and it was the wrong one: the route is specified as a deed count,
+so putting warmth on it means *redefining* the route rather than filling a hole. See the gift
+acceptance row in §2 for what it reads instead, and why warmth rather than trust.
 
 **The moment:** before residency they call you *stranger*. After, **they use your name.** One string
 swap, zero art, and it delivers the whole pitch in a single line.
