@@ -198,6 +198,18 @@ does not know you. Prices 1.00. Board shows "no history."
 Granted by the Elder at era ≥ 1, requiring either *known* band with ≥3 residents or one significant
 deed (`DEFENDED_RAID`, or `FED_HUNGRY` ×3).
 
+**The band reads `trust`** — ruled at the close of session 08, and it is measured rather than chosen.
+A witness's share of a gift is one point and warmth decays one a day, so the two cancel exactly and
+**no three residents ever reach 20 warmth in a hundred in-game days**; gossip, run both ways, does not
+change that at any mark. Trust does not decay, so the third resident crosses 20 on **day 28**.
+Residency is therefore earned by consistency rather than by intensity.
+
+**Which leaves the second route as `warmth`'s to claim, and session 09 owes it one.** Warmth is
+written by every kindness and read by nothing once the band reads trust — the exact shape §1 forbids —
+and its exemption expires at the close of 09. The second route, or whether a villager will accept a
+gift at all, are the candidates. **Its consumer may not be the dialogue pool selection**, which is a
+display.
+
 **The moment:** before residency they call you *stranger*. After, **they use your name.** One string
 swap, zero art, and it delivers the whole pitch in a single line.
 

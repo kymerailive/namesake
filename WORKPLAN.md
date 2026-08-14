@@ -306,6 +306,15 @@ generations and keeps latency out of the interaction path entirely.
    stands.
 2. **Session 10 fails ship-or-kill.** If nobody reacts when town B knows their name, the central
    thesis is wrong. Better to learn it at session 10 than 60.
+
+   **Session 08 narrowed it without retiring it, and the narrowing is worth stating precisely.** The
+   half that is now machinery rather than hope: a deed reaches 78% of a village it was not witnessed
+   in, the pipeline runs one hop further by construction rather than by a second implementation, and
+   **the story that reaches town B is guaranteed to still carry your name** — that is what the
+   retention ruling was chosen to protect, and `GossipTest` turns red if a future change takes it
+   away. What is untouched is the half the risk is actually about: **whether a player reacts.** No
+   test in this repo can have an opinion on that, and session 08 shipped without an owner playtest,
+   so the first human reading of a second-hand line is still ahead rather than behind.
 3. **Cultures don't feel foreign.** If settlement two sounds and behaves like settlement one, the
    travel loop collapses around hour 45 and no era ladder saves it. **The first read passed —
    ruled by the owner, 2026-08-13.** Households read as related and a second village read as
@@ -376,6 +385,16 @@ sweep's coverage and bucket stability, and the guard that refuses to persist a p
 Rerun the measurement when something plausibly moved the budget, and record the machine with the
 number; a number without its conditions is the same mistake in a different unit.
 
+**Generalised at session 08, because the ruling above turned out to have a loophole and CI found
+it.** "The profiler gets no CI job" was read as being about the *profiler*, and it is not — it is
+about **wall clocks**. A harness leg asserting `millis < 50` is the same forbidden thing wearing
+different clothes, and one had been sitting in the setup phase since session 07, green only because
+the margin was six-fold. Session 08 took a hundred simulated days from 8 ms to 21 and `origin/main`
+went red at 51 on a runner. **So the rule is stated at the level it actually holds: no assertion in
+CI may be a comparison against wall-clock time.** Record the number, and gate on a ceiling loose
+enough that only an order-of-magnitude regression trips it anywhere. The measured factor to design
+against is **3–4×**: the runner takes 61–71 ms for what the owner's machine does in 19.
+
 **A fifth, added 2026-08-14, and it *is* in CI — which is the interesting half: the simulation.**
 `net.namesake.sim` advances a settlement N in-game days through the shipped record layer and reports
 what happened. It is the opposite of the profiler in exactly the way that matters. The profiler
@@ -402,6 +421,14 @@ between a deed and the save file is called through `DeedBus.record`, the same do
 The `spread ≥ 64` boundary-jitter floor · the 8/tick transition governor · the `id % 7` path gate ·
 the player-relative particle emission gate · the `dayDelta ≤ 64` clamp · the `addActivitySafely`
 helper · the sleep-skip cold-start mode.
+
+**Added at session 08: `Deed.ATTRIBUTED` does two jobs and both are load-bearing.** It is the blur
+threshold *and* the floor on retelling — a story you cannot attribute is a story you cannot pass on —
+which is what makes `DESIGN.md`'s "max 2 hops" fall out of the arithmetic rather than needing a
+counter, and therefore what keeps `Deed` at seven fields. **It looks exactly like a tuning knob and it
+is a wall.** Move it and you silently change how far every story in the world travels; move
+`Deed.RETOLD` with it and you change that plus what a rumour is worth to a bond. `GossipTest` holds
+the pair to a window rather than to values, and turns red naming the number it produced instead.
 
 ---
 
@@ -2860,12 +2887,10 @@ outstanding half is narrow and is listed so it cannot be quietly absorbed:
 - **Whether 0.70 is the right price for a rumour**, as opposed to the right arithmetic. It is held to
   a window rather than a value precisely so this stays cheap to change: anything in `[0.50, 0.707)`
   keeps every ruled clause true.
-- **Three interpretive calls this session made from §4's wording**, any of which is cheap to overrule
-  now and expensive after session 10 builds on them: the 0.35 transfer read as a chance *per hearer*
-  rather than per drain; "4 an in-game hour" read as one story per settlement per 250 ticks; and the
-  blur read as **moving no bond at all** rather than as a caption on a bond that still moves. The
-  third is the substantive one — it means a village that hears about a killing at two hops feels
-  nothing about the player, because nobody there can say it was them.
+- ~~**Three interpretive calls this session made from §4's wording.**~~ **All three confirmed by the
+  owner at close** — see the rulings below. They are recorded here rather than deleted because the
+  question was real: each was cheap to overrule at the close of 08 and expensive after session 10
+  builds on it, and that window is now shut deliberately rather than by nobody noticing.
 
 **The playtest is owed and is carried into session 09 rather than closed.** The script is three or
 four different villagers fed, an in-game hour waited, then `/namesake debug deeds` on somebody who was
@@ -2923,14 +2948,47 @@ expensive one and it is the one with the least evidence behind it.** Session 09 
 cheap routes first, measure what they buy, and raise `RING_CAPACITY` last — but that is a sequencing
 note, not a re-ruling.
 
+**3. The blur moves no bond, confirmed.** An unattributed rumour is remembered and changes nobody's
+opinion of the player, because nobody can say it was them. The alternative offered — that it should
+move a *settlement* effect instead, which is `DESIGN.md` §4 step 5's job — was not taken, and the
+reason it was offered stands: step 5 is the era ladder's and does not exist, so today the choice is
+between a mechanic and a caption, and it is a mechanic. **If step 5 is ever built, this is the first
+thing that should feed it.**
+
+**4. Both readings of §4 step 7's rates, confirmed.** `0.35` is the chance one *hearer* takes one
+telling, not a fraction of the village per drain; "four an in-game hour" is one story drained per
+settlement per 250 ticks, not four. Both are load-bearing for the 78% and both are now ruled rather
+than assumed — which matters because the first is what makes the criterion clear **without** the
+witness fraction, and reading it the other way would have put coverage back on the one input nobody
+has measured.
+
+**5. `Bond.warmth` gets its own mechanic in session 09** rather than an exemption moved to 12 or a
+deletion. Both alternatives were offered and declined. **This is now session 09's second obligation
+and it has a hard deadline** — the exemption expires at the close of 09 and
+`SocialValueLedgerTest` turns the build red on its own. §5 already grants residency two ways, *the
+band* or *one significant deed*, and trust has taken the band; the second route, or whether a
+villager will accept a gift at all, are the shapes suggested. **What it may not be is session 09's
+dialogue pool selection** — `Bond.trust`'s own ledger entry rules that a display, and session 03
+caught `cultureId` telling exactly that lie.
+
 #### Carried into session 09
 
-- **Session 08's playtest is owed**, and with it the three interpretive calls above. Session 09 has a
+- **Session 08's playtest is owed**, and it is the only thing left open from 08. Session 09 has a
   playtest of its own (the name swap is the whole pitch in one line), so the two can be run together
-  — but 09's exit criterion must not be allowed to stand in for 08's.
-- **The two rulings above are 09's opening work**, and the rule 5 trap in the second is the first
-  thing to solve rather than the last: a field added in week one whose consumer is found in week three
-  is a field that gets an exemption nobody meant to write.
+  — but 09's exit criterion must not be allowed to stand in for 08's. The script: feed three or four
+  *different* villagers, wait an in-game hour, then `/namesake debug deeds` on somebody who was not
+  watching. Three or four because the blur fires on a coin.
+- **Session 09 opens with three obligations, not one**, and two of them have hard deadlines that fire
+  by themselves at its close: the residency threshold on trust; **a real non-display consumer for
+  `Bond.warmth`**; and the memory-depth work with its rule 5 trap. The trap is the first thing to
+  solve rather than the last — a field added in week one whose consumer is found in week three is a
+  field that gets an exemption nobody meant to write.
+- **Archive a schema-6 save from both loaders before writing a line**, because the memory-depth ruling
+  means session 09 almost certainly bumps to schema 7, and hard rule 1 then owes a load test against a
+  save written by a pre-change build. The commit to check out is **`a81490c`**. Session 06's archives
+  were lost and session 07 had to rebuild one from a detached checkout; it works and costs ten
+  minutes, and doing it first costs none. Session 08's own archives live only in a session scratchpad
+  and should be assumed gone.
 - `$env:JAVA_HOME` still must be pinned to JDK 21. Kill the dev client between runs, and delete
   `<loader>/run/saves/namesake_attachbet` before a `setup`.
 - **The warmth-decay finding is still session 09's biggest problem, and gossip is no longer one of the
