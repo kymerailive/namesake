@@ -3,7 +3,21 @@
 **The ledger.** What happens next, in order, with exit criteria. Read first, update last.
 Where any other document disagrees on sequence, this wins.
 
-- **Status:** session 08 complete, **and a deed now reaches people who were not standing there.** Feed
+- **Status:** session 09 complete, **and a villager says your name because of something you did.** Walk
+  into a Karsk village and Stodysk Stuksk tells you *"I don't know your business here."* Give three of
+  their neighbours enough for the village to take you in, and the same villager — who has still never
+  met you — says *"Hm. You again, Player589. Good, yes?"* That happened in a running game, it survived
+  a save, a quit and a reload **at a new schema version**, and the villager was chosen to be one the
+  player had never dealt with, because `DESIGN.md` §5's swap belongs to the settlement rather than to
+  one relationship. Nine sessions of machinery reached a person's ears in one line.
+  Behind it: **160 authored lines** — four pools × five registers × eight — with six cultures'
+  openers, tag questions, stranger words and formality biases over them; a residency threshold that
+  reads **trust** and is derived rather than stored; and all three of the owner's memory-depth
+  routes, which cost a **schema 7 that rewrites every ring on disk** into a fixed-width packed record
+  behind two palettes. That worst case measures **1.30 MB of NBT** where the readable encoding would
+  have been 6.26, so the 2 MB ceiling stood untouched and only the compressed one was re-ruled, with
+  the measurement in hand. **336 unit tests, 69 harness legs in `setup` and 12 in `verify`.**
+  Before that: session 08, **and a deed now reaches people who were not standing there.** Feed
   a villager in a square and within two in-game days **78% of the village holds it** — at three
   descending confidences, and at least one of them can no longer say who did it. The villager behind
   a wall records nothing when it happens and has heard about it an hour later, which is the wall
@@ -56,8 +70,8 @@ Where any other document disagrees on sequence, this wins.
 | 06 | Episodic memory | **done** — 2026-08-14 |
 | 07 | Headless simulation harness | **done** — 2026-08-14 |
 | 08 | Gossip and distortion | **done** — 2026-08-14 |
-| 09 | Dialogue pools and residency | **NEXT** |
-| 10 | Roads and propagation — **SHIP-OR-KILL** | pending |
+| 09 | Dialogue pools and residency | **done** — 2026-08-15 |
+| 10 | Roads and propagation — **SHIP-OR-KILL** | **NEXT** |
 | 11 | Notice Board | pending |
 | 12 | Standing bands | pending |
 | 13 | Day plan I — free slots | pending |
@@ -383,6 +397,23 @@ generations and keeps latency out of the interaction path entirely.
    so session 09 owes warmth a real non-display consumer or the build goes red on its own. **That is
    the mechanism working exactly as designed, and it is the first time it has bitten on a field
    somebody was actively planning to pay.**
+
+   **Both were paid at session 09, and this risk shrank for the first time since it was raised.**
+   `Bond.trust` names `Residency.verdict` — three residents at twenty trust, the band, measured at
+   day 28. `Bond.warmth` names `GiftPolicy.verdict` — whether a villager will accept a gift they have
+   no use for from somebody they do not yet like — and the reason that is *warmth's* mechanic rather
+   than a mechanic that happens to read warmth is the one thing warmth can express and trust cannot:
+   trust never decays, so a gate on it opens once and never closes, and this one closes again when
+   you stop turning up. **Three exemptions remain of the five: `respect` at 12, `fear` and `debt` at
+   16, all untouched.**
+
+   **And one was opened in their place, deliberately and with the reasoning in the session 09 log:
+   `Deed.item`, at 12.** Session 09 added it as the owner's "richer per memory", built three
+   non-display readers for it, and rejected all three — the deed id (which would hand the ring back
+   its grindability), a gift rule with a one-item bypass, and session 12's trade band two sessions
+   early. The honest answer was that its only reader today is a line of dialogue, so it is an
+   exemption with a date rather than a technicality. `Memories.Slot.repeats` arrived in the same
+   session and was consumed on the day it landed, by the eviction policy.
 
    **Armed the same way risk 4 was**, against this ledger's own status board, so it fails loudly at
    the close of the owing session rather than quietly. `debt` is the longest of the five and the one
@@ -3050,3 +3081,346 @@ caught `cultureId` telling exactly that lie.
 honest. Three decisions added to `DESIGN.md` §2 — the gossip retention, gossip storage, and which copy
 of an event wins a ring slot — taking the count 52 → 55 — and two more at close from the owner’s rulings, the residency axis and memory depth, taking it to 57 — plus §4 step 7 rewritten around the retention
 and the blur's `if` statement, and §8's drain row given its bound. No changes to the 16-session shape.
+
+### Session 09 — 2026-08-15 — dialogue pools and residency
+
+**Shipped.** `63cdc46..HEAD`, pushed to `origin/main`. CI green on all three jobs.
+
+**A villager says your name because of something you did.** Walk into the Karsk village and Stodysk
+Stuksk says *"I don't know your business here."* Give three of their neighbours enough that the
+village takes you in, and the same villager says *"Hm. You again, Player589. Good, yes?"* — and
+Stodysk has still never met you. That is `DESIGN.md` §5's swap, in a running game, surviving a save
+and a reload at a new schema version, spoken by somebody chosen precisely because they had no part
+in earning it: **residency belongs to the settlement, so what one villager did changed what a
+different one calls you.** Nine sessions of machinery reached a person's ears in one line.
+
+#### The three fields that owed a non-display consumer, and what each was ruled
+
+This is the session the brief said was most likely to become both reference codebases at once — the
+first whose deliverable is words, arriving with three fields needing a reader and no obvious one that
+is not a line of dialogue. So the first thing written this session was not a line of dialogue. It was
+**`net.namesake.dialogue` going into `SocialValueLedgerTest`'s `DISPLAY_PACKAGES`**, before the
+package existed, which makes naming anything in it a build failure rather than a thing somebody has
+to remember while under pressure to ship a hundred and sixty lines.
+
+**1. `Bond.warmth` → `GiftPolicy.verdict`. A villager will not accept a gift they have no use for
+from somebody they do not yet like.**
+
+The exemption expired at this session's close and both escapes had been declined, so it needed a real
+mechanic. Four things it had to not break, and each is a failure this design could plausibly have
+shipped:
+
+- **Onboarding.** §10's acceptance script step 2 is a player who arrived ten minutes ago feeding a
+  hungry villager. Feeding the hungry and giving what vanilla's own `wantsToPickUp` says they want
+  are **never** gated. Only `GIFT_UNWANTED` is.
+- **The deadlock.** A gate on all giving is a gate on the only thing that raises the axis it reads.
+  The two ungated routes are exactly the two that raise warmth, so the door out is always open and
+  "always recoverable, slowly" stays true. `GiftPolicyTest.thereIsNoDeadlock` asserts that both
+  ungated kindnesses actually move `Bond.WARMTH`, so it is a door with a handle on the inside rather
+  than a comment claiming there is one.
+- **The threshold is low, and it is measured.** **Four.** One feeding is +3 for a typical villager,
+  so it costs a second act of kindness and nothing more — against an observed maximum of 56–60 and a
+  village median of 0–1. That is seven percent of the maximum. LNK set gates at 35–205 against an
+  observed 32; this one is held to the range by a test that names the numbers.
+- **It is a mechanic, not a line.** A refusal means the item does not leave your hand, no deed is
+  emitted, no bond moves and no memory is written. Four consequences, none of them a sentence.
+
+**Why warmth rather than trust, which is the part that makes it warmth's mechanic rather than a
+mechanic that happens to read warmth.** Trust does not decay — that is why session 08 put the
+residency band on it — so a gate on trust opens once and never closes: *he was kind to me a season
+ago, so I will take his rubbish for ever.* Warmth falls a point an in-game day toward four tenths of
+its high-water mark, so this gate **closes again** if you stop turning up. Nothing else in the mod can
+express "lately", and `GiftPolicyTest.theGateReopensBecauseWarmthDecays` is that sentence as a test.
+
+**2. `Memories.Slot.repeats` → `Memories.evictionWeight`. Which memory survives an overflow.**
+
+The offered candidate, taken. Session 07 named it as the one question its numbers could not settle —
+*nothing in that run gave a villager a killing to keep, so nothing has yet tested whether thirty-two
+subsequent gifts push one out* — and until this session the answer was **yes**: the ring took its
+head, so a player could bury what they did under enough of what they did afterwards, one day at a
+time, and content addressing did not stop it because every day is a different deed.
+
+Eviction is now weakest-out. A harmful deed outranks every kindness absolutely; within a class, what
+happened more often is held harder, up to `Bond.DAILY_CAP`; ties go to the oldest, which is what keeps
+"the newest N survive" exactly true for a ring of single kindnesses and is why session 06's tests
+still pass unchanged. **The cap on the repeat term is load-bearing rather than tidy**: without it five
+hundred identical gifts would be the strongest benign memory a villager has for ever, which is the
+grind content addressing closed reopening through a door it does not watch.
+
+**3. `Deed.item` → a dated exemption, expiring at the close of session 12. This is the one I want
+ruled on, because the honest answer was "no consumer yet" and the dishonest one was available.**
+
+What reads *which object* today is a line of dialogue. Three non-display readers were built and
+rejected, and the reasons are the argument:
+
+- **`Deed.id()`.** Folding the item into the derivation is the obvious reading of "richer per memory"
+  — a loaf and an apple become two things to remember — and it would have passed every check in
+  `SocialValueLedgerTest`. It also hands the ring back its grindability through a door the daily cap
+  does not watch: an afternoon of one gift is one entry, and an afternoon of eight different junk
+  items would be eight. Session 06 built the whole ring around that not being true.
+  `MemoriesTest.theObjectIsOutsideTheDerivation` pins it.
+- **A gift-acceptance rule** — a villager refusing a fourth of the same object. It is a real `if` with
+  a real consequence, it lives in the same policy object as warmth's, and **it is bypassed by
+  alternating two objects**, because a slot that collects two objects honestly names neither. A guard
+  whose bypass is that trivial is a consumer on paper. I built it before I noticed, and it is recorded
+  here because "I found a reader" and "I found a reader that does something" are different claims.
+- **Session 12's trade band, built two sessions early.** It would perturb every earn-rate number
+  sessions 07 and 08 measured, to pay a debt that has a date on it already.
+
+So it is an exemption with a date, which is what exemptions are for. **Session 12 either reads it or
+the field is deleted.** Overrule this if the gift rule reads better to you than the honesty does; it
+is about fifteen lines either way.
+
+**And one thing the field cost that is not an exemption, because it is a real design decision.**
+`Deed.id()` excludes the object, so two gifts of different things on one day are one memory — which
+cannot name either of them, and therefore names neither. `DESIGN.md` §2 already rules that shape for
+gossip: **distorts, never lies.** A memory that named the first object would be inventing a detail it
+does not have, which is the one thing nothing in this mod is allowed to do.
+
+#### The second contradiction, resolved out loud
+
+`WORKPLAN.md`'s exit criterion is "acceptance steps 1–3 pass" and §10 step 3 reads *"Walk the road to
+B (~2 min). Stranger lines. Board shows 'no history.'"* Three clauses, and they belong to three
+different sessions.
+
+| clause | whose | this session |
+|---|---|---|
+| **Stranger lines** | 09 | **Passes.** Proven in a running game, and `ResidencyTest.residencyIsPerSettlement` proves the *per-settlement* half a second village depends on: three residents of A at the threshold do not make you a resident of B. |
+| **Walk the road to B** | 10 | The walking needs no road — you can walk anywhere. What does not exist is a *second settlement in the harness*, which is session 10's fixture rather than something 09 declined to build. |
+| **Board shows "no history"** | 11 | Not started, correctly. |
+
+**So step 3 passes on its own clause and on nothing else, and the same is true of step 1**, which the
+brief did not flag: *"Arrive at A. Every villager speaks a stranger line. Prices 1.00."* The stranger
+line is 09's and passes; the price band is session 12's and does not exist. **Step 2 passes in full**
+and has since session 05 — the harness still asserts +3 to the subject and +1 to each of three
+witnesses, this session included.
+
+#### What the packed ring measured, and the one ceiling that was re-ruled
+
+Session 08 forecast this precisely: at the readable codec's 122.3 B a deed, a hundred and twenty-eight
+slots puts the worst case at **6.26 MB of NBT and 186 KB gzipped**, and *both* `MemoriesTest` ceilings
+go red. So the format changed. A ring is now one `ByteArrayTag` per holder at **25 bytes a slot**,
+behind an **actor palette** and an **item palette** — because two UUIDs are thirty-two of a
+forty-seven byte record and a village's rings hold the same few people over and over.
+
+Measured, four hundred personas each holding a full ring, 51,200 deeds:
+
+| | session 06, 32 slots | session 09, 128 slots |
+|---|---|---|
+| NBT tag tree | 1,565,620 B (122.3 B a deed) | **1,303,029 B (25.4 B a deed)** |
+| gzipped | 46,506 B (3.6 B a deed) | **153,437 B (3.0 B a deed)** |
+| ceilings | 2,000,000 / 100,000 | **2,000,000 / 200,000** |
+
+**The tag-tree ceiling did not move, and that is the whole result.** The ring is four times deeper and
+every memory carries two things it did not, and the worst case fits inside a budget set for a table a
+quarter of the size. The compressed figure is the one that was re-ruled, **with the measurement in
+hand**, and the honest reading of it is that the old number was never a statement about the format:
+the per-deed cost went *down*, 3.6 B to 3.0, and the total went up because there are four times as
+many deeds. Two hundred thousand is chosen so the **next** capacity raise trips it — doubling again is
+~307 KB compressed and ~2.6 MB raw, so both ceilings would fire together. Session 06's rule is
+unchanged and is the point of having one: **if it goes red the fix is a decision, not a bigger
+number.**
+
+#### Hard rule 1, in full, and the pre-change half done before a line was written
+
+The `setup` phase was run on **both loaders at `a81490c`'s tree** — the code at HEAD was byte-identical
+to `a81490c`, since the three commits between them touch only `WORKPLAN.md` and `DESIGN.md`, so the
+saves are pre-change saves in the only sense that matters — and archived outside the worktree at
+`C:\MCA Reborn Rework\.archives\schema6-a81490c`, **with their subjects files**, which session 08's
+archives lacked. Then the schema-7 build loaded them:
+
+```
+NPC registry datafixer: schema 6 -> 7 (deed rings repacked to fixed-width records behind
+an actor and an item palette; every ring on disk is rewritten) rewrote 26 record(s)
+Loaded 9 persona(s), 9 bound to an entity, 1 settlement(s), 6 bond(s),
+26 deed(s) across 6 ring(s), 0 rumour(s) in 0 settlement(s) (schema 7)
+```
+
+**This is not the additive kind, and after three in a row that is the thing to say out loud.** Schemas
+4, 5 and 6 each added a table and each said that "additive" is a claim rather than a default. This one
+rewrites, and the rewrite count is a real number rather than the zero those three return.
+
+**The failure it guards against is silent, which is why it is a harness leg as well as a unit test.**
+Vanilla's `CompoundTag.getByteArray` returns an **empty array** for a key holding the wrong tag type.
+So a ring the fixer did not convert loads as a villager who remembers nothing — no error, no crash —
+and is written back that way at the next autosave. That is MCA's failure exactly, in a save file
+rather than in a release note. `Memories.readFrom` refuses that shape **by name** and counts it as
+damage, so the silent version cannot happen; the harness proves the deeds a schema-6 build wrote are
+still here, on a writable registry, read back through a real load path.
+
+**Then each world was loaded a second time**, which is the only way session 01's defect 1 is ever
+caught: `no migration expected: world is already at schema 7`. The repack reached disk.
+
+**And one seam this created is pinned rather than hoped for.** `NpcSchema.fixPackedDeedRings` writes
+the layout longhand instead of calling `Memories.save`, because a datafixer describes a shape frozen
+in the past — calling the current writer would make it mean "whatever the newest format is", so a
+schema-8 change would silently rewrite schema-6 saves into schema-8 bytes stamped schema 7. That
+loads, and it is wrong. The cost is that two places now know the layout, and
+`NpcSchemaTest.thePackedRingThisFixWritesIsTheOneMemoriesReads` is what stops them drifting apart
+unnoticed: **a later session that changes the packed record is meant to turn it red**, and the fix is
+to write that session's own fixer rather than to update the constant in this one.
+
+#### What the run found that nobody asked it
+
+**1. `DESIGN.md` §5's second route is much the cheaper of the two, and the band the owner ruled is the
+slower path.** The harness leg turned red on its first run for a reason that was not a bug: by the
+time it asked, the player was *already* a resident, because session 05's legs feed villagers and
+`FED_HUNGRY` ×3 is §5's other route. The simulation puts numbers on it — the in-game day residency is
+granted, by model:
+
+| model | ATTENTIVE | SATURATING | INTERMITTENT | CARELESS | PASSING_THROUGH |
+|---|---|---|---|---|---|
+| **residency granted** | day 6 | day 2 | day 6 | day 3 | day 42 |
+| the band alone would be | day 28 | — | — | — | — |
+
+Every one of those is the deed route. Vanilla's own `wantsMoreFood` gates feeding in real play, so it
+is not free the way the table makes it look — but **session 08's ruling was about which axis a band
+reads, and in practice almost nobody will reach residency by the band at all.** That is not a defect
+and nothing was changed on the strength of it; it is the shape of §5 with the arithmetic done, and it
+is the owner's to rule. The harness now asserts *both* routes: that the deed route had already fired,
+and that the band is met too after **3 in-game days** of gifts.
+
+**2. The capacity raise closed the instrument gap session 07 opened, and it is measurable.** At
+thirty-two slots a ring-derived earn rate over-stated the truth by up to **+109%** at a hundred days,
+because the warmth was cumulative and the days it was divided by were capped by the ring. At a hundred
+and twenty-eight, a hundred days of `ATTENTIVE` play **truncates nobody at all** — the deepest ring
+holds 85 of 128 slots and reaches back all 100 days, and `0 of 9` rings are full where session 07
+measured `9 of 9`. Session 12 can now set a threshold from a live save without the correction session
+07 said it would need, up to about this length of playthrough. A saturating player still overflows,
+which is where the eviction policy is exercised.
+
+**3. Gossip gives a villager contact days the player never gave them, and only the deeper ring made it
+visible.** A story drained into somebody's ring keeps the day it *happened* on, not the day they heard
+it — so a hearer's ring reports contact on a day the player was nowhere near them. At thirty-two slots
+eviction hid it. It is a second reason a live save's rate reads high, in the opposite direction from
+the first, and `SimulationTest` now measures both halves separately rather than asserting one
+inequality that happened to hold.
+
+#### Rule 3: twenty-two deliberate breakages, each watched to fail and then removed
+
+Every one was checked for a **non-empty diff** before the tests ran, and the failing test's *name* was
+captured rather than the build's exit status — a breakage that turns the build red by failing some
+other test is not evidence for the guard it was aimed at, and the first pass of this only recorded
+"BUILD FAILED" and could not tell the difference.
+
+| Breakage | Result |
+|---|---|
+| Eviction ignores how often a memory happened | **Red.** *"an afternoon that happened nine times outlives a single gift of the same age"* |
+| A killing weighs the same as a loaf | **3 red**, including *"a killing outlives a whole ring's worth of later kindness"* |
+| A slot keeps the first object when two disagree | **Red.** *"a slot that collects two different objects names neither of them"* |
+| A retelling counts as a second occurrence | **4 red**, including the registry's dirty flag |
+| An unmigrated schema-6 ring reads as an empty one | **Red.** *"a schema-6 ring is damage rather than an empty one"* |
+| The schema bumped to 8 with no matching fix | **5 red.** The fix ladder has a hole |
+| The 6 → 7 fix runs, logs, and converts nothing | **2 red** — the conversion and the frozen-format pin |
+| The frozen fixer's record width drifts by one byte | **2 red.** *"the packed ring this fix writes is the one Memories reads"* |
+| The gift gate stops reading warmth | **4 red**, *including the rule 5 ledger* — the consumer stops being one |
+| The gate put on every gift, including feeding the hungry | **2 red.** *"a total stranger can always feed the hungry"* |
+| The band takes two residents rather than three | **Red** |
+| Feedings counted as ring rows rather than as events | **Red.** *"one feeding four people watched is one feeding, not four"* |
+| An unattributed rumour counts as evidence of residency | **Red** |
+| A stranger line stops saying it does not know you | **Red.** *"every stranger line about you says, in words, that they do not know you"* |
+| Two cultures share a word for a stranger | **Red** |
+| What they saw comes before what they were told | **2 red**, including a register becoming unreachable |
+| A villager who remembers you is still a stranger | **Red** |
+| The object folded into the deed id | **3 red**, including the pinned literal |
+| `RING_CAPACITY` doubled again to 256 | **2 red.** The re-ruled ceiling firing on exactly what it was set for |
+| A count of one printed on every deed row | **Red.** The column reading the same thing over and over |
+| **`Bond.warmth` names the dialogue pool selection as its consumer** | **Red.** *"names net.namesake.dialogue.Dialogue, but that package exists to show things to a person"* |
+| `Bond.warmth`'s session-05 exemption restored, at the close | **Red.** The forcing function, on the field this session was about |
+
+**The eleventh and the twenty-first rows are the two worth reading.** The eleventh is the rule 5 ledger
+catching a *mechanic that stopped being one*: removing the warmth test from `GiftPolicy` does not
+break the class, it breaks the claim that anything reads the field, and `SocialValueLedgerTest` says
+so by name. The twenty-first is the lie this session was most at risk of telling, told on purpose and
+refused by a package name added before the first line of dialogue was written.
+
+#### What the exit criteria actually showed
+
+**Both loaders, every leg green**, in two launches each plus two cross-build load tests:
+
+| phase | legs | what it was run against |
+|---|---|---|
+| `setup` | **69** (60 before this session) | a fresh world on the session 09 build |
+| `verify` | **12** (9 before) | that world, saved and reloaded |
+| `verify` | **13** | the archived **schema-6** world, migrating 6 → 7 |
+| `verify` | **9** | the same world again — `no migration expected: world is already at schema 7` |
+
+**336 unit tests**, up from 285, real JUnit XML, `failures=0 errors=0 skipped=0`.
+
+The exit criterion, on screen, on both loaders — the same villager before and after, and one who
+never met the player either time:
+
+```
+Fabric     Stodysk Stuksk    I don't know your business here.
+           Stodysk Stuksk    Hm. You again, Player589. Good, yes?
+
+NeoForge   Gvyskizyv Stuksk  Hm. A face I don't know. Good day, yes?
+           Gvyskizyv Stuksk  Hm. There you are, Dev, yes?
+```
+
+Both villages are Karsk, whose voice opens on *Hm.* and tags with *yes?* — which is the per-culture
+half doing its job in the same four lines as the name swap.
+
+#### Not ruled at close, and it is deliberately not absorbed
+
+**Session 08's playtest is still owed and session 09's is owed with it.** Both are the owner's and
+neither has been run.
+
+**What was checked, stated precisely so it is not mistaken for the playtest.** The lines reached a
+player's chat **through a running game on both loaders** — the harness sends them, and the verdict
+file quotes what was sent. Three classes of defect are guarded: every one of **1,920 rendered
+sentences** (four pools × five registers × six cultures × two residency states × eight lines, with the
+opener attached and the tag hung) fits the sixty-character budget; nothing carries a carriage return;
+and every authored line and every culture tic is plain ASCII, which closes the missing-glyph class
+session 06 shipped a hundred and sixty new chances of.
+
+**What was not checked is the thing that matters most, and it is not being filed as optional.**
+Nobody has looked at these sentences and formed an opinion about them. Session 07 substituted an
+instrument for a playtest and shipped three over-width lines; session 08 found a sixty-four character
+header that had been shipping since 06 because nothing rendered it. A width budget is not a
+judgement about whether a Karsk villager sounds like a Karsk villager, or whether *"Hm. You again,
+Player589. Good, yes?"* lands or grates.
+
+The two scripts, unchanged:
+
+- **08's:** feed three or four *different* villagers, wait an in-game hour, then `/namesake debug
+  deeds` on somebody who was not watching. Three or four because the blur fires on a coin. What is
+  outstanding is whether a second-hand line reads as second-hand, and whether **0.70** is the right
+  price for a rumour as opposed to the right arithmetic.
+- **09's:** sneak and right-click a villager with an empty hand to talk. Then earn residency and do it
+  again. The deed row now carries *which object* and *how many times*, so `/namesake debug deeds` is
+  worth a look on somebody you have been giving things to.
+
+#### Carried into session 10
+
+- `$env:JAVA_HOME` still must be pinned to JDK 21. Kill the dev client between runs, and delete
+  `<loader>/run/saves/namesake_attachbet` before a `setup`.
+- **The schema-6 archives are outside the worktree at `C:\MCA Reborn Rework\.archives\schema6-a81490c`,
+  with their subjects files.** Session 06's were lost and 07 rebuilt one; 08's lived in a scratchpad.
+  Session 10 should archive a **schema-7** pair the same way before it starts, whether or not it
+  expects to bump — it costs ten minutes and it has cost two sessions already.
+- **Session 10 changes no schema if it can help it**, and session 08 already built for that: the
+  gossip deque is persisted precisely so a cross-settlement hop in flight across a save needs no bump
+  during a ship-or-kill session.
+- **`Register.ABOUT_OTHERS` is the sentence step 5 is made of.** A villager selects it when their ring
+  holds a deed of yours they did not witness, and it comes *before* the first-hand register on
+  purpose. Session 10 adds the edge; the words already exist.
+- **`Deed.RETOLD` is still the number session 10 will be tempted to move**, and it is still held to
+  `[0.50, 0.707)` rather than to a value. Unchanged from session 08.
+- **A packed ring means a save file is no longer readable with an NBT viewer.** `/namesake debug
+  deeds` is the instrument. The gossip deque deliberately kept the readable encoding, because it is
+  bounded by settlements rather than by personas and it is the thing somebody actually opens a save to
+  look at.
+- `DeedBus.witnessScan`, `DeedBus.emit` and `Gossip.drain` **still have meters pointed at nothing**,
+  unchanged and for the unchanged reasons.
+
+**Ledger change.** Session 09 → done, session 10 → NEXT. **Risk 5 updated, and for the first time
+since it was raised it shrank**: `Bond.trust` and `Bond.warmth` are both paid, which was the whole of
+what fell due this session. One new exemption in their place — `Deed.item`, at 12 — and one new field
+consumed on the day it landed, `Memories.Slot.repeats`. Four decisions added to `DESIGN.md` §2 and one
+rewritten, taking the count 57 → 61, plus §3's `Deed` and §5 rewritten around what shipped.
+**A gap in the rule 5 mechanism is recorded rather than papered over:** `everyPersistedRecordIsLedgered`
+discriminates "persisted" by the presence of a `Codec`, and a packed ring slot has none — so
+`Memories.Slot` is pinned into the ledger by name, by a test that says why. No changes to the
+16-session shape.
+

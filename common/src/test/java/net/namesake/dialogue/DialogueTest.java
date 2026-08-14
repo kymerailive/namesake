@@ -133,6 +133,48 @@ class DialogueTest {
         }
     }
 
+    /**
+     * <b>The missing-glyph class, closed at the source rather than at the renderer.</b>
+     *
+     * <p>Session 06 shipped a carriage return in every deed row — {@code String.format("%n")} is the
+     * platform separator, so on Windows it emits {@code \r\n}, and Minecraft's font has no glyph for
+     * a carriage return and draws it as a small square. It was invisible in the log, invisible in
+     * every test that read the string, and perfectly obvious the moment somebody looked at a screen.
+     *
+     * <p>A hundred and sixty authored sentences are a hundred and sixty chances to type a curly
+     * apostrophe or an en dash and find out the same way. Vanilla's default font covers Latin-1 and
+     * a great deal more, so this is stricter than it strictly needs to be — and being stricter than
+     * necessary about a character set is cheaper than being wrong about which glyphs a resource pack
+     * happens to ship.
+     */
+    @Test
+    @DisplayName("every authored line and every culture tic is plain ASCII")
+    void nothingCarriesACharacterTheFontMayNotHave() {
+        List<String> everything = new ArrayList<>();
+        for (Pool pool : Pool.values()) {
+            for (Register register : Register.values()) {
+                everything.addAll(Lines.of(pool, register));
+            }
+        }
+        for (Culture culture : Culture.values()) {
+            Voice voice = Voice.of(culture);
+            everything.add(voice.opener());
+            everything.add(voice.tag());
+            everything.add(voice.strangerAddress());
+        }
+
+        for (String line : everything) {
+            for (int i = 0; i < line.length(); i++) {
+                char c = line.charAt(i);
+                assertTrue(c >= 0x20 && c < 0x7F, () -> String.format(
+                        "'%s' carries U+%04X, which is outside plain ASCII. Minecraft draws a "
+                                + "character it has no glyph for as a small square, and session 06 "
+                                + "shipped exactly that in every deed row.", line, (int) c));
+            }
+        }
+        assertTrue(everything.size() > 160, "the scan has to actually reach every line");
+    }
+
     // --- the cultures ------------------------------------------------------------------------------
 
     /**
