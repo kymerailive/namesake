@@ -129,7 +129,8 @@ public final class Simulation {
             PlayerModel model,
             int focus,
             float witnessFraction,
-            boolean gossip) {
+            boolean gossip,
+            int settlements) {
 
         public Plan {
             if (days < 1) {
@@ -142,33 +143,67 @@ public final class Simulation {
                 throw new IllegalArgumentException("A witness fraction of " + witnessFraction
                         + " is not a fraction");
             }
+            if (settlements < 1) {
+                throw new IllegalArgumentException("A world of " + settlements + " settlements has "
+                        + "nowhere for a deed to happen");
+            }
         }
 
-        /** The measured defaults: a nine-resident farming village, the population session 04 found. */
+        /**
+         * The measured defaults: a nine-resident farming village, the population session 04 found.
+         *
+         * <p><b>One settlement, still.</b> Session 08 declined to build a second on the grounds that
+         * a second village with no cross-settlement mechanic is a report column reading zero, and
+         * that argument holds in the other direction now: every number sessions 07, 08 and 09
+         * measured came out of a one-settlement plan, and quietly making the default two would move
+         * all of them. Session 10's plan is {@link #withNeighbour()}, and its report is the only one
+         * that reads it.
+         */
         public static Plan standard(long seed, int days, PlayerModel model) {
             return new Plan(seed, days, TYPICAL_RESIDENTS, 3, Culture.VALE.id(),
                     net.namesake.settlement.Specialty.FARMING.id(), (byte) 70,
-                    model, TYPICAL_FOCUS, TYPICAL_WITNESS_FRACTION, true);
+                    model, TYPICAL_FOCUS, TYPICAL_WITNESS_FRACTION, true, 1);
         }
 
         public Plan with(PlayerModel other) {
             return new Plan(seed, days, residents, households, cultureId, specialty, defensibility,
-                    other, focus, witnessFraction, gossip);
+                    other, focus, witnessFraction, gossip, settlements);
         }
 
         public Plan withWitnessFraction(float fraction) {
             return new Plan(seed, days, residents, households, cultureId, specialty, defensibility,
-                    model, focus, fraction, gossip);
+                    model, focus, fraction, gossip, settlements);
         }
 
         public Plan withCulture(byte culture) {
             return new Plan(seed, days, residents, households, culture, specialty, defensibility,
-                    model, focus, witnessFraction, gossip);
+                    model, focus, witnessFraction, gossip, settlements);
         }
 
         public Plan withDays(int otherDays) {
             return new Plan(seed, otherDays, residents, households, cultureId, specialty,
-                    defensibility, model, focus, witnessFraction, gossip);
+                    defensibility, model, focus, witnessFraction, gossip, settlements);
+        }
+
+        /**
+         * The same village with a neighbour down the road. <b>Session 10's fixture.</b>
+         *
+         * <p>The player never goes there — {@link #emit} only ever acts in settlement 0 — which is
+         * the whole point: everything the neighbour ends up holding arrived by road, so the table is
+         * a measurement of propagation rather than of a second player.
+         */
+        public Plan withNeighbour() {
+            return withSettlements(2);
+        }
+
+        public Plan withSettlements(int count) {
+            return new Plan(seed, days, residents, households, cultureId, specialty, defensibility,
+                    model, focus, witnessFraction, gossip, count);
+        }
+
+        /** Everybody in the world, which is not the same as everybody the player can reach. */
+        public int population() {
+            return residents * settlements;
         }
 
         /**
@@ -183,9 +218,20 @@ public final class Simulation {
          */
         public Plan withGossip(boolean spreading) {
             return new Plan(seed, days, residents, households, cultureId, specialty, defensibility,
-                    model, focus, witnessFraction, spreading);
+                    model, focus, witnessFraction, spreading, settlements);
         }
     }
+
+    /**
+     * How far apart two settlements are placed, in blocks.
+     *
+     * <p>Far enough to be two settlements — {@code Settlements.MEMBERSHIP_RADIUS} is 96, so anything
+     * past 192 cannot be misread as one village with a long high street — and close enough that the
+     * relative-neighbourhood test joins them, which two points always are. The exact figure changes
+     * nothing the record layer measures: <b>nothing downstream of a deed reads a distance.</b> The
+     * road's length is the materialiser's problem and it has no numbers in this report.
+     */
+    public static final int NEIGHBOUR_SPACING = 512;
 
     // --- outputs -----------------------------------------------------------------------------------
 
@@ -232,17 +278,29 @@ public final class Simulation {
      * @param unattributed how many of them held it with no name attached
      */
     public record Spread(long deedId, long blurredId, DeedType type, int emittedOnDay,
-                         int[] holders, int[] unattributed) {
+                         int[] holders, int[] unattributed, int[] away, int[] awayNamed) {
 
         /** What share of the settlement held it by the close of {@code day}. */
         public float coverage(int day, int residents) {
             return residents == 0 ? 0F : (float) holders[day] / residents;
         }
+
+        /**
+         * What share of the <i>neighbouring</i> settlement held it by the close of {@code day}.
+         *
+         * <p>Counted separately rather than folded into {@link #holders}, because the two answer
+         * different questions and session 08's whole method was to check the arithmetic against the
+         * criterion rather than the other way round: 78% of a village is session 08's number, and
+         * anything at all in the next village is session 10's.
+         */
+        public float awayCoverage(int day, int residents) {
+            return residents == 0 ? 0F : (float) away[day] / residents;
+        }
     }
 
     /** Everything one run produced. */
     public record Outcome(Plan plan, NpcRegistry registry, List<Persona> residents,
-                          Settlement settlement, List<Moment> chronicle,
+                          List<Persona> neighbours, Settlement settlement, List<Moment> chronicle,
                           Map<UUID, History> histories, List<Spread> spread, long elapsedNanos) {
 
         /** The ledger's exit criterion is written in seconds; a run is measured in microseconds. */
@@ -276,16 +334,27 @@ public final class Simulation {
         long begun = System.nanoTime();
 
         NpcRegistry registry = new NpcRegistry();
-        Settlement settlement = settlementFor(plan);
+        Settlement settlement = settlementFor(plan, 0);
         registry.settlements().put(settlement);
+        for (int place = 1; place < plan.settlements(); place++) {
+            registry.settlements().put(settlementFor(plan, place));
+        }
 
+        // Settlement 0's residents keep the ids and households a one-settlement plan gave them, so
+        // adding a neighbour moves no number sessions 07, 08 or 09 measured. Everyone after them is
+        // offset by their settlement, which is the difference between a second village and a bigger
+        // first one.
         List<Persona> residents = new ArrayList<>(plan.residents());
-        for (int i = 0; i < plan.residents(); i++) {
-            Persona placed = Persona.create(new UUID(plan.seed(), i), 0L)
-                    .placed(settlement.id(), 4096 + (i % plan.households()), plan.cultureId());
-            Persona rolled = placed.withTraits(TraitRoll.roll(placed, registry.settlements()));
-            registry.put(rolled);
-            residents.add(rolled);
+        List<Persona> neighbours = new ArrayList<>();
+        for (int place = 0; place < plan.settlements(); place++) {
+            long fold = plan.seed() ^ (place * 0x9E3779B97F4A7C15L);
+            for (int i = 0; i < plan.residents(); i++) {
+                Persona placed = Persona.create(new UUID(fold, i), 0L)
+                        .placed(place, 4096 + place * 64 + (i % plan.households()), plan.cultureId());
+                Persona rolled = placed.withTraits(TraitRoll.roll(placed, registry.settlements()));
+                registry.put(rolled);
+                (place == 0 ? residents : neighbours).add(rolled);
+            }
         }
 
         List<Moment> chronicle = new ArrayList<>();
@@ -328,7 +397,8 @@ public final class Simulation {
                     Moment moment = emit(registry, plan, settlement, residents, day, visit, i, type);
                     chronicle.add(moment);
                     spread.computeIfAbsent(moment.deedId(), id -> new Spread(id, moment.blurredId(),
-                            moment.type(), moment.day(), new int[plan.days()], new int[plan.days()]));
+                            moment.type(), moment.day(), new int[plan.days()], new int[plan.days()],
+                            new int[plan.days()], new int[plan.days()]));
                 }
                 visit++;
             }
@@ -343,7 +413,7 @@ public final class Simulation {
                 }
             }
 
-            countHolders(registry, residents, spread, day);
+            countHolders(registry, residents, neighbours, spread, day);
 
             // The day's close, read the way a mechanic would read it: through the decayed view,
             // because that is the number any consumer of a bond actually sees.
@@ -380,7 +450,7 @@ public final class Simulation {
                     peak.get(resident.id()), peakDay.get(resident.id())));
         }
 
-        return new Outcome(plan, registry, List.copyOf(residents), settlement,
+        return new Outcome(plan, registry, List.copyOf(residents), List.copyOf(neighbours), settlement,
                 Collections.unmodifiableList(chronicle), Collections.unmodifiableMap(histories),
                 List.copyOf(spread.values()), System.nanoTime() - begun);
     }
@@ -441,23 +511,32 @@ public final class Simulation {
      * the account of it.
      */
     private static void countHolders(NpcRegistry registry, List<Persona> residents,
-                                     Map<Long, Spread> spread, int day) {
+                                     List<Persona> neighbours, Map<Long, Spread> spread, int day) {
         // Asked of the ring's own cached ids rather than of the deeds, because this runs once a day
         // over every villager and Deed.id() is a sixty-four bit mix of eight fields. Reading the
         // deeds instead was three quarters of a hundred-day run, and CI found it before the ledger
         // did — a shared runner reported 51 ms against a 50 ms tick where this machine reported 21.
-        Map<Long, Integer> held = new LinkedHashMap<>();
-        for (Persona resident : residents) {
-            for (long id : registry.memories().idsOf(resident.id())) {
-                held.merge(id, 1, Integer::sum);
-            }
-        }
+        Map<Long, Integer> held = tally(registry, residents);
+        Map<Long, Integer> abroad = tally(registry, neighbours);
         for (Spread story : spread.values()) {
             int named = held.getOrDefault(story.deedId(), 0);
             int unnamed = held.getOrDefault(story.blurredId(), 0);
             story.holders()[day] = named + unnamed;
             story.unattributed()[day] = unnamed;
+            int awayNamed = abroad.getOrDefault(story.deedId(), 0);
+            story.awayNamed()[day] = awayNamed;
+            story.away()[day] = awayNamed + abroad.getOrDefault(story.blurredId(), 0);
         }
+    }
+
+    private static Map<Long, Integer> tally(NpcRegistry registry, List<Persona> people) {
+        Map<Long, Integer> held = new LinkedHashMap<>();
+        for (Persona person : people) {
+            for (long id : registry.memories().idsOf(person.id())) {
+                held.merge(id, 1, Integer::sum);
+            }
+        }
+        return held;
     }
 
     /**
@@ -485,15 +564,16 @@ public final class Simulation {
      * four, so a village short of food really does raise warier, greedier people than one short of
      * tools.
      */
-    private static Settlement settlementFor(Plan plan) {
-        long seed = plan.seed();
+    private static Settlement settlementFor(Plan plan, int index) {
+        long seed = plan.seed() + index;
         byte[] needs = {
                 (byte) Math.floorMod(seed * 7, 61),
                 (byte) Math.floorMod(seed * 13, 61),
                 (byte) Math.floorMod(seed * 17, 61),
                 (byte) Math.floorMod(seed * 23, 61)};
-        return new Settlement(0, OVERWORLD,
-                new BlockPos((int) Math.floorMod(seed, 4096), 64, (int) Math.floorMod(seed / 4096, 4096)),
+        return new Settlement(index, OVERWORLD,
+                new BlockPos((int) Math.floorMod(plan.seed(), 4096) + index * NEIGHBOUR_SPACING, 64,
+                        (int) Math.floorMod(plan.seed() / 4096, 4096)),
                 plan.specialty(), plan.defensibility(), needs);
     }
 

@@ -10,6 +10,7 @@ import net.namesake.harness.ProfilerHarness;
 import net.namesake.npc.PersonaService;
 import net.namesake.platform.VerbTransport;
 import net.namesake.settlement.SettlementRegistrar;
+import net.namesake.road.RoadNetwork;
 import net.namesake.social.Gossip;
 import net.namesake.social.SocialEvents;
 import net.namesake.verb.Interactions;
@@ -143,17 +144,21 @@ public final class NamesakeNeoForge {
     private static void onServerStopping(ServerStoppingEvent event) {
         VerbNetwork.onServerStopping();
         SettlementRegistrar.onServerStopping();
+        RoadNetwork.onServerStopping();
     }
 
     /**
-     * Spends whatever settlement survey a villager's arrival asked for, a few chunks at a time, and
-     * — from session 08 — retells one story per settlement that has one, every 250 ticks. Every
-     * callee returns on its first line when there is nothing to do, which is the usual case; see
-     * {@code Gossip} for why the drain is bounded by construction rather than measured.
+     * Spends whatever settlement survey a villager's arrival asked for, a few chunks at a time;
+     * from session 08, retells one story per settlement that has one, every 250 ticks; and from
+     * session 10, routes one road off-thread and lays a bounded number of its blocks. Every callee
+     * returns on its first line when there is nothing to do, which is the usual case; see
+     * {@code Gossip} for why the drain is bounded by construction rather than measured, and
+     * {@code RoadNetwork} for what a road will and will not replace.
      */
     private static void onServerTick(ServerTickEvent.Post event) {
         SettlementRegistrar.onServerTick(event.getServer());
         Gossip.onServerTick(event.getServer());
+        RoadNetwork.onServerTick(event.getServer());
         AttachBetHarness.onServerTick(event.getServer());
         ProfilerHarness.onServerTick(event.getServer());
     }

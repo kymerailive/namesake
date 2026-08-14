@@ -11,6 +11,7 @@ import net.namesake.npc.Persona;
 import net.namesake.profile.Meter;
 import net.namesake.profile.Meters;
 import net.namesake.profile.Profiling;
+import net.namesake.road.Roads;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -82,6 +83,13 @@ import java.util.UUID;
  *       removed the moment its deque runs dry, which is at most two drains after the last deed
  *       anybody did there. With one player that is one settlement, whatever the save holds — the map
  *       is sized by recent events, not by the world.</li>
+ *   <li><b>Session 10 widens that window and it is worth stating rather than leaving to be found.</b>
+ *       A neighbouring settlement holding a story that is still on the road stays in the map until
+ *       the day turns, so the window is up to one in-game day rather than two drains, over as many
+ *       settlements as the deed's village has roads. What a visit costs is unchanged and it is not
+ *       the persona table: {@link #poll} walks a deque of at most {@link #DEQUE_CAPACITY} and returns
+ *       nothing, so the four-hundred-record walk still only happens for a settlement with something
+ *       to say <i>today</i>.</li>
  *   <li>A drain that finds work walks the persona table once for that settlement's residents. At
  *       {@code DESIGN.md} §8's four hundred records that is four hundred visits, four times an
  *       in-game hour, which is four hundred visits per 72,000 ticks of game time.</li>
@@ -91,6 +99,47 @@ import java.util.UUID;
  * wall-clock number taken on the owner's machine while they are working on it is the confident-wrong
  * kind. {@code GossipTest.theDrainVisitsOnlySettlementsWithSomethingToSay} pins the bound instead,
  * over a two-hundred-settlement registry, deterministically, in CI.
+ *
+ * <h2>Session 10: the border, and the two ruled numbers that did not compose</h2>
+ *
+ * <p><b>The timing.</b> {@link #DRAIN_INTERVAL_TICKS} is 250 and a story is spent after two drains,
+ * so a deed is out of its own village's deque about <b>500 ticks</b> after it is queued.
+ * {@code DESIGN.md} §4 step 7 gave the cross-settlement hop a <b>1200–6000 tick</b> delay. By the
+ * time that delay elapses there is nothing left in the source deque to send, so <i>"take from the
+ * deque after a delay"</i> was never an implementation. Three ways out were available and all three
+ * cost something real: an in-flight table is persisted state and therefore a schema bump in a
+ * ship-or-kill session; lengthening the deque's life changes how far a story travels inside its own
+ * village, which is the number session 08 spent its whole budget getting right; shortening the delay
+ * removes the thing acceptance step 3 depends on, which is that you can outwalk the news.
+ *
+ * <p><b>The fourth way is the one taken, and the argument for it is not convenience.</b> The story
+ * is handed to the neighbour's deque <i>at the moment it is told at home</i> — while it is still in
+ * hand — and the neighbour refuses to tell it until the day has turned. Both halves are read off the
+ * deed: {@link Deed#settlementId()} says where it happened, {@link Deed#gameDay()} says when. So the
+ * in-flight story is a queued rumour in a persisted deque, which is <b>exactly what session 08
+ * persisted the deque for</b>, and session 10 changes no schema.
+ *
+ * <p>The delay is therefore measured in in-game days rather than in ticks, and that is the part
+ * worth arguing rather than the part worth apologising for. <b>Nothing downstream of a deed has ever
+ * seen a tick.</b> {@code Deed.dayOf} divides game time by 24,000, {@code Bond.decayedTo} takes a
+ * day, {@code Bond.apply} resets the allowance when the day turns — and session 07's whole claim that
+ * a hundred simulated days <i>are</i> a hundred days rests on that being true. A tick-precise delay
+ * would be the first sub-day clock in the record layer, and the instrument that has to measure this
+ * session's propagation curve could no longer run it exactly. A delay that cannot be simulated is a
+ * delay nobody can put a number on.
+ *
+ * <p><b>The confidence.</b> What crosses is the deque's own entry, untouched — <i>the carrier's copy
+ * of the story</i> — and the neighbour's first telling degrades it exactly as the source's first
+ * telling degraded the witnesses'. A witness leaves the village holding a hundred, so the first
+ * people in the next village to hear it hold <b>seventy</b>: they can still name you, which is what
+ * {@code DESIGN.md} §10 step 5 is made of, and the telling after that blurs to forty-nine.
+ *
+ * <p><b>And a story crosses a border only from the place it happened</b> — {@link #atHome} — which is
+ * one comparison over a field the deed already carries. Without it the carrier's copy would arrive
+ * undegraded in the next village and set out again undegraded from there, and your name would reach
+ * the horizon. With it, the two hops {@code DESIGN.md} rules are the two hops you get, and they are
+ * still arithmetic: a hundred at home, seventy next door, forty-nine and nameless after that.
+ * <b>Nothing counts hops and nothing counts borders.</b>
  */
 public final class Gossip {
 
@@ -114,6 +163,29 @@ public final class Gossip {
      * not already know, which is what carries the exit criterion — the witnesses are the rest.
      */
     public static final float TRANSFER_CHANCE = 0.35F;
+
+    /**
+     * The chance one resident takes one telling that came down a road. {@code DESIGN.md} §4 step 7's
+     * 0.15.
+     *
+     * <p><b>Per hearer, exactly as {@link #TRANSFER_CHANCE} is, and that reading is an interpretive
+     * call rather than a reading of the words.</b> §4 step 7 says <i>"same-settlement transfer at
+     * 0.35 per hearer … cross-settlement along a road edge at 0.15"</i>, and the alternative is that
+     * 0.15 is a coin on the edge itself. Session 08's fourth closing ruling settled the same question
+     * for 0.35 — <i>the chance one hearer takes one telling, not a fraction of the village per
+     * drain</i> — and applying it again is what makes the two numbers the same kind of thing. It also
+     * makes the road load-bearing rather than decorative: <b>the edge decides whether there is a
+     * route at all, and this decides how well the news takes when it gets there.</b>
+     *
+     * <p>What the other reading costs is arithmetic and is the reason this one was chosen. A story
+     * gets exactly one attributed telling, so a coin on the edge would put a named story into a
+     * <i>specific</i> neighbouring village 15% of the time — and {@code WORKPLAN.md}'s acceptance
+     * script is one gift. Per hearer, one gift reaches at least one namer in a nine-person village
+     * <b>77%</b> of the time and three gifts reach one <b>99%</b> of the time. Neither number is a
+     * choice about how talkative a village is; they are the same 0.15 read two ways, and one of them
+     * makes ship-or-kill a coin flip.
+     */
+    public static final float ARRIVES_BY_ROAD = 0.15F;
 
     private static final String KEY_LIST = "gossip";
     private static final String KEY_SETTLEMENT = "settlement";
@@ -206,17 +278,65 @@ public final class Gossip {
         return true;
     }
 
-    /** Takes the oldest story, and drops the settlement from the map when nothing is left. */
-    private Deed poll(int settlementId) {
+    /**
+     * Takes the oldest story this settlement is able to tell yet, and drops the settlement from the
+     * map when nothing is left.
+     *
+     * <p><b>"Able to tell yet" is the session 10 delay, and it is derived rather than scheduled.</b>
+     * A story that happened here is tellable the moment it is queued. A story that came down a road
+     * is somebody walking, and they arrive when the day has turned — see {@link #hasArrived}. So the
+     * queue is skipped past rather than blocked: a village with a traveller still on the road can
+     * still talk about its own business.
+     */
+    private Deed poll(int settlementId, int day) {
         Deque<Deed> queue = bySettlement.get(settlementId);
         if (queue == null) {
             return null;
         }
-        Deed head = queue.pollFirst();
+        Deed tellable = null;
+        for (Deed queued : queue) {
+            if (hasArrived(queued, settlementId, day)) {
+                tellable = queued;
+                break;
+            }
+        }
+        if (tellable == null) {
+            return null;
+        }
+        queue.remove(tellable);
         if (queue.isEmpty()) {
             bySettlement.remove(settlementId);
         }
-        return head;
+        return tellable;
+    }
+
+    /**
+     * Whether this settlement is the one the deed happened in.
+     *
+     * <p>Two jobs, both of them {@code if} statements over a field that has been on the record since
+     * session 05. It decides what a telling is worth here — first-hand business is
+     * {@link #TRANSFER_CHANCE}, a story from down the road is {@link #ARRIVES_BY_ROAD} — and it
+     * decides whether a story may set out again, which is what bounds how far a name travels. See the
+     * class note.
+     */
+    public static boolean atHome(Deed deed, int settlementId) {
+        return deed.settlementId() == settlementId;
+    }
+
+    /**
+     * Whether a story is here yet. <b>The whole of session 10's delay, as one comparison.</b>
+     *
+     * <p>A story from elsewhere is a person on a road, and they arrive once the day has turned. That
+     * is what stops a player outwalking the news within a day — acceptance step 3 — and it is well
+     * inside step 4's two in-game days. It needs no departure timestamp, no arrival tick and no
+     * in-flight table, because {@link Deed#gameDay()} is already on the record and already persisted.
+     *
+     * <p>The honest edge: a deed done in the last minutes before midnight is told next door at first
+     * light rather than a day later. That is a smaller delay than the design's shortest, and buying
+     * it back would cost the departure timestamp this method exists to do without.
+     */
+    public static boolean hasArrived(Deed deed, int settlementId, int day) {
+        return atHome(deed, settlementId) || day > deed.gameDay();
     }
 
     /** Drops everything one settlement had to say. Called when a settlement is removed. */
@@ -226,10 +346,17 @@ public final class Gossip {
 
     // --- the drain ---------------------------------------------------------------------------------
 
-    /** What one drain did, so a caller — or a report — can assert on it rather than infer it. */
-    public record Drained(Deed told, int offered, int heard, boolean stillTravelling) {
+    /**
+     * What one drain did, so a caller — or a report — can assert on it rather than infer it.
+     *
+     * @param crossed how many neighbouring settlements this telling set out for. Reported rather
+     *                than derived, for the reason session 08 gave when it made a delivery report what
+     *                it wrote: a count that is inferred from the graph is a count that stays right
+     *                when the code stops doing it.
+     */
+    public record Drained(Deed told, int offered, int heard, boolean stillTravelling, int crossed) {
 
-        public static final Drained NOTHING = new Drained(null, 0, 0, false);
+        public static final Drained NOTHING = new Drained(null, 0, 0, false, 0);
 
         public boolean happened() {
             return told != null;
@@ -250,13 +377,20 @@ public final class Gossip {
     public static Drained drain(NpcRegistry registry, int settlementId, int day) {
         long begun = Meters.now();
         Gossip gossip = registry.gossip();
-        Deed carried = gossip.poll(settlementId);
+        Deed carried = gossip.poll(settlementId, day);
         if (carried == null) {
             return Drained.NOTHING;
         }
         // A poll is a change to a persisted table whether or not anybody listens: the village's copy
         // of this story is worse attested than it was a moment ago.
         registry.setDirty();
+
+        boolean home = atHome(carried, settlementId);
+        // One line, no field. The rate is a property of the story rather than of the teller: news of
+        // somewhere else takes less well than the village's own business, and it goes on taking less
+        // well on the second telling too, when the teller is a neighbour rather than a traveller.
+        // That is the conservative reading of the two available and it costs nothing to hold.
+        float chance = home ? TRANSFER_CHANCE : ARRIVES_BY_ROAD;
 
         Deed told = carried.retold();
         int offered = 0;
@@ -275,7 +409,7 @@ public final class Gossip {
             if (!told.isAttributed() && registry.memories().remembers(resident.id(), carried.id())) {
                 continue;
             }
-            if (!takes(told, resident.id())) {
+            if (!takes(told, resident.id(), chance)) {
                 continue;
             }
             DeedBus.deliver(registry, told, resident, day);
@@ -287,22 +421,44 @@ public final class Gossip {
             gossip.enqueue(settlementId, told);
         }
 
+        // The border. What crosses is `carried` rather than `told` — the carrier's own copy, which
+        // the far village's first telling will degrade exactly as this one degraded the witnesses'.
+        // Only from home, which is what stops an undegraded copy setting out again from every
+        // village it reaches. Both halves are argued in the class note.
+        int crossed = 0;
+        if (home) {
+            for (int neighbour : Roads.neighboursOf(registry.settlements(), settlementId)) {
+                if (gossip.enqueue(neighbour, carried)) {
+                    crossed++;
+                }
+            }
+        }
+
         if (Profiling.ENABLED) {
             DRAIN.end(begun);
             Meters.count("Gossip stories drained");
             Meters.count("Gossip residents offered", offered);
             Meters.count("Gossip residents who heard", heard);
+            Meters.count("Gossip borders crossed", crossed);
         }
-        Namesake.LOGGER.debug("Gossip in settlement {}: {} told to {} of {} resident(s){}",
+        Namesake.LOGGER.debug("Gossip in settlement {}: {} told to {} of {} resident(s){}{}",
                 settlementId, told, heard, offered,
-                travelling ? ", still travelling" : ", and it stops here");
-        return new Drained(told, offered, heard, travelling);
+                travelling ? ", still travelling" : ", and it stops here",
+                crossed == 0 ? "" : ", and set out for " + crossed + " neighbour(s)");
+        return new Drained(told, offered, heard, travelling, crossed);
     }
 
     /**
      * One story from every settlement that has one. What a drain tick actually is.
      *
-     * @return how many settlements had something to say
+     * <p>The active set is copied before the loop because a drain now writes into <i>another</i>
+     * settlement's deque: crossing a border while iterating the map it is adding to would be a
+     * concurrent modification, and a story reaching a neighbour that has not been visited yet this
+     * tick would be told on the day it arrived rather than the day after.
+     *
+     * @return how many settlements actually told something. A settlement holding only a story that
+     * is still on the road is visited and says nothing, which is the delay working rather than a
+     * drain that failed.
      */
     public static int drainEverySettlement(NpcRegistry registry, int day) {
         if (registry.gossip().isEmpty()) {
@@ -311,10 +467,13 @@ public final class Gossip {
             return 0;
         }
         Set<Integer> active = Set.copyOf(registry.gossip().bySettlement.keySet());
+        int told = 0;
         for (int settlementId : active) {
-            drain(registry, settlementId, day);
+            if (drain(registry, settlementId, day).happened()) {
+                told++;
+            }
         }
-        return active.size();
+        return told;
     }
 
     /**
@@ -352,12 +511,16 @@ public final class Gossip {
      * <p>Confidence is mixed in as well as the id, so the second telling of a story is not offered
      * to exactly the people who refused the first one. Without it a resident's answer would be fixed
      * for the life of a deed and two drains would reach the same 35% twice.
+     *
+     * @param chance {@link #TRANSFER_CHANCE} for the village's own business, {@link #ARRIVES_BY_ROAD}
+     *               for a story that came down a road. Passed rather than looked up, so this stays a
+     *               pure function of three values and a unit test can ask it about either rate.
      */
-    static boolean takes(Deed told, UUID resident) {
+    static boolean takes(Deed told, UUID resident, float chance) {
         long hash = Deed.mix(told.id(), resident.getMostSignificantBits());
         hash = Deed.mix(hash, resident.getLeastSignificantBits());
         hash = Deed.mix(hash, told.confidence());
-        return (hash >>> 40) < (long) (TRANSFER_CHANCE * (1L << 24));
+        return (hash >>> 40) < (long) (chance * (1L << 24));
     }
 
     // --- persistence -------------------------------------------------------------------------------

@@ -1,5 +1,6 @@
 package net.namesake.sim;
 
+import net.namesake.npc.Persona;
 import net.namesake.social.Bond;
 import net.namesake.social.Deed;
 import net.namesake.social.DialogueStats;
@@ -9,7 +10,9 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -459,5 +462,108 @@ class SimulationTest {
         assertTrue(Reports.statsOf(Simulation.run(brief.withGossip(true))).deedsHeld()
                         > Reports.statsOf(Simulation.run(brief.withGossip(false))).deedsHeld(),
                 "gossip must put more deeds into more rings, or the switch does nothing");
+    }
+
+    // --- session 10: the border ---------------------------------------------------------------------
+
+    /**
+     * <b>{@code WORKPLAN.md}'s ship-or-kill criterion, as a claim about time.</b> Acceptance steps
+     * 4 and 5.
+     *
+     * <p><i>Wait ~2 in-game days. Return to B. Someone says they've heard your name.</i> The player
+     * never goes to settlement 1 in this plan, so everything it holds arrived down a road — and what
+     * matters is not that it holds <i>something</i> but that at least one villager there can still
+     * say who did it, because a villager who cannot has nothing to say about <b>you</b>.
+     */
+    @Test
+    @DisplayName("your name reaches the next village by the day after, without you going there")
+    void yourNameCrossesTheBorder() {
+        Simulation.Plan plan = Simulation.Plan.standard(SEED, 4, PlayerModel.PASSING_THROUGH)
+                .withNeighbour();
+        Simulation.Outcome outcome = Simulation.run(plan);
+
+        assertEquals(1, outcome.chronicle().size(), "one deed, so the numbers are about one story");
+        assertEquals(plan.residents(), outcome.neighbours().size(), "and a real second village");
+        Simulation.Spread story = outcome.spread().get(0);
+
+        assertEquals(0, story.away()[0],
+                "on the day it happened the carrier is still walking; a next village that already "
+                        + "knows is a player who cannot outwalk the news, which is acceptance step 3");
+        assertTrue(story.awayNamed()[1] >= 1,
+                () -> "by day 1 the next village held " + story.away()[1] + " cop(ies) and "
+                        + story.awayNamed()[1] + " of them named the actor. Step 5 needs one.");
+        assertTrue(story.away()[3] >= story.away()[1], "and it does not un-happen");
+    }
+
+    /**
+     * <b>Session 08's numbers must not move, and this is the test that says so.</b>
+     *
+     * <p>A second settlement is a fixture change, and a fixture change that quietly moved the
+     * seventy-eight percent would make every number in session 08's log wrong without anybody
+     * noticing. It cannot: the crossing takes a copy of the deque's entry rather than consuming a
+     * telling, so a village with a neighbour tells its own people exactly what it told them before.
+     */
+    @Test
+    @DisplayName("adding a neighbour changes nothing at all about what happens at home")
+    void theNeighbourDoesNotDisturbTheVillageItIsNextTo() {
+        Simulation.Plan alone = Simulation.Plan.standard(SEED, 4, PlayerModel.PASSING_THROUGH);
+        Simulation.Spread home = Simulation.run(alone).spread().get(0);
+        Simulation.Spread withNeighbour = Simulation.run(alone.withNeighbour()).spread().get(0);
+
+        assertArrayEquals(home.holders(), withNeighbour.holders(),
+                "session 08 measured 78% of a village and that number belongs to the village");
+        assertArrayEquals(home.unattributed(), withNeighbour.unattributed());
+    }
+
+    /**
+     * The far village holds it at seventy and at forty-nine and never at a hundred.
+     *
+     * <p>A hundred means first-hand, and {@code Dialogue.registerFor} reads exactly that to choose
+     * between <i>something they watched you do</i> and <i>something they were told</i>. A villager
+     * five hundred blocks away telling you they saw it is the whole mechanism lying.
+     */
+    @Test
+    @DisplayName("the next village was told; it never watched")
+    void theNextVillageNeverWatchedAnything() {
+        Simulation.Plan plan = Simulation.Plan.standard(SEED, 4, PlayerModel.INTERMITTENT)
+                .withNeighbour();
+        Simulation.Outcome outcome = Simulation.run(plan);
+
+        java.util.Set<Integer> confidences = new java.util.TreeSet<>();
+        int held = 0;
+        for (Persona resident : outcome.neighbours()) {
+            for (Deed deed : outcome.registry().memories().of(resident.id())) {
+                confidences.add((int) deed.confidence());
+                assertEquals(0, deed.settlementId(),
+                        "everything the next village holds happened in the one next door");
+                held++;
+            }
+        }
+        assertTrue(held > 0, "the fixture has to have reached it, or this proves nothing");
+        assertFalse(confidences.contains((int) Deed.FIRST_HAND),
+                () -> "the next village holds " + confidences + ", and 100 means somebody there "
+                        + "watched a thing that happened five hundred blocks away");
+        assertTrue(java.util.Set.of(70, 49).containsAll(confidences),
+                () -> "only 70 and 49 are reachable across a border; this village holds "
+                        + confidences);
+    }
+
+    /**
+     * A road is what a story crosses, so with no road there is nothing to cross.
+     *
+     * <p>The control for the whole session, and it is the same shape as session 08's silent row: with
+     * one settlement in the world the away column is not merely small, it does not exist.
+     */
+    @Test
+    @DisplayName("with one settlement in the world nothing crosses anywhere")
+    void theControl() {
+        Simulation.Outcome alone = Simulation.run(
+                Simulation.Plan.standard(SEED, 4, PlayerModel.INTERMITTENT));
+        assertTrue(alone.neighbours().isEmpty());
+        for (Simulation.Spread story : alone.spread()) {
+            for (int day = 0; day < 4; day++) {
+                assertEquals(0, story.away()[day]);
+            }
+        }
     }
 }

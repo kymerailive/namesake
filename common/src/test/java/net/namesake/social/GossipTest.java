@@ -391,27 +391,34 @@ class GossipTest {
         Deed told = aKilling(1).retold();
         for (int i = 0; i < 50; i++) {
             UUID resident = new UUID(0xC01, i);
-            assertEquals(Gossip.takes(told, resident), Gossip.takes(told, resident),
+            assertEquals(Gossip.takes(told, resident, Gossip.TRANSFER_CHANCE),
+                    Gossip.takes(told, resident, Gossip.TRANSFER_CHANCE),
                     "the same story and the same hearer must always agree");
         }
 
-        int took = 0;
-        int trials = 20_000;
-        for (int i = 0; i < trials; i++) {
-            if (Gossip.takes(told, new UUID(0xC01, i))) {
-                took++;
+        // Both rates, because session 10 gave the same coin a second one: a telling that came down
+        // a road takes less well than the village's own business, and a coin that ignored the rate
+        // it was handed would be a cross-settlement hop running at the same-settlement number.
+        for (float chance : new float[]{Gossip.TRANSFER_CHANCE, Gossip.ARRIVES_BY_ROAD}) {
+            int took = 0;
+            int trials = 20_000;
+            for (int i = 0; i < trials; i++) {
+                if (Gossip.takes(told, new UUID(0xC01, i), chance)) {
+                    took++;
+                }
             }
+            float rate = (float) took / trials;
+            assertTrue(Math.abs(rate - chance) < 0.02F,
+                    () -> "the coin came up " + rate + " against a ruled " + chance);
         }
-        float rate = (float) took / trials;
-        assertTrue(Math.abs(rate - Gossip.TRANSFER_CHANCE) < 0.02F,
-                () -> "the coin came up " + rate + " against a ruled " + Gossip.TRANSFER_CHANCE);
 
         // And the second telling is not offered to exactly the people who refused the first.
         Deed again = told.retold();
         int changed = 0;
         for (int i = 0; i < 200; i++) {
             UUID resident = new UUID(0xC01, i);
-            if (Gossip.takes(told, resident) != Gossip.takes(again, resident)) {
+            if (Gossip.takes(told, resident, Gossip.TRANSFER_CHANCE)
+                    != Gossip.takes(again, resident, Gossip.TRANSFER_CHANCE)) {
                 changed++;
             }
         }
@@ -621,5 +628,257 @@ class GossipTest {
         assertTrue(registry.isDirty(),
                 "and that has to reach the disk, or the story reloads with the confidence it had an "
                         + "hour ago and travels further than DESIGN.md permits");
+    }
+
+    // --- session 10: the border --------------------------------------------------------------------
+
+    private static final int SPACING = 512;
+
+    /**
+     * {@code count} villages in a line, {@link #SPACING} apart, each with {@code residents} people.
+     *
+     * <p>Registered as real {@code Settlement} records rather than as bare persona settlement ids,
+     * because the road graph is derived from the settlement table and a village with no bell is not
+     * anybody's neighbour. That is also why every test above this line still passes untouched: they
+     * build villages the old way, so their world has no roads and nothing crosses.
+     */
+    private static NpcRegistry villages(int count, int residents) {
+        NpcRegistry registry = new NpcRegistry();
+        for (int place = 0; place < count; place++) {
+            registry.settlements().put(new net.namesake.settlement.Settlement(place,
+                    net.minecraft.resources.ResourceLocation.withDefaultNamespace("overworld"),
+                    new net.minecraft.core.BlockPos(place * SPACING, 64, 0),
+                    net.namesake.settlement.Specialty.FARMING.id(), (byte) 50,
+                    new byte[]{0, 0, 0, 0}));
+            for (int i = 0; i < residents; i++) {
+                registry.put(Persona.create(new UUID(0xB0DE + place, i), 0L)
+                        .placed(place, 1, (byte) 0)
+                        .withTraits(Personality.typical()));
+            }
+        }
+        return registry;
+    }
+
+    private static Deed aFeeding(int settlement, int day) {
+        return Deed.of(DeedType.FED_HUNGRY, PLAYER, new UUID(0xF00D, settlement), settlement, day);
+    }
+
+    private static List<Persona> residentsOf(NpcRegistry registry, int settlement) {
+        return registry.all().stream().filter(p -> p.settlementId() == settlement).toList();
+    }
+
+    /**
+     * <b>Acceptance step 5, as arithmetic.</b> Somebody in the next town can say your name.
+     *
+     * <p>Three claims in one trace, and each is a decision the session log argues. The story is in
+     * the neighbour's deque the moment it is told at home, so nothing schedules anything and nothing
+     * is persisted that was not already. It is <i>not told</i> on the day it happened, which is the
+     * whole of the delay. And what crosses is the carrier's own copy, so the neighbour's first
+     * telling lands at seventy — attributed, and therefore the sentence {@code Register.ABOUT_OTHERS}
+     * selects.
+     */
+    @Test
+    @DisplayName("a story crosses the border in hand and is told the day after it happened")
+    void aStoryCrossesTheBorderAndArrivesTheDayAfter() {
+        NpcRegistry registry = villages(2, 9);
+        Deed deed = aFeeding(0, 0);
+        DeedBus.record(registry, deed, List.of(residentsOf(registry, 0).get(0)), 0);
+
+        Gossip.Drained home = Gossip.drain(registry, 0, 0);
+        assertEquals(1, home.crossed(), "one road out of settlement 0, and the story took it");
+        assertEquals(1, registry.gossip().of(1).size(), "it is in the neighbour's deque already");
+        assertEquals(Deed.FIRST_HAND, registry.gossip().of(1).get(0).confidence(),
+                "and it is the carrier's own copy, not a telling — nobody there has heard it yet");
+
+        assertEquals(Gossip.Drained.NOTHING, Gossip.drain(registry, 1, 0),
+                "on the day it happened the carrier is still walking");
+        assertTrue(registry.memories().of(residentsOf(registry, 1).get(0).id()).isEmpty());
+
+        Gossip.Drained abroad = Gossip.drain(registry, 1, 1);
+        assertTrue(abroad.happened(), "the day has turned and they have arrived");
+        assertEquals(70, abroad.told().confidence(), "one telling, from a carrier who was there");
+        assertTrue(abroad.told().isAttributed(), "so the next town can still say your name");
+        assertEquals(PLAYER, abroad.told().actor());
+        assertEquals(0, abroad.crossed(), "and it does not set out again from here");
+        assertTrue(abroad.heard() > 0, "somebody in the next town heard it");
+    }
+
+    /**
+     * The bound that replaces a hop counter across a border, and the reason there is not one.
+     *
+     * <p>If a village passed on the copy it received rather than only the copy it witnessed, the
+     * story would arrive undegraded in every village down the line and your name would reach the
+     * horizon. One comparison over {@link Deed#settlementId()} stops that, and {@code DESIGN.md}'s
+     * two hops stay arithmetic: named at home, named next door, and nothing beyond.
+     */
+    @Test
+    @DisplayName("a story crosses a border only from the place it happened, so a name goes one town")
+    void aStoryCrossesOnlyFromWhereItHappened() {
+        NpcRegistry registry = villages(3, 9);
+        assertTrue(net.namesake.road.Roads.graphOf(registry.settlements()).joins(1, 2),
+                "the fixture has to have a road on from the middle village, or this proves nothing");
+
+        DeedBus.record(registry, aFeeding(0, 0), List.of(residentsOf(registry, 0).get(0)), 0);
+        for (int day = 0; day <= 4; day++) {
+            for (int drain = 0; drain < Gossip.DRAINS_PER_DAY; drain++) {
+                Gossip.drainEverySettlement(registry, day);
+            }
+        }
+
+        assertTrue(holdersIn(registry, 1) > 0, "the next town heard about it");
+        assertEquals(0, holdersIn(registry, 2),
+                "and the town beyond it did not: a story is carried out by somebody who was there");
+        assertTrue(registry.gossip().isEmpty(), "and nothing is left in flight anywhere");
+    }
+
+    private static int holdersIn(NpcRegistry registry, int settlement) {
+        int held = 0;
+        for (Persona resident : residentsOf(registry, settlement)) {
+            if (!registry.memories().of(resident.id()).isEmpty()) {
+                held++;
+            }
+        }
+        return held;
+    }
+
+    /**
+     * <b>Nobody in the next town ever holds a first-hand copy.</b>
+     *
+     * <p>The deque entry that crosses carries a hundred, because that is what the person carrying it
+     * knows — and the deque is never handed to anybody, only retold from. If a resident of the next
+     * village ever ended up at a hundred they would select {@code Register.ABOUT_YOU}, and a villager
+     * five hundred blocks away would tell you they watched you do it.
+     */
+    @Test
+    @DisplayName("nobody in the next town ever holds it first-hand")
+    void theFarVillageNeverHearsItFirstHand() {
+        NpcRegistry registry = villages(2, 40);
+        DeedBus.record(registry, aFeeding(0, 0), List.of(residentsOf(registry, 0).get(0)), 0);
+        for (int day = 0; day <= 3; day++) {
+            for (int drain = 0; drain < Gossip.DRAINS_PER_DAY; drain++) {
+                Gossip.drainEverySettlement(registry, day);
+            }
+        }
+
+        for (Persona resident : residentsOf(registry, 1)) {
+            for (Deed held : registry.memories().of(resident.id())) {
+                assertNotEquals(Deed.FIRST_HAND, held.confidence(),
+                        () -> resident.id() + " in the next town holds a first-hand copy of "
+                                + "something that happened five hundred blocks away");
+                assertTrue(held.confidence() == 70 || held.confidence() == 49,
+                        () -> "the far village holds " + held.confidence() + ", and only 70 and 49 "
+                                + "are reachable there");
+            }
+        }
+    }
+
+    /** Two settlements with no road between them exchange nothing at all. */
+    @Test
+    @DisplayName("no road, no crossing")
+    void nothingCrossesWithoutARoad() {
+        NpcRegistry registry = new NpcRegistry();
+        registry.settlements().put(new net.namesake.settlement.Settlement(0,
+                net.minecraft.resources.ResourceLocation.withDefaultNamespace("overworld"),
+                new net.minecraft.core.BlockPos(0, 64, 0),
+                net.namesake.settlement.Specialty.FARMING.id(), (byte) 50, new byte[]{0, 0, 0, 0}));
+        registry.settlements().put(new net.namesake.settlement.Settlement(1,
+                net.minecraft.resources.ResourceLocation.withDefaultNamespace("the_nether"),
+                new net.minecraft.core.BlockPos(100, 64, 0),
+                net.namesake.settlement.Specialty.FARMING.id(), (byte) 50, new byte[]{0, 0, 0, 0}));
+        for (int place = 0; place < 2; place++) {
+            for (int i = 0; i < 9; i++) {
+                registry.put(Persona.create(new UUID(0xBEEF + place, i), 0L)
+                        .placed(place, 1, (byte) 0).withTraits(Personality.typical()));
+            }
+        }
+
+        DeedBus.record(registry, aFeeding(0, 0), List.of(residentsOf(registry, 0).get(0)), 0);
+        assertEquals(0, Gossip.drain(registry, 0, 0).crossed());
+        assertTrue(registry.gossip().of(1).isEmpty(),
+                "a bell in the Nether is nobody's neighbour, so nothing was ever sent");
+    }
+
+    /**
+     * <b>Hard rule 1's whole point, and session 08's foresight being right.</b>
+     *
+     * <p>A story on the road is certain to cross a save — that is why session 08 persisted the deque
+     * — and this is the check that it does so <b>without a schema change</b>. It is written as a
+     * round trip through the shipped codec rather than through a registry, because what is being
+     * proved is that session 10's in-flight state <i>is</i> the schema-6 table and nothing else.
+     */
+    @Test
+    @DisplayName("a story still on the road survives a save and is told after the reload")
+    void anInFlightStorySurvivesASave() {
+        NpcRegistry registry = villages(2, 9);
+        DeedBus.record(registry, aFeeding(0, 0), List.of(residentsOf(registry, 0).get(0)), 0);
+        Gossip.drain(registry, 0, 0);
+        assertEquals(1, registry.gossip().of(1).size(), "the fixture has to have one in flight");
+
+        CompoundTag tag = new CompoundTag();
+        registry.gossip().save(tag);
+        Gossip reloaded = new Gossip();
+        assertEquals(0, reloaded.readFrom(tag), "no new record, no new key, no new schema");
+        assertEquals(registry.gossip().of(1), reloaded.of(1),
+                "a traveller carrying a story across a save is a queued rumour and nothing else");
+
+        // And it is still pending after the reload, rather than arriving because the world reopened.
+        assertFalse(Gossip.hasArrived(reloaded.of(1).get(0), 1, 0));
+        assertTrue(Gossip.hasArrived(reloaded.of(1).get(0), 1, 1));
+    }
+
+    /**
+     * The rate the far village takes it at, measured rather than asserted at the call site.
+     *
+     * <p>A telling that came down a road is {@code ARRIVES_BY_ROAD}; the village's own business is
+     * {@code TRANSFER_CHANCE}. Reading the wrong one is invisible in a nine-person village and is the
+     * difference between a reputation that leaks and one that travels, so it is counted over four
+     * hundred hearers.
+     */
+    @Test
+    @DisplayName("the far village takes a road-borne telling at 0.15, not at the local 0.35")
+    void aRoadBorneTellingArrivesAtItsOwnRate() {
+        NpcRegistry registry = villages(2, 400);
+        DeedBus.record(registry, aFeeding(0, 0), List.of(residentsOf(registry, 0).get(0)), 0);
+        Gossip.drain(registry, 0, 0);
+
+        Gossip.Drained abroad = Gossip.drain(registry, 1, 1);
+        float rate = (float) abroad.heard() / abroad.offered();
+        assertEquals(400, abroad.offered());
+        assertTrue(Math.abs(rate - Gossip.ARRIVES_BY_ROAD) < 0.04F,
+                () -> "the next town took it at " + rate + " against a ruled "
+                        + Gossip.ARRIVES_BY_ROAD + "; the local rate is " + Gossip.TRANSFER_CHANCE);
+    }
+
+    /**
+     * A settlement waiting on a traveller is visited and says nothing, and that must not cost a
+     * rewrite of every persona, settlement, bond and ring in the world at the next autosave.
+     */
+    @Test
+    @DisplayName("a village waiting on a traveller is visited, says nothing, and marks nothing dirty")
+    void aPendingStoryIsCheapAndClean() {
+        NpcRegistry registry = villages(2, 9);
+        DeedBus.record(registry, aFeeding(0, 0), List.of(residentsOf(registry, 0).get(0)), 0);
+        Gossip.drain(registry, 0, 0);
+        Gossip.drain(registry, 0, 0);
+        registry.setDirty(false);
+
+        assertEquals(0, Gossip.drainEverySettlement(registry, 0),
+                "settlement 1 is in the map and has nothing it can say yet");
+        assertFalse(registry.isDirty(),
+                "and a visit that changes nothing must not have Minecraft rewrite the whole file");
+        assertEquals(1, registry.gossip().settlements(), "it is still waiting, not lost");
+    }
+
+    @Test
+    @DisplayName("the two derived rules the border is made of")
+    void theBorderRulesAreDerived() {
+        Deed here = aFeeding(0, 5);
+        assertTrue(Gossip.atHome(here, 0));
+        assertFalse(Gossip.atHome(here, 1));
+
+        assertTrue(Gossip.hasArrived(here, 0, 5), "your own business is never on the road");
+        assertFalse(Gossip.hasArrived(here, 1, 5), "somebody has to walk there");
+        assertTrue(Gossip.hasArrived(here, 1, 6), "and they arrive when the day has turned");
+        assertTrue(Gossip.hasArrived(here, 1, 400), "and they do not un-arrive");
     }
 }

@@ -39,6 +39,7 @@ public final class Settlements {
 
     private final Map<Integer, Settlement> byId = new LinkedHashMap<>();
     private int nextId;
+    private int revision;
 
     public Optional<Settlement> byId(int id) {
         return Optional.ofNullable(byId.get(id));
@@ -90,6 +91,21 @@ public final class Settlements {
         if (settlement.id() >= nextId) {
             nextId = settlement.id() + 1;
         }
+        revision++;
+    }
+
+    /**
+     * How many times this table has changed. Not persisted, and not a version of anything on disk.
+     *
+     * <p>Session 10's road graph is a pure function of this table, so it is derived rather than
+     * stored — and derived means recomputed, which means something has to say when it is stale.
+     * A counter that only ever goes up is the cheapest honest answer: {@code Roads} holds one graph
+     * and the revision it was built at, and a settlement registering anywhere invalidates it. It
+     * cannot disagree with the table it counts, because it is incremented by the only method that
+     * changes one.
+     */
+    public int revision() {
+        return revision;
     }
 
     // --- persistence ---------------------------------------------------------------------------

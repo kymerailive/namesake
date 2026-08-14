@@ -2,15 +2,18 @@ package net.namesake.sim;
 
 import net.namesake.culture.Culture;
 import net.namesake.culture.Names;
+import net.namesake.dialogue.Dialogue;
 import net.namesake.dialogue.Lines;
 import net.namesake.dialogue.Pool;
 import net.namesake.dialogue.Register;
 import net.namesake.dialogue.Voice;
 import net.namesake.npc.Persona;
+import net.namesake.road.RoadGraph;
 import net.namesake.social.Bond;
 import net.namesake.social.Deed;
 import net.namesake.social.DeedType;
 import net.namesake.social.DialogueStats;
+import net.namesake.social.Gossip;
 import net.namesake.social.Memories;
 import net.namesake.social.Personality;
 import net.namesake.social.Residency;
@@ -194,6 +197,173 @@ public final class Reports {
         return String.format(Locale.ROOT, "  %-22s %7d %7d %7d %8.0f%% %9d",
                 label, story.holders()[0], story.holders()[1], story.holders()[2],
                 story.coverage(last, plan.residents()) * 100F, story.unattributed()[last]);
+    }
+
+    // --- session 10: across the border -------------------------------------------------------------
+
+    /**
+     * <b>{@code WORKPLAN.md}'s ship-or-kill criterion, as a table.</b> Acceptance steps 4 and 5.
+     *
+     * <p><i>Wait ~2 in-game days. Return to B. Someone says they've heard your name, referencing A.</i>
+     * That is a claim about time and about a second population, which is this instrument's job — the
+     * running game shows that a road exists and that a villager says the line, and this shows how
+     * many of them can, on which day, and how well they know it.
+     *
+     * <p><b>The player never goes to settlement 1.</b> Everything it ends up holding arrived down a
+     * road, so a non-zero number in the away column cannot be anything else.
+     *
+     * <p><b>The second table is the one that decides whether ship-or-kill is a coin.</b> One deed is
+     * offered to each of the far village's residents once, at {@code Gossip.ARRIVES_BY_ROAD}, so
+     * whether <i>anybody</i> there can name you is a run of nine coins — and a criterion that passes
+     * on 77% of worlds is a criterion that fails a playtest one time in four. Measured across
+     * thirty-two seeds rather than asserted, and measured again for a player who did five things
+     * instead of one, because that is what a person actually does before they walk down a road.
+     */
+    public static List<String> crossSettlement(Simulation.Plan plan) {
+        Simulation.Plan two = plan.withNeighbour().withDays(4).with(PlayerModel.PASSING_THROUGH);
+        Simulation.Outcome outcome = Simulation.run(two);
+
+        List<String> lines = new ArrayList<>();
+        lines.add("--- across the border: what the next village knows, and when ---");
+        lines.add("  one deed on day 0 in settlement 0. Settlement 1 is " + Simulation.NEIGHBOUR_SPACING
+                + " blocks away");
+        lines.add("  down a road, and the player never goes there. Everything it holds arrived by road.");
+        lines.add(String.format(Locale.ROOT,
+                "  a hearer at home takes a telling at %.0f%%; down a road, at %.0f%%.",
+                Gossip.TRANSFER_CHANCE * 100F, Gossip.ARRIVES_BY_ROAD * 100F));
+        lines.add("  a story crosses at the carrier's own confidence and the far village's first");
+        lines.add("  telling degrades it, so a witness who walks the road puts your name in the next");
+        lines.add("  village at 70 and the telling after that blurs to 49.");
+        RoadGraph graph = net.namesake.road.Roads.graphOf(outcome.registry().settlements());
+        lines.add("  the graph gossip crossed: " + (graph.edges().isEmpty()
+                ? "no edges, which would make every away column zero" : graph.edges().toString()));
+        lines.add("");
+        lines.add(String.format(Locale.ROOT, "  %5s %10s %11s %10s %11s",
+                "day", "home held", "home named", "away held", "away named"));
+        if (outcome.spread().isEmpty()) {
+            lines.add("  no deed was emitted, so there is nothing to follow");
+            return lines;
+        }
+        Simulation.Spread story = outcome.spread().get(0);
+        for (int day = 0; day < two.days(); day++) {
+            lines.add(String.format(Locale.ROOT, "  %5d %10d %11d %10d %11d",
+                    day, story.holders()[day], story.holders()[day] - story.unattributed()[day],
+                    story.away()[day], story.awayNamed()[day]));
+        }
+        lines.add("");
+        lines.add("  day 0 is zero away by construction: a story from elsewhere is somebody walking,");
+        lines.add("  and they arrive when the day has turned. That is the whole of the delay and it");
+        lines.add("  is read off Deed.gameDay, so nothing about it is persisted or scheduled.");
+
+        lines.add("");
+        lines.addAll(awayLadder(outcome));
+        lines.add("");
+        lines.addAll(namingOdds(plan));
+        lines.add("");
+        lines.addAll(whatTheyActuallySay(outcome));
+        return lines;
+    }
+
+    /** Which confidences the far village ends up holding. Two are reachable, and a third is a bug. */
+    private static List<String> awayLadder(Simulation.Outcome outcome) {
+        Map<Integer, Integer> byConfidence = new java.util.TreeMap<>(java.util.Comparator.reverseOrder());
+        for (Persona resident : outcome.neighbours()) {
+            for (Deed deed : outcome.registry().memories().of(resident.id())) {
+                byConfidence.merge((int) deed.confidence(), 1, Integer::sum);
+            }
+        }
+        List<String> lines = new ArrayList<>();
+        lines.add("  every copy the next village holds, by confidence:");
+        if (byConfidence.isEmpty()) {
+            lines.add("    nothing reached it at all");
+            return lines;
+        }
+        for (Map.Entry<Integer, Integer> entry : byConfidence.entrySet()) {
+            lines.add(String.format(Locale.ROOT, "    %3d  %-24s %3d holder(s)",
+                    entry.getKey(),
+                    entry.getKey() >= Deed.ATTRIBUTED ? "names the actor" : "someone from the north",
+                    entry.getValue()));
+        }
+        lines.add("    100 must never appear here: nobody in the next village watched anything.");
+        return lines;
+    }
+
+    /**
+     * How often the next village ends up with somebody who can say your name, over many worlds.
+     *
+     * <p>Thirty-two seeds rather than one, because whether a particular villager takes a particular
+     * telling is a hash of the story and the hearer over persona ids a real game mints at random —
+     * session 08's blur fires on a coin for the same reason, and its log says plainly that a playtest
+     * should feed three or four villagers rather than concluding from one. This is that advice with a
+     * number under it.
+     */
+    private static List<String> namingOdds(Simulation.Plan plan) {
+        List<String> lines = new ArrayList<>();
+        lines.add("  how often the next village can name you, over 32 worlds:");
+        lines.add(String.format(Locale.ROOT, "  %-28s %9s %14s", "what the player did", "any namer",
+                "namers, mean"));
+        lines.add(namingRow(plan, PlayerModel.PASSING_THROUGH, 4, "one deed, then left"));
+        lines.add(namingRow(plan, PlayerModel.INTERMITTENT, 5, "a couple of deeds, twice"));
+        lines.add(namingRow(plan, PlayerModel.ATTENTIVE, 6, "one a day for five days"));
+        lines.add("  'any namer' is what acceptance step 5 needs: one villager in the next town who");
+        lines.add("  can still say who did it. A playtest that does one thing and walks is the top row.");
+        return lines;
+    }
+
+    private static String namingRow(Simulation.Plan plan, PlayerModel model, int days, String label) {
+        int worlds = 32;
+        int withNamer = 0;
+        int namers = 0;
+        for (int seed = 0; seed < worlds; seed++) {
+            Simulation.Plan world = new Simulation.Plan(plan.seed() + seed * 7919L, days,
+                    plan.residents(), plan.households(), plan.cultureId(), plan.specialty(),
+                    plan.defensibility(), model, plan.focus(), plan.witnessFraction(), true, 2);
+            Simulation.Outcome outcome = Simulation.run(world);
+            int named = 0;
+            for (Simulation.Spread story : outcome.spread()) {
+                named += story.awayNamed()[days - 1];
+            }
+            namers += named;
+            if (named > 0) {
+                withNamer++;
+            }
+        }
+        return String.format(Locale.ROOT, "  %-28s %8.0f%% %14.1f",
+                label, 100F * withNamer / worlds, (float) namers / worlds);
+    }
+
+    /**
+     * <b>The sentence the session is for, rendered rather than described.</b>
+     *
+     * <p>Session 09's last two defects were both perfectly correct string concatenation that passed
+     * every guard in the repo, and both were found by rendering the lines and reading them. A table
+     * saying <i>two residents hold an attributed copy</i> is not the same claim as a villager saying
+     * something a person would react to.
+     */
+    private static List<String> whatTheyActuallySay(Simulation.Outcome outcome) {
+        List<String> lines = new ArrayList<>();
+        lines.add("  what a villager in the next town says to somebody who has never been there:");
+        int said = 0;
+        int day = outcome.plan().days() - 1;
+        for (Persona resident : outcome.neighbours()) {
+            List<Deed> ring = outcome.registry().memories().of(resident.id());
+            if (Dialogue.registerFor(ring, outcome.player(), 1) != Register.ABOUT_OTHERS) {
+                continue;
+            }
+            Dialogue.Spoken spoken = Dialogue.speak(outcome.registry(), resident, outcome.player(),
+                    "Kymerailive", 1, day, 20261010L);
+            lines.add(String.format(Locale.ROOT, "    %-26s %s",
+                    net.namesake.culture.Names.of(resident).full(), spoken.line()));
+            if (++said >= 4) {
+                break;
+            }
+        }
+        if (said == 0) {
+            lines.add("    nobody there has anything to say about you, in this world");
+        }
+        lines.add("  Register.ABOUT_OTHERS, selected because their ring holds a deed of yours they");
+        lines.add("  did not witness. Session 09 wrote the words; session 10 only added the road.");
+        return lines;
     }
 
     /**

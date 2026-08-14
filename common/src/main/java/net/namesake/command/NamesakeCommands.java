@@ -27,6 +27,11 @@ import net.namesake.npc.Persona;
 import net.namesake.npc.PersonaService;
 import net.namesake.platform.Platform;
 import net.namesake.platform.PersonaLink;
+import net.namesake.road.RoadEdge;
+import net.namesake.road.RoadGraph;
+import net.namesake.road.RoadNetwork;
+import net.namesake.road.RoadProgress;
+import net.namesake.road.Roads;
 import net.namesake.settlement.Need;
 import net.namesake.settlement.Settlement;
 import net.namesake.sim.PlayerModel;
@@ -109,6 +114,11 @@ public final class NamesakeCommands {
                                                 IntegerArgumentType.getInteger(context, "count")))))
                         .then(Commands.literal("settlements")
                                 .executes(NamesakeCommands::dumpSettlements))
+                        // Session 10's instrument: which settlements are neighbours, and how much of
+                        // the road between them exists as blocks. Read-only — the graph is derived
+                        // from the settlement table on demand and nothing here builds anything.
+                        .then(Commands.literal("roads")
+                                .executes(NamesakeCommands::dumpRoads))
                         // The instrument session 05's exit criterion is read with: what the
                         // villagers around you feel about *you*, next to what a gift is worth to
                         // each of them. Read-only.
@@ -375,6 +385,89 @@ public final class NamesakeCommands {
                         + "  " + needsOf(settlement)
                         + "  centre " + settlement.centre().toShortString())
                 .orElse("settlement " + settlementId + "  (MISSING from the registry)");
+    }
+
+    /**
+     * <b>Session 10's instrument.</b> Which settlements are neighbours, and how far the road between
+     * them has actually been laid.
+     *
+     * <p>Two questions that look like one and are not, which is why they are two sections. The graph
+     * is what a story crosses and it is arithmetic over the settlement table — it exists the moment a
+     * second village is registered, whether or not a single block has been placed. The road is what
+     * you can see, and it appears only in chunks somebody has loaded. A world where the first section
+     * is populated and the second is empty is <b>working correctly</b>, and it is the state the
+     * ship-or-kill test can pass in.
+     */
+    private static int dumpRoads(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        NpcRegistry registry = NpcRegistry.get(source.getServer());
+        RoadGraph graph = Roads.graphOf(registry.settlements());
+        List<String> rows = roadRows(registry.settlements().size(), graph,
+                RoadNetwork.materialises(), RoadNetwork.progress(), RoadNetwork.unrouted());
+
+        String report = String.join("\n", rows);
+        source.sendSuccess(() -> Component.literal(report), false);
+        Namesake.LOGGER.info("[debug roads] {}", report.replace("\n", " |"));
+        return graph.size();
+    }
+
+    /**
+     * The rows {@code /namesake debug roads} prints.
+     *
+     * <p>Pure over its arguments so {@code CommandLayoutTest} can enumerate the states this command
+     * can be in — a world with no settlements, one with a single village and therefore no
+     * neighbours, a network with nothing laid, and one half built — rather than measuring whichever
+     * one a fixture produces. That is the guard session 07 shipped three over-width absence branches
+     * past, and taking {@link RoadProgress} rather than {@code RoadNetwork} is what makes it
+     * reachable at all: that class names a block, so touching it outside a running game runs
+     * Minecraft's registry bootstrap and throws.
+     */
+    static List<String> roadRows(int settlements, RoadGraph graph, boolean materialising,
+                                 List<RoadProgress> progress, List<RoadEdge> unrouted) {
+        List<String> rows = new ArrayList<>();
+        rows.add("roads: " + graph.size() + " edge(s) over " + settlements + " settlement(s)");
+        if (settlements < 2) {
+            // Every section prints its own absence. One village has no neighbours and that is not a
+            // failure of anything; saying so is the difference between that and a broken command.
+            rows.add("  a road needs two settlements. Find another village.");
+            return rows;
+        }
+        if (graph.edges().isEmpty()) {
+            rows.add("  no two are neighbours: a third village sits between them.");
+            return rows;
+        }
+        rows.add("  neighbours, from the relative-neighbourhood graph:");
+        for (Map.Entry<Integer, int[]> entry : graph.adjacency().entrySet()) {
+            StringBuilder line = new StringBuilder("    s").append(entry.getKey()).append(" ->");
+            for (int neighbour : entry.getValue()) {
+                line.append(' ').append(neighbour);
+            }
+            rows.add(clip(line.toString(), Reports.CHAT_WIDTH));
+        }
+
+        rows.add("  what has been laid as blocks:");
+        if (!materialising) {
+            // The distinction the command exists to make: the graph above is what a story crosses,
+            // and it is unaffected by whether a single block was ever placed.
+            rows.add("    blocks are off; gossip crosses the graph, not them");
+            return rows;
+        }
+        if (progress.isEmpty() && unrouted.isEmpty()) {
+            rows.add("    no road has been routed yet");
+            return rows;
+        }
+        for (RoadProgress road : progress) {
+            rows.add(road.buildable()
+                    ? String.format(Locale.ROOT, "    %-9s %4d/%4d laid, %3d refused, %2dc x%.1f",
+                    road.edge(), road.laid(), road.columns(), road.refused(), road.chunks(),
+                    road.roughness())
+                    : String.format(Locale.ROOT, "    %-9s %s", road.edge(),
+                    road.routed() ? "no road: the terrain is too hard" : "no road: none was found"));
+        }
+        for (RoadEdge edge : unrouted) {
+            rows.add(String.format(Locale.ROOT, "    %-9s waiting to be routed", edge));
+        }
+        return rows;
     }
 
     private static int dumpSettlements(CommandContext<CommandSourceStack> context) {
@@ -881,6 +974,8 @@ public final class NamesakeCommands {
         List<String> file = new ArrayList<>(Reports.full(outcome));
         file.add("");
         file.addAll(Reports.propagation(plan));
+        file.add("");
+        file.addAll(Reports.crossSettlement(plan));
         file.add("");
         file.addAll(Reports.residencyWithAndWithoutGossip(plan));
         file.add("");

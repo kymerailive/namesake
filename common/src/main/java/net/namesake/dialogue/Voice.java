@@ -19,7 +19,13 @@ import java.util.Map;
  * <h2>Four tics, and each one does something a test can see</h2>
  *
  * <ul>
- *   <li>{@link #opener} — what goes in front. Vale leans on <i>Aye,</i>; Tal-Qir on <i>So.</i></li>
+ *   <li>{@link #opener} — what goes in front, and <b>it is its own sentence</b>. Vale leans on
+ *       <i>Aye.</i>; Tal-Qir on <i>So.</i> Session 10 found the reason that has to be a rule: Vale's
+ *       opener ended in a comma until then, and the hundred and sixty lines are all capitalised, so
+ *       it rendered <i>"Aye, The village has your name now."</i> Making the opener continue the
+ *       sentence instead would need this class to know which first words are names — the address
+ *       slot can be a player's — and an opener that ends itself has no such case.
+ *       {@code DialogueTest} refuses one that does not.</li>
  *   <li>{@link #tag} — the question hung on the end. Meridian asks <i>no?</i> constantly; Tal-Qir
  *       almost never does.</li>
  *   <li>{@link #strangerAddress} — <b>what they call you before residency</b>, which is the half of
@@ -48,14 +54,14 @@ public record Voice(String opener, String tag, String strangerAddress, float for
 
     static {
         // Temperate farmland: plain, settled, a little blunt. Says aye and means it.
-        BY_CULTURE.put(Culture.VALE, new Voice("Aye,", "aye?", "stranger", 0.30F));
+        BY_CULTURE.put(Culture.VALE, new Voice("Aye.", "aye?", "stranger", 0.30F));
         // Cold high country: clipped, proud, slow to open. The opener is barely a word.
         BY_CULTURE.put(Culture.KARSK, new Voice("Hm.", "yes?", "outlander", 0.65F));
         // Warm coast, mercantile: everyone is a friend until they are not, and everything is a
         // question. The lowest formality of the six, and it shows in how often it tags.
         BY_CULTURE.put(Culture.MERIDIAN, new Voice("Ah!", "no?", "friend", 0.15F));
         // Hot lowland: communal, unhurried, hard to offend.
-        BY_CULTURE.put(Culture.ASHANI, new Voice("Eh,", "eh?", "traveller", 0.25F));
+        BY_CULTURE.put(Culture.ASHANI, new Voice("Eh.", "eh?", "traveller", 0.25F));
         // Dry uplands: the most formal of the six, and the most conformist — session 03's own note.
         BY_CULTURE.put(Culture.TALQIR, new Voice("So.", "indeed?", "guest", 0.85F));
         // Cool wet valleys: reserved, orderly, private. Opens rather than tags.
@@ -95,17 +101,32 @@ public record Voice(String opener, String tag, String strangerAddress, float for
      *   <li><b>Not on something too short to hang one off.</b> The hostile pool opens with
      *       <i>"You."</i> and closes with <i>"Go."</i>, and <i>"You, yes?"</i> is not a sentence in
      *       any register. {@link #TAGGABLE_LENGTH} is where that stops.</li>
+     *   <li><b>Not the word this culture has just opened with.</b> Session 10, and it is session
+     *       09's stutter rule arriving from the other end: Vale opens <i>Aye.</i> and tags
+     *       <i>aye?</i>, so a sentence carrying both reads <i>"Aye. Someone mentioned you, in
+     *       passing, aye?"</i> Two of the six cultures have that pair, and for Vale the two coins
+     *       land together about a fifth of the time. <b>The tag is what gives way rather than the
+     *       opener</b>, because the opener is the rarer tic for an informal culture and
+     *       {@code DialogueTest} measures the realised opener rate against the formality ordering.</li>
      * </ul>
      */
     public String inflect(String line, Register register, long seed) {
         String spoken = line;
+        boolean opened = false;
         if (coin(seed) < formality && !opensOnTheSameWord(line)) {
             spoken = opener + " " + spoken;
+            opened = true;
         }
-        if (canTag(spoken, register) && coin(mix(seed)) < 1.0F - formality) {
+        if (canTag(spoken, register) && !(opened && tagEchoesTheOpener())
+                && coin(mix(seed)) < 1.0F - formality) {
             spoken = spoken.substring(0, spoken.length() - 1) + ", " + tag;
         }
         return spoken;
+    }
+
+    /** Whether this culture's two tics are the same word. Vale's are, and Ashani's are. */
+    boolean tagEchoesTheOpener() {
+        return firstWord(opener).equals(firstWord(tag));
     }
 
     /**

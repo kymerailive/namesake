@@ -16,6 +16,7 @@ import net.namesake.harness.AttachBetHarness;
 import net.namesake.harness.ProfilerHarness;
 import net.namesake.npc.PersonaService;
 import net.namesake.settlement.SettlementRegistrar;
+import net.namesake.road.RoadNetwork;
 import net.namesake.social.Gossip;
 import net.namesake.social.SocialEvents;
 import net.namesake.verb.Interactions;
@@ -83,15 +84,19 @@ public final class NamesakeFabric implements ModInitializer {
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
             VerbNetwork.onServerStopping();
             SettlementRegistrar.onServerStopping();
+            RoadNetwork.onServerStopping();
         });
 
         // Spends whatever settlement survey a villager's arrival asked for, a few chunks at a
-        // time, and — from session 08 — retells one story per settlement that has one, every 250
-        // ticks. Both return on their first line when there is nothing to do, which is the usual
-        // case; see Gossip for why the second is bounded by construction rather than measured.
+        // time; from session 08, retells one story per settlement that has one, every 250 ticks;
+        // and from session 10, routes one road off-thread and lays a bounded number of its blocks.
+        // All three return on their first line when there is nothing to do, which is the usual
+        // case; see Gossip for why the drain is bounded by construction rather than measured, and
+        // RoadNetwork for what a road will and will not replace.
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             SettlementRegistrar.onServerTick(server);
             Gossip.onServerTick(server);
+            RoadNetwork.onServerTick(server);
             AttachBetHarness.onServerTick(server);
             ProfilerHarness.onServerTick(server);
         });

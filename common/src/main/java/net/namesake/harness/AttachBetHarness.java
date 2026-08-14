@@ -33,11 +33,20 @@ import net.namesake.Namesake;
 import net.namesake.culture.Culture;
 import net.namesake.culture.Names;
 import net.namesake.dialogue.Dialogue;
+import net.namesake.dialogue.Pool;
+import net.namesake.dialogue.Register;
 import net.namesake.dialogue.Voice;
 import net.namesake.npc.NpcRegistry;
 import net.namesake.npc.NpcSchema;
 import net.namesake.npc.Persona;
 import net.namesake.platform.PersonaLink;
+import net.namesake.road.RoadEdge;
+import net.namesake.road.RoadGraph;
+import net.namesake.road.RoadNetwork;
+import net.namesake.road.RoadPath;
+import net.namesake.road.RoadProgress;
+import net.namesake.road.RoadTrail;
+import net.namesake.road.Roads;
 import net.namesake.sim.PlayerModel;
 import net.namesake.sim.Reports;
 import net.namesake.sim.Simulation;
@@ -65,6 +74,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -118,6 +128,16 @@ public final class AttachBetHarness {
      */
     private static final int VILLAGE_OFFSET = 300;
 
+    /**
+     * How far the second village sits from the first. <b>Session 10's fixture.</b>
+     *
+     * <p>Past {@code Settlements.MEMBERSHIP_RADIUS} twice over, so neither village's residents can be
+     * mistaken for the other's — and close enough that a player standing between them holds both in
+     * the loaded area, which is what the road needs to be laid at all and what makes it possible to
+     * feed somebody in one village and then look at the other.
+     */
+    private static final int NEIGHBOUR_OFFSET = 192;
+
     /** How long to let Minecraft shut down before giving up on it. See the watchdog below. */
     private static final long SHUTDOWN_GRACE_MILLIS = 45_000L;
 
@@ -143,6 +163,14 @@ public final class AttachBetHarness {
     private static final List<Resident> RESIDENTS = new ArrayList<>();
     private static BlockPos villageSite;
     private static Settlement registeredSettlement;
+
+    /** Session 10: the village down the road, and the ground the road was laid over. */
+    private static BlockPos neighbourSite;
+    private static RoadEdge roadEdge;
+    private static final List<BlockPos> ROAD_GRASS = new ArrayList<>();
+    private static final List<BlockPos> ROAD_PLANKS = new ArrayList<>();
+    private static int storiesSentDownTheRoad;
+    private static int dayTheDeedsHappened;
 
     /** Session 05: the six roles of the witness leg, and the bonds it produced. */
     private static UUID deedSubject;
@@ -418,6 +446,7 @@ public final class AttachBetHarness {
             case 13, 14, 15 -> runSettlementCheck(server, level);
             case 16, 17 -> runWitnessCheck(server, level);
             case 18 -> runGossipCheck(server, level);
+            case 19, 20, 21, 22, 23 -> runRoadCheck(server, level);
             default -> finish(server, true);
         }
     }
@@ -1106,6 +1135,369 @@ public final class AttachBetHarness {
                 player.serverLevel(), 4, "Harness", Component.literal("Harness"), server, player);
     }
 
+    // --- session 10: the road, the border, and the first blocks this mod has ever placed ----------
+
+    /**
+     * <b>Ship-or-kill, in a running game.</b> A second village, a road between them as real blocks,
+     * and a villager who has never met you saying they have heard of you.
+     *
+     * <p>{@code WORKPLAN.md} draws the line and this session sits on both sides of it. The graph is
+     * arithmetic and is {@code RoadGraphTest}; the A* is arithmetic over a fixture heightmap and is
+     * {@code RoadPathTest}; the border's confidence, its delay and its rates are arithmetic and are
+     * {@code GossipTest}; the propagation curve across two settlements is a claim about time and is
+     * {@code SimulationTest}. <b>Three things are left, and every one of them is a property of a
+     * running world:</b>
+     *
+     * <ol>
+     *   <li>That a second bell produces a second settlement, and that the graph joins them
+     *       <i>through the shipped registry</i> rather than through a list of points in a test.</li>
+     *   <li>That the materialiser turns natural ground into road — and <b>leaves a player's floor
+     *       alone</b>. That is the claim the ledger makes about what this will not touch, and it is
+     *       the one no unit test can make, because the whole of it is what
+     *       {@code MOTION_BLOCKING_NO_LEAVES} answers over blocks somebody put there.</li>
+     *   <li>That a story crosses on the server's own tick hook and is <i>not</i> told on the day it
+     *       happened, and that a villager in the far village then selects
+     *       {@code Register.ABOUT_OTHERS} — the sentence session 09 wrote and session 10 only
+     *       delivered.</li>
+     * </ol>
+     *
+     * <p><b>The fixture predicts the route rather than guessing where it will run.</b> The router is
+     * a pure function of two chunk positions and {@code RoadNetwork.terrainOf}, so the harness calls
+     * exactly that and lays its ground over the answer. A second copy of the terrain lambda here
+     * would be a fixture testing itself; this way, a route that moves takes the fixture with it.
+     */
+    private static void runRoadCheck(MinecraftServer server, ServerLevel level) {
+        NpcRegistry registry = NpcRegistry.get(server);
+        switch (step) {
+            case 19 -> {
+                // Midway between the two bells, so both villages and the whole road are inside the
+                // loaded area. Nothing here may load a chunk on purpose — see RoadNetwork.
+                neighbourSite = villageSite.offset(NEIGHBOUR_OFFSET, 0, 0);
+                teleport(player(server), level, villageSite.getX() + NEIGHBOUR_OFFSET / 2, 200,
+                        villageSite.getZ());
+                beginAwait(2400);
+            }
+            case 20 -> {
+                ChunkPos chunk = new ChunkPos(neighbourSite);
+                if (stillWaiting(server, () -> level.getChunkSource().hasChunk(chunk.x, chunk.z),
+                        false, "the second village's chunks to load")) {
+                    return;
+                }
+                // Session 03's lesson, fifth application: read the heightmap only once the chunk is
+                // actually here, or the village is built at y = -64 inside the deepslate.
+                neighbourSite = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                        neighbourSite);
+                record(neighbourSite.getY() > level.getMinBuildHeight(),
+                        "ROAD the second village site is on real ground at y=" + neighbourSite.getY());
+
+                prepareTheGround(level);
+                buildVillage(level, neighbourSite);
+                for (int i = 0; i < 6; i++) {
+                    Villager villager = EntityType.VILLAGER.spawn(level,
+                            neighbourSite.offset(1 + (i % 3) + (i < 3 ? 0 : 20), 1, 1),
+                            MobSpawnType.COMMAND);
+                    if (villager == null) {
+                        throw new IllegalStateException("could not spawn neighbour villager " + i);
+                    }
+                    villager.setPersistenceRequired();
+                    villager.setNoAi(true);
+                }
+                beginAwait(3000);
+            }
+            case 21 -> {
+                if (stillWaiting(server, () -> registry.settlements().size() >= 2
+                                && neighbours(registry).size() >= 4, false,
+                        "the second bell to be surveyed and its villagers to be generated")) {
+                    return;
+                }
+                record(registry.settlements().size() == 2,
+                        "ROAD a second bell made a second settlement ("
+                                + registry.settlements().size() + ")");
+                if (registry.settlements().size() < 2) {
+                    finish(server, false);
+                    return;
+                }
+                int far = registry.settlements().all().stream()
+                        .map(Settlement::id)
+                        .filter(id -> id != registeredSettlement.id())
+                        .findFirst().orElseThrow();
+                roadEdge = new RoadEdge(registeredSettlement.id(), far);
+
+                RoadGraph graph = Roads.graphOf(registry.settlements());
+                record(graph.joins(roadEdge.a(), roadEdge.b()),
+                        "ROAD the two settlements are neighbours in the graph a story crosses: "
+                                + graph.edges());
+                record(neighbours(registry).size() >= 4, "ROAD the far village has "
+                        + neighbours(registry).size() + " resident(s) who have never met the player");
+
+                // A fresh in-game day, so these feedings are new deeds rather than the same content-
+                // addressed ones session 05's legs already emitted and the village already spent.
+                bumpTheDay(level, 1);
+                dayTheDeedsHappened = Deed.dayOf(level);
+                ServerPlayer player = player(server);
+                int fed = 0;
+                for (Villager villager : villagersNearTheBell(level)) {
+                    if (fed >= 4) {
+                        break;
+                    }
+                    if (DeedBus.emit(level, DeedType.FED_HUNGRY, player, villager,
+                            "minecraft:bread").happened()) {
+                        fed++;
+                    }
+                }
+                storiesSentDownTheRoad = registry.gossip().of(registeredSettlement.id()).size();
+                record(fed > 0 && storiesSentDownTheRoad > 0,
+                        "ROAD " + fed + " feeding(s) in the first village put "
+                                + storiesSentDownTheRoad + " story(s) in its deque on day "
+                                + dayTheDeedsHappened);
+                // Waiting on the drain, which is game time: sprinting is the right instrument, and
+                // it is a poll against the condition rather than a blind run.
+                beginAwait(3000);
+            }
+            case 22 -> {
+                int far = roadEdge.other(registeredSettlement.id());
+                if (stillWaiting(server, () -> !registry.gossip().of(far).isEmpty(), true,
+                        "a story to set out down the road on the server's own tick hook")) {
+                    return;
+                }
+                List<Deed> travelling = registry.gossip().of(far);
+                record(!travelling.isEmpty(),
+                        "BORDER " + travelling.size() + " story(s) crossed into the far village's "
+                                + "deque on the server tick hook, with nothing scheduled and nothing "
+                                + "persisted that was not already");
+                record(travelling.stream().allMatch(deed ->
+                                deed.settlementId() == registeredSettlement.id()),
+                        "BORDER and every one of them still says where it happened, which is how the "
+                                + "far village knows it is not its own business");
+                record(travelling.stream().allMatch(deed -> deed.confidence() == Deed.FIRST_HAND),
+                        "BORDER what crossed is the carrier's own copy, so the far village's first "
+                                + "telling degrades it exactly as this one's did");
+
+                int heldAbroad = ringsHolding(registry, far);
+                record(heldAbroad == 0,
+                        "BORDER and on the day it happened not one of the far village's residents "
+                                + "has heard it (" + heldAbroad + ") — a player can outwalk the news");
+
+                bumpTheDay(level, 1);
+                beginAwait(3000);
+            }
+            case 23 -> {
+                int far = roadEdge.other(registeredSettlement.id());
+                if (stillWaiting(server, () -> ringsHolding(registry, far) > 0, true,
+                        "the day to turn and the traveller to arrive in the far village")) {
+                    return;
+                }
+                checkTheFarVillageHeard(server, level, far);
+                checkTheRoadExists(server, level);
+                writeSubjects(level);
+                advance(server, 5);
+            }
+            default -> finish(server, true);
+        }
+    }
+
+    /**
+     * <b>The exit criterion, on a screen.</b> A villager who has never seen the player, in a village
+     * the player has never done anything in, with the player's name attached to something they did
+     * somewhere else.
+     */
+    private static void checkTheFarVillageHeard(MinecraftServer server, ServerLevel level, int far) {
+        NpcRegistry registry = NpcRegistry.get(server);
+        ServerPlayer player = player(server);
+        int held = 0;
+        int named = 0;
+        Persona speaker = null;
+        Set<Integer> confidences = new java.util.TreeSet<>();
+        for (Persona resident : neighbours(registry)) {
+            List<Deed> ring = registry.memories().of(resident.id());
+            if (ring.isEmpty()) {
+                continue;
+            }
+            held++;
+            for (Deed deed : ring) {
+                confidences.add((int) deed.confidence());
+            }
+            if (Dialogue.registerFor(ring, player.getUUID(), 1) == Register.ABOUT_OTHERS) {
+                named++;
+                if (speaker == null) {
+                    speaker = resident;
+                }
+            }
+        }
+
+        record(held > 0, "BORDER the day turned and " + held + " resident(s) of the far village "
+                + "hold a story about something that happened five hundred blocks away");
+        record(!confidences.contains((int) Deed.FIRST_HAND),
+                "BORDER and not one of them holds it first-hand: " + confidences
+                        + " — 70 was told, 49 cannot name who");
+        record(named > 0, "BORDER " + named + " of them can still say who did it, which is what "
+                + "Register.ABOUT_OTHERS needs and what acceptance step 5 is made of");
+
+        if (speaker == null) {
+            return;
+        }
+        // Turn 1 is the second thing said in a conversation, which is where the register that is
+        // not a greeting lives. See Dialogue.registerFor.
+        Dialogue.Spoken spoken = Dialogue.speak(registry, speaker, player.getUUID(),
+                player.getGameProfile().getName(), 1, Deed.dayOf(level), level.getGameTime());
+        record(spoken.register() == Register.ABOUT_OTHERS,
+                "BORDER on screen, in a running game: " + Names.of(speaker).full() + " |  "
+                        + spoken.line());
+        record(spoken.pool() != Pool.STRANGER,
+                "BORDER and they are no longer a stranger to you, in a village you have never "
+                        + "done anything in (" + spoken.pool() + ")");
+        record(spoken.line().length() <= Reports.CHAT_WIDTH,
+                "BORDER the line is " + spoken.line().length() + " characters against a "
+                        + Reports.CHAT_WIDTH + "-character chat width");
+        record(!spoken.line().contains("\r"), "BORDER and it carries no carriage return");
+
+        List<String> emitted = new ArrayList<>();
+        CommandSourceStack capturing = capturing(server, player, emitted);
+        boundEntity(server, speaker.id()).ifPresent(entity ->
+                server.getCommands().performPrefixedCommand(capturing,
+                        "namesake debug deeds " + entity.getUUID()));
+        server.getCommands().performPrefixedCommand(capturing, "namesake debug roads");
+
+        record(emitted.stream().anyMatch(line -> line.contains("@s" + registeredSettlement.id())),
+                "BORDER the deed row says which village it happened in, which is the instrument "
+                        + "step 5's 'referencing A' is read with until session 11's board");
+        record(emitted.stream().anyMatch(line -> line.contains("neighbours")),
+                "ROAD /namesake debug roads printed the graph through the real dispatcher");
+        String widest = emitted.stream().max(Comparator.comparingInt(String::length)).orElse("");
+        record(widest.length() <= Reports.CHAT_WIDTH,
+                "ROAD the widest line either command emits is " + widest.length() + " characters, "
+                        + "against a " + Reports.CHAT_WIDTH + "-character chat width: |" + widest + "|");
+        record(emitted.stream().noneMatch(line -> line.contains("\r")),
+                "ROAD no line carries a carriage return");
+    }
+
+    /**
+     * <b>The first blocks this mod has ever placed, and the ones it refused to.</b>
+     *
+     * <p>The plank floor is the whole point. Every bound the ledger claims for the materialiser comes
+     * down to one thing — that the surface it tests is whatever
+     * {@code MOTION_BLOCKING_NO_LEAVES} finds, so a build hides the natural ground under it — and
+     * that is a property of a world with blocks in it rather than of any function.
+     */
+    private static void checkTheRoadExists(MinecraftServer server, ServerLevel level) {
+        if (!RoadNetwork.materialises()) {
+            record(true, "ROAD block laying is switched off for this run; the graph is unaffected");
+            return;
+        }
+        int path = 0;
+        for (BlockPos column : ROAD_GRASS) {
+            if (level.getBlockState(column).is(Blocks.DIRT_PATH)) {
+                path++;
+            }
+        }
+        int intact = 0;
+        for (BlockPos plank : ROAD_PLANKS) {
+            if (level.getBlockState(plank).is(Blocks.OAK_PLANKS)) {
+                intact++;
+            }
+        }
+
+        record(!ROAD_GRASS.isEmpty() && !ROAD_PLANKS.isEmpty(),
+                "ROAD the fixture laid " + ROAD_GRASS.size() + " column(s) of natural ground and "
+                        + ROAD_PLANKS.size() + " of somebody's floor across the route");
+        record(path > 0, "ROAD " + path + " of " + ROAD_GRASS.size() + " natural column(s) on the "
+                + "route are dirt path — this mod changed the world for the first time in ten "
+                + "sessions");
+        record(intact == ROAD_PLANKS.size(),
+                "ROAD and " + intact + " of " + ROAD_PLANKS.size() + " planks are untouched: a road "
+                        + "does not go through somebody's floor");
+
+        List<RoadProgress> progress = RoadNetwork.progress();
+        record(!progress.isEmpty(), "ROAD the router answered " + progress.size() + " edge(s)");
+        for (RoadProgress road : progress) {
+            record(road.buildable(), "ROAD " + road.edge() + ": " + road.chunks()
+                    + " chunk(s), " + road.laid() + " column(s) laid, " + road.refused()
+                    + " refused, " + String.format(Locale.ROOT, "%.1f", road.roughness())
+                    + "x the cost of flat ground");
+        }
+    }
+
+    /**
+     * Lays the ground the road will be built over: natural cover, and a floor somebody built.
+     *
+     * <p>Run <b>before</b> the second bell exists, so the router has not started and nothing has been
+     * laid yet. The route is predicted with the shipped function rather than guessed, so the fixture
+     * is on the road wherever the terrain puts it.
+     */
+    private static void prepareTheGround(ServerLevel level) {
+        ROAD_GRASS.clear();
+        ROAD_PLANKS.clear();
+        RoadPath.Route route = RoadPath.between(new ChunkPos(villageSite),
+                new ChunkPos(neighbourSite), RoadNetwork.terrainOf(level));
+        if (!route.buildable()) {
+            Namesake.LOGGER.warn("[harness] the predicted route between the two villages is not "
+                    + "buildable ({}); the road legs will say so", route.roughness());
+            return;
+        }
+        List<BlockPos> paving = RoadTrail.paving(RoadTrail.centreLine(route.chunks()),
+                RoadTrail.WIDTH);
+        // The middle third, which is well clear of both villages' own platforms and is the part a
+        // player standing between the two bells has loaded.
+        int from = paving.size() / 3;
+        int to = paving.size() * 2 / 3;
+        for (int i = from; i < to; i++) {
+            BlockPos column = paving.get(i);
+            if (level.getChunkSource().getChunkNow(column.getX() >> 4, column.getZ() >> 4) == null) {
+                continue;
+            }
+            BlockPos surface = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                    column).below();
+            if (surface.getY() <= level.getMinBuildHeight()) {
+                continue;
+            }
+            // A contiguous run in the exact middle is somebody's floor. Contiguous rather than
+            // scattered, because a road three wide would otherwise step round a single column and
+            // the guard would pass without ever being tested.
+            boolean floor = i >= (from + to) / 2 - 12 && i < (from + to) / 2 + 12;
+            level.setBlock(surface, floor
+                    ? Blocks.OAK_PLANKS.defaultBlockState()
+                    : Blocks.GRASS_BLOCK.defaultBlockState(), 2);
+            (floor ? ROAD_PLANKS : ROAD_GRASS).add(surface);
+        }
+        Namesake.LOGGER.info("[harness] prepared {} natural column(s) and {} of somebody's floor "
+                + "along the predicted route ({} chunks)", ROAD_GRASS.size(), ROAD_PLANKS.size(),
+                route.chunks().size());
+    }
+
+    /** Everyone who lives in a settlement that is not the first village. */
+    private static List<Persona> neighbours(NpcRegistry registry) {
+        return registry.all().stream()
+                .filter(persona -> persona.settlementId() != Persona.UNASSIGNED
+                        && persona.settlementId() != registeredSettlement.id())
+                .toList();
+    }
+
+    private static int ringsHolding(NpcRegistry registry, int settlement) {
+        int held = 0;
+        for (Persona persona : registry.all()) {
+            if (persona.settlementId() == settlement && !registry.memories().of(persona.id()).isEmpty()) {
+                held++;
+            }
+        }
+        return held;
+    }
+
+    /**
+     * Moves the world's clock on by whole in-game days.
+     *
+     * <p>The alternative is sprinting twenty-four thousand ticks, which is four hundred times what
+     * any other wait in this harness costs and would outrun the chunk loader — session 01's defect,
+     * for the fifth time. <b>Game time rather than day time</b>, because {@code Deed.dayOf} divides
+     * {@code getGameTime}: day time is a mutable world property that {@code /time set} and the sleep
+     * skip both move backwards, and a delay keyed on a clock that can go backwards is a delay you
+     * can undo with a command.
+     */
+    private static void bumpTheDay(ServerLevel level, int days) {
+        long moved = level.getLevelData().getGameTime() + days * 24_000L;
+        ((net.minecraft.world.level.storage.ServerLevelData) level.getLevelData()).setGameTime(moved);
+        Namesake.LOGGER.info("[harness] the clock moved to in-game day {}", Deed.dayOf(level));
+    }
+
     /** Moves one persona's villager, and stops it falling out of the sky. */
     private static void place(MinecraftServer server, ServerLevel level, UUID personaId,
                               double x, double y, double z) {
@@ -1619,6 +2011,7 @@ public final class AttachBetHarness {
                 checkBondsSurvivedReload(registry);
                 checkMemoriesSurvivedReload(registry);
                 checkResidencySurvivedReload(server, registry);
+                checkTheRoadSurvivedReload(registry);
                 // The exit criterion's instrument, run where there is something to read: through
                 // the real dispatcher, so argument parsing and the permission gate are covered too,
                 // and into the log so a run leaves behind what a player would have seen.
@@ -1658,9 +2051,15 @@ public final class AttachBetHarness {
      * have to have persisted, and the settlement they were rolled against has to still be there.
      */
     private static void checkSettlementSurvivedReload(NpcRegistry registry) {
-        record(registry.settlements().size() == 1,
-                "SETTLEMENT RELOAD one settlement came back (" + registry.settlements().size() + ")");
-        Settlement settlement = registry.settlements().all().stream().findFirst().orElse(null);
+        // Two from session 10, and one from every save written before it. The subjects file says
+        // which, exactly as session 09's residency row does: a world archived at schema 6 or 7 has
+        // one village in it, and expecting two would fail the cross-build load test for a reason
+        // that has nothing to do with persistence.
+        int expected = roadEdge == null ? 1 : 2;
+        record(registry.settlements().size() == expected,
+                "SETTLEMENT RELOAD " + expected + " settlement(s) came back ("
+                        + registry.settlements().size() + ")");
+        Settlement settlement = registry.settlements().byId(registeredSettlement.id()).orElse(null);
         if (settlement == null) {
             return;
         }
@@ -1841,6 +2240,46 @@ public final class AttachBetHarness {
      * could go wrong, which is the absent bond table being read as damage and turning the registry
      * read-only.
      */
+    /**
+     * <b>The road network came back and nothing on disk carried it.</b> Session 10's verify leg.
+     *
+     * <p>This is the assertion the whole "no schema bump" argument rests on, and it is worth having
+     * as a leg rather than only as a claim in a log. The graph is a pure function of the settlement
+     * table; the routes are a pure function of the world seed. Neither is written anywhere. So a
+     * world that comes back from disk with the same two settlements has to come back with the same
+     * one road between them — and the story that was still on the road when the world closed has to
+     * be a queued rumour in a schema-7 table and nothing else.
+     */
+    private static void checkTheRoadSurvivedReload(NpcRegistry registry) {
+        if (roadEdge == null) {
+            // A save written before session 10 has one village in it and no road to rebuild.
+            Namesake.LOGGER.info("[harness] no road recorded in this save; skipping the road legs");
+            return;
+        }
+        RoadGraph graph = Roads.graphOf(registry.settlements());
+        record(graph.joins(roadEdge.a(), roadEdge.b()),
+                "ROAD RELOAD the road came back without one byte of it being persisted: "
+                        + graph.edges() + " — the graph is derived from the settlement table, which "
+                        + "has been on disk since schema 3");
+
+        int far = roadEdge.other(registeredSettlement.id());
+        int abroad = 0;
+        Set<Integer> confidences = new java.util.TreeSet<>();
+        for (Persona persona : registry.all()) {
+            if (persona.settlementId() != far) {
+                continue;
+            }
+            for (Deed deed : registry.memories().of(persona.id())) {
+                abroad++;
+                confidences.add((int) deed.confidence());
+            }
+        }
+        record(abroad > 0, "ROAD RELOAD " + abroad + " deed(s) that crossed a border are still in "
+                + "the far village's rings after a save, a quit and a reload");
+        record(!confidences.contains((int) Deed.FIRST_HAND),
+                "ROAD RELOAD and still not one of them first-hand: " + confidences);
+    }
+
     private static void checkDataFixer(NpcRegistry registry) {
         int onDisk = registry.loadedSchemaVersion();
         if (onDisk >= NpcSchema.CURRENT) {
@@ -2205,6 +2644,12 @@ public final class AttachBetHarness {
             lines.add("residency " + registeredSettlement.id() + " " + residencyPlayer + " "
                     + residencySpeaker + " " + residencyName);
         }
+        if (roadEdge != null) {
+            // Session 10's row, and its absence is load-bearing: a save written before this session
+            // has one settlement in it, and the verify phase has to expect one rather than two.
+            // Session 09's residency row carries the same rule and for the same reason.
+            lines.add("road " + roadEdge.a() + " " + roadEdge.b());
+        }
         try {
             Files.write(SUBJECT_FILE, lines);
             Namesake.LOGGER.info("[harness] wrote {} subject(s) to {}",
@@ -2228,6 +2673,7 @@ public final class AttachBetHarness {
         MEMORIES.clear();
         villageSite = null;
         registeredSettlement = null;
+        roadEdge = null;
         residencySpeaker = null;
         residencyPlayer = null;
         residencyName = null;
@@ -2267,6 +2713,8 @@ public final class AttachBetHarness {
                     residencyName = String.join(" ",
                             java.util.Arrays.copyOfRange(parts, 4, parts.length));
                 }
+                case "road" -> roadEdge = new RoadEdge(Integer.parseInt(parts[1]),
+                        Integer.parseInt(parts[2]));
                 default -> Namesake.LOGGER.warn("[harness] unrecognised subject line '{}'", line);
             }
         }

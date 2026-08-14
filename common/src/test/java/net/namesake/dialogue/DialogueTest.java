@@ -345,6 +345,61 @@ class DialogueTest {
                 + "if the pools changed, check whether the rule is still earning its place");
     }
 
+    /**
+     * <b>Session 10's half of the same defect, and it was found the same way.</b>
+     *
+     * <p>Vale's opener ended in a comma until session 10, and every one of the hundred and sixty
+     * lines starts with a capital, so the report of what a villager in the next town actually says
+     * came out as <i>"Aye, The village has your name now."</i> Every width guard, every ASCII guard
+     * and every carriage-return guard was green through it.
+     *
+     * <p>The rule is that an opener <b>is its own sentence</b>, which is the only version of this
+     * with no exceptions. Making the line continue the opener's sentence would mean lowercasing its
+     * first letter, and the first word of a line can be <i>I</i>, or the address slot with a player's
+     * name in it — so the alternative fix needs a list of words it must not touch, and a list is the
+     * thing session 09 refused to write for the stutter.
+     */
+    @Test
+    @DisplayName("an opener is its own sentence, so the line after it may keep its capital")
+    void anOpenerEndsItsOwnSentence() {
+        for (Culture culture : Culture.values()) {
+            String opener = Voice.of(culture).opener();
+            assertTrue(opener.endsWith(".") || opener.endsWith("!") || opener.endsWith("?"),
+                    () -> culture + " opens with '" + opener + "', which does not end a sentence — so "
+                            + "it renders as \"" + opener + " The village has your name now.\"");
+        }
+    }
+
+    /**
+     * <b>"Aye. Someone mentioned you, in passing, aye?"</b>
+     *
+     * <p>Two of the six cultures tag with the word they open with, and for Vale — formality 0.30 —
+     * the two coins land together about a fifth of the time. Found in session 10's cross-settlement
+     * report, on the one sentence the ship-or-kill test is made of, which is the third time in two
+     * sessions that rendering the output and reading it has been the instrument.
+     */
+    @Test
+    @DisplayName("a culture never says its own word twice in one sentence")
+    void noVillagerEchoesItsOwnTic() {
+        boolean anyEcho = false;
+        for (Culture culture : Culture.values()) {
+            Voice voice = Voice.of(culture);
+            anyEcho |= voice.tagEchoesTheOpener();
+            if (!voice.tagEchoesTheOpener()) {
+                // Opening and tagging is exactly what a culture with two different tics should do.
+                continue;
+            }
+            for (long seed = 0; seed < 400; seed++) {
+                String spoken = voice.inflect("The village has your name now.",
+                        Register.ABOUT_OTHERS, seed);
+                assertFalse(spoken.startsWith(voice.opener()) && spoken.endsWith(voice.tag()),
+                        () -> culture + " opened and tagged with the same word: " + spoken);
+            }
+        }
+        assertTrue(anyEcho, "no culture tags with the word it opens with, so this proves nothing — "
+                + "check whether the rule still earns its place before deleting it");
+    }
+
     /** Every line a villager can actually say, rendered, with nothing hung where it does not belong. */
     @Test
     @DisplayName("no parting and no one-word line comes out as a question")

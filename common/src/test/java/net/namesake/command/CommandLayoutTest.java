@@ -8,6 +8,9 @@ import net.namesake.dialogue.Register;
 import net.namesake.dialogue.Voice;
 import net.namesake.npc.NpcRegistry;
 import net.namesake.npc.Persona;
+import net.namesake.road.RoadEdge;
+import net.namesake.road.RoadGraph;
+import net.namesake.road.RoadProgress;
 import net.namesake.sim.PlayerModel;
 import net.namesake.sim.Reports;
 import net.namesake.sim.Simulation;
@@ -306,7 +309,7 @@ class CommandLayoutTest {
         Simulation.Plan plan = new Simulation.Plan(20260814L, 200, 40, 8,
                 net.namesake.culture.Culture.KARSK.id(),
                 net.namesake.settlement.Specialty.MASONRY.id(), (byte) 40,
-                PlayerModel.SATURATING, 3, 0.9F, true);
+                PlayerModel.SATURATING, 3, 0.9F, true, 1);
         return Simulation.run(plan);
     }
 
@@ -380,7 +383,46 @@ class CommandLayoutTest {
                 Map.entry("deeds, a gift with an object on it", NamesakeCommands.deedRows(holder,
                         List.of(once(Deed.of(DeedType.GIFT_WANTED, viewer, holder.id(),
                                 holder.settlementId(), 198, "minecraft:enchanted_golden_apple"))),
-                        200)));
+                        200)),
+                // Session 10's command, in the four states it has. The first two are absences and
+                // are the ones this guard exists for: session 07 shipped three over-width absence
+                // branches past a version of it that measured a populated fixture.
+                Map.entry("roads, a world with no settlements at all",
+                        NamesakeCommands.roadRows(0, RoadGraph.EMPTY, true, List.of(), List.of())),
+                Map.entry("roads, one village and nobody to be a neighbour of",
+                        NamesakeCommands.roadRows(1, RoadGraph.EMPTY, true, List.of(), List.of())),
+                Map.entry("roads, a network with nothing laid yet",
+                        NamesakeCommands.roadRows(9, roadNetwork(), true, List.of(), List.of())),
+                Map.entry("roads, block laying switched off",
+                        NamesakeCommands.roadRows(9, roadNetwork(), false, List.of(), List.of())),
+                Map.entry("roads, a network half built", NamesakeCommands.roadRows(9, roadNetwork(),
+                        true,
+                        List.of(new RoadProgress(new RoadEdge(1998, 1999), 9999, 9999, 999, 99,
+                                        9.9, true),
+                                RoadProgress.unbuilt(new RoadEdge(1998, 1999), true, 9.9),
+                                RoadProgress.unbuilt(new RoadEdge(1998, 1999), false, 0)),
+                        List.of(new RoadEdge(1998, 1999)))));
+    }
+
+    /**
+     * A graph wide enough that the adjacency rows are measured at a width a real world reaches.
+     *
+     * <p>A ring of nine villages: every one of them is a neighbour of two others, which is the row
+     * shape, and the ids run into four digits because a long playthrough registers hundreds of
+     * settlements and the column has to still be a column then.
+     */
+    private static RoadGraph roadNetwork() {
+        List<net.namesake.settlement.Settlement> ring = new java.util.ArrayList<>();
+        for (int i = 0; i < 9; i++) {
+            double angle = Math.PI * 2 * i / 9;
+            ring.add(new net.namesake.settlement.Settlement(1990 + i,
+                    net.minecraft.resources.ResourceLocation.withDefaultNamespace("overworld"),
+                    new net.minecraft.core.BlockPos((int) (Math.cos(angle) * 4000), 64,
+                            (int) (Math.sin(angle) * 4000)),
+                    net.namesake.settlement.Specialty.FARMING.id(), (byte) 50,
+                    new byte[]{0, 0, 0, 0}));
+        }
+        return RoadGraph.of(ring);
     }
 
     /**
@@ -549,6 +591,7 @@ class CommandLayoutTest {
         everything.addAll(Reports.acrossModels(outcome.plan()));
         everything.addAll(Reports.witnessSensitivity(outcome.plan()));
         everything.addAll(Reports.propagation(outcome.plan()));
+        everything.addAll(Reports.crossSettlement(outcome.plan()));
         everything.addAll(Reports.residencyWithAndWithoutGossip(outcome.plan().withDays(30)));
 
         for (String line : everything) {
