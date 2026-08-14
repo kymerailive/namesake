@@ -17,8 +17,12 @@ Where any other document disagrees on sequence, this wins.
   cross-settlement delay was 1200–6000, so *"take from the deque after a delay"* was never an
   implementation. **The delay is now one in-game day, derived from `Deed.gameDay`** — and the
   argument is not the schema, it is that nothing downstream of a deed has ever seen a tick, which is
-  what session 07's instrument rests on. **The remaining half of the exit criterion is the owner's
-  and is outstanding: whether a person reacts.**
+  what session 07's instrument rests on. **And the owner played it: sessions 08's, 09's and 10's
+  playtests run in one sitting, in that order, and all three landed — *"Yes, landed. It worked."***
+  Standing risk 2 is retired on that, with its *not told it was coming* clause folded into session
+  15's, which is already the untold-stranger test. The one thing the playtest found is not machinery:
+  the second-hand line sits behind a greeting, so a player who talks once to each villager never
+  hears it.
   Before that: session 09, **and a villager says your name because of something you did.** Walk
   into a Karsk village and Stodysk Stuksk tells you *"I don't know your business here."* Give three of
   their neighbours enough for the village to take you in, and the same villager — who has still never
@@ -363,14 +367,22 @@ generations and keeps latency out of the interaction path entirely.
 2. **Session 10 fails ship-or-kill.** If nobody reacts when town B knows their name, the central
    thesis is wrong. Better to learn it at session 10 than 60.
 
-   **Session 10 shipped, and this risk is narrower than it has ever been and is not retired.** The
-   machinery half is done and is checked on every push: a deed done in one village reaches every
+   ~~**Session 10 fails ship-or-kill.**~~ **Retired 2026-08-15 — it shipped and the owner played
+   it.** The machinery half is checked on every push: a deed done in one village reaches every
    resident of a village down the road, with the player's name still attached, on the in-game day
-   after it happened, in a running game on both loaders. The half this risk is about is the half no
-   test in this repo can have an opinion about — **whether a person reacts** — and it is still ahead
-   rather than behind, because it is the owner's and the owner has not played it. Sessions 08 and 09
-   both closed owing a playtest and this one closes owing all three. **That is the whole of what is
-   left of this risk, and it is now the only thing left of it.**
+   after it happened, on both loaders. The half no test in this repo could have an opinion about was
+   ruled by the owner in one sitting, running sessions 08's, 09's and 10's playtests in that order so
+   a flat reaction would have said which layer failed — and none of them was flat. *"Yes, landed. It
+   worked."*
+
+   **One clause of the criterion is not met and is folded rather than dropped.** It says *a playtester
+   **who was not told it was coming***, and the owner wrote the brief; what is ruled is that the
+   mechanism lands on somebody who knows the mod, not that it surprises somebody who does not.
+   **Session 15's exit criterion is already that test** — *a stranger plays 45 minutes and can
+   describe, unprompted, something a villager remembered about them* — so surprise is measured there
+   rather than carried here as a fourth outstanding playtest. The propagation thesis is no longer the
+   thing that could end the project; the drama engine outside the slice is now a question of scope
+   rather than of whether the ground under it holds.
 
    **Session 08 narrowed it without retiring it, and the narrowing is worth stating precisely.** The
    half that is now machinery rather than hope: a deed reaches 78% of a village it was not witnessed
@@ -3827,30 +3839,49 @@ control row exists for exactly that and it is the reason the table above is wort
 also why the last row is a harness run rather than an assertion, because the allowlist is the one
 claim in this session that no unit test can make.
 
-#### Not ruled at close, and it is the half the whole session is for
+#### Ruled at close, by the owner: all three playtests were run, and all three landed
 
-**Three playtests are owed and all three are the owner's.** Session 08's, session 09's, and this
-one's — and this one's *is* the exit criterion. The brief was explicit that running 08's and 09's
-first was the one piece of advice it would not take out, and they have not been run, so if the
-reaction is flat there are three layers it could be. That is stated rather than absorbed.
+**Sessions 08's, 09's and 10's, in one sitting and in that order — which was the point of the
+order.** The owner's words, kept because a paraphrase of a ruling is not a ruling:
 
-**What was checked, precisely, so it is not mistaken for the playtest.** The line reached a player's
-chat through a running game on both loaders and the verdict file quotes what was sent; the register
-that selected it is asserted rather than assumed; the line is measured against the chat width, is
-plain ASCII and carries no carriage return; and the report now prints a page of what the far village
-says, which is how two of this session's six defects were found. **None of that is a judgement about
-whether a person looks up from the screen.**
+- **09's — the name swap.** *"Yes, landed. It worked."*
+- **08's — the second-hand line.** *"I think that worked"*, confirmed against
+  `/namesake debug deeds` showing `heard c70` on a villager who was not standing there.
+- **10's — the border.** In a village they had never done anything in, before the day turned:
+  *"No one's told me about you, guest."* After it: *"So. I know your face now."* — the stranger pool
+  giving way to the known one, which is the story arriving. Then, on the next turn of the same
+  conversation, the `ABOUT_OTHERS` line. **Verdict: it all worked.**
 
-- **10's:** feed three or four villagers in one village, wait an in-game day, then walk to the next
-  village along and talk to somebody there. `/namesake debug roads` shows whether the two are
-  neighbours and `/namesake debug deeds` on a villager there shows the `@s0` marking the row as
-  another village's business. **The question is whether "Someone mentioned you, in passing." from a
-  stranger in a town you have never worked in lands, or reads as noise.**
-- **08's:** unchanged, and now cheaper to run alongside 10's — feed three or four *different*
-  villagers, wait an in-game hour, `/namesake debug deeds` on somebody who was not watching. What is
-  outstanding is whether a second-hand line reads as second-hand and whether 0.70 is the right price
-  for a rumour.
-- **09's:** unchanged. Sneak, empty hand, right-click a villager; earn residency; do it again.
+**Standing risk 2 is retired on that, and the one clause of it that is not met is stated rather than
+absorbed.** `WORKPLAN.md`'s criterion says *a playtester **who was not told it was coming**,* and the
+owner wrote the brief. What has been ruled is that the mechanism lands on somebody who knows the mod;
+what has not been tested is surprise. **That is session 15's exit criterion already** — *a stranger
+plays 45 minutes and can describe, unprompted, something a villager remembered about them* — so it is
+folded there rather than left as a fourth outstanding playtest.
+
+#### The finding the playtest produced, and it is about the sentence rather than the machinery
+
+**The line this whole session exists for sits behind a greeting, and a player who talks once never
+hears it.** `Dialogue.registerFor` returns `GREETING` at turn 0 and `ABOUT_OTHERS` at turn 1, so the
+conversation goes: first right-click opens it, the second is *"So. I know your face now."*, and the
+**third** is *"Someone mentioned you, in passing."* The owner's first report of test 3 was the
+greeting, and it read as the test having half-worked — because a playtester talking once to each of
+five villagers gets five greetings and never the payload.
+
+**Nothing is broken and the ordering is arguably right** — a villager should greet you before they
+gossip about you. But it is a real cost that was invisible from inside the code, and it is the
+owner's to rule, so it is written down rather than fixed on the way past: **should a villager whose
+ring holds a story about you lead with it?** It is two lines in `registerFor`. Recorded here because
+the machine-checked half of this session asserted the *register* and never the *turn it arrives on*,
+which is exactly the gap between "the mechanism fires" and "a person hears it".
+
+**And one observation from the same session, carried rather than acted on.** Villagers were seen
+stuck in places they could not path out of, inside their own houses. **Nothing in this mod moves a
+villager or touches pathfinding** — the day plan is sessions 13 and 14 and does not exist — and the
+road materialiser swaps a surface block in place, never inside a build and never above ground level,
+so it cannot make geometry a villager can be caught in. It is vanilla village generation putting
+houses into terrain. It stops being vanilla's problem at **13**, whose whole industry standoff
+mechanic assumes a villager can reach their workstation.
 
 **And the two rulings session 09 handed up are still open, deliberately.** The brief carried them
 with the answer left blank, so they stay blank rather than being decided by the session that
@@ -3874,6 +3905,23 @@ inherited them:
   rows naming where the story came from*, and the direction is derivable from two fields the deed and
   the persona already carry — `Deed.UNKNOWN_ACTOR`'s note has said so since session 08 and nothing has
   built it yet.
+- **`Dialogue.registerFor` puts `ABOUT_OTHERS` on turn 1, and the playtest says that is worth a
+  ruling.** A villager greets you before they gossip about you, which is right; it also means the
+  sentence session 10 exists for is the *third* right-click and a player who talks once to each
+  villager never reaches it. Two lines to change, and session 11's board is the other place that
+  question gets answered — a hearsay row on the Notice Board is the same content with no turn count
+  in front of it.
+- **Villagers stuck inside their own houses, seen during the close-of-10 playtest.** Vanilla village
+  generation; nothing here moves a villager or touches pathfinding, and the materialiser cannot
+  create geometry. **It becomes session 13's problem**, whose industry standoff mechanic assumes a
+  villager can reach their workstation — the lazy ones are supposed to be standing eight blocks away
+  on purpose, and a villager who *cannot* get there is the same silence for the wrong reason.
+- **Push from a worktree does not move the owner's working copy, and this session sent them to build
+  a stale one.** `git push origin HEAD:main` moves the remote ref and touches neither the local
+  `main` branch nor its files, so `C:\MCA Reborn Rework` sat six commits behind while the playtest
+  instructions pointed at it — the first thing the owner hit was *"there is no
+  /namesake debug roads command"*, and the mod was fine. **Fast-forward the working copy as part of
+  the push, not after somebody reports a missing command.**
 - **The road is the first thing in this mod a player can see without opening a menu**, so it is the
   first thing that will get reported as a bug. `/namesake debug roads` is the instrument and
   `-Dnamesake.roads=off` is the answer to "it built one through my base" while it is being looked at.
@@ -3890,9 +3938,11 @@ inherited them:
   are transient and one-shot per place, like session 03's census, and a wall-clock number from this
   machine is the confident-wrong kind.
 
-**Ledger change.** Session 10 → done, session 11 → NEXT. **Standing risk 2 narrowed to exactly one
-thing and deliberately not retired**: the machinery half is checked on every push and the half about
-whether a person reacts has not been run. Two new entries in the *never cut* section — the home rule
+**Ledger change.** Session 10 → done, session 11 → NEXT. **Standing risk 2 retired** — the session
+it names shipped and the owner played it; the *not told it was coming* clause is folded into session
+15's exit criterion, which is already that test. Two of the five standing risks are now retired and
+neither by argument: the attach bet by a persona surviving two entity-UUID changes, and this one by
+somebody saying *"it worked."* Two new entries in the *never cut* section — the home rule
 and the carrier's copy — because both look like plumbing and are what keep `max 2 hops` arithmetic
 across a border. Five decisions added to `DESIGN.md` §2 and §4 step 7 rewritten around them, taking
 the count 61 → 66, plus §8's road rows corrected: the A\* grid is one node per chunk and its heights
