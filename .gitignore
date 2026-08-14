@@ -39,3 +39,10 @@ desktop.ini
 
 # Profiler run transcripts. The numbers that matter go in WORKPLAN.md; these are scratch.
 *.gradle.log
+
+# Pre-change world saves, kept for hard rule 1's load test. They are real Minecraft worlds — a
+# megabyte each and binary — and they belong to a session rather than to the repository. Session 06's
+# archives were lost and 07 had to rebuild one from a detached checkout; 08's lived in a scratchpad
+# and were gone by 09. Keeping them here means the next session can find them, and this line means
+# they never reach a commit.
+/.archives/

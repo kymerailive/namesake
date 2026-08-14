@@ -3226,9 +3226,11 @@ number.**
 
 The `setup` phase was run on **both loaders at `a81490c`'s tree** — the code at HEAD was byte-identical
 to `a81490c`, since the three commits between them touch only `WORKPLAN.md` and `DESIGN.md`, so the
-saves are pre-change saves in the only sense that matters — and archived outside the worktree at
+saves are pre-change saves in the only sense that matters — and archived at
 `C:\MCA Reborn Rework\.archives\schema6-a81490c`, **with their subjects files**, which session 08's
-archives lacked. Then the schema-7 build loaded them:
+archives lacked. That path is in the repo root, outside every session worktree, and is gitignored, so
+the next session can find it and no session can commit a megabyte of binary world into the history.
+Then the schema-7 build loaded them:
 
 ```
 NPC registry datafixer: schema 6 -> 7 (deed rings repacked to fixed-width records behind
