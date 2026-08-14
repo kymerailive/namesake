@@ -94,8 +94,12 @@ public final class Dialogue {
         Register register = registerFor(ring, player, turn);
 
         String address = addressFor(registry, speaker, player, playerName, day, voice);
-        long mixed = Voice.mix(Voice.mix(speaker.id().getMostSignificantBits() ^ seed)
-                ^ (long) pool.ordinal() * 31L + register.ordinal() + (long) turn * 1009L);
+        // Both halves of the persona id, for the reason Names.personaSeed folds both: two personas
+        // minted in the same millisecond differ mostly in the low bits, and a village whose ids
+        // share a high half would greet a player with one sentence between nine of them.
+        long mixed = Voice.mix(Voice.mix(speaker.id().getMostSignificantBits() * 0x9E3779B97F4A7C15L
+                ^ speaker.id().getLeastSignificantBits() ^ seed)
+                ^ ((long) pool.ordinal() * 31L + register.ordinal() + (long) turn * 1009L));
         String line = Lines.at(pool, register, mixed).replace(Lines.ADDRESS, address);
         return new Spoken(pool, register, address, voice.inflect(line, mixed));
     }

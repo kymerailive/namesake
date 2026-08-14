@@ -6,11 +6,14 @@ import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 import net.namesake.settlement.Settlements;
 import net.namesake.social.Bonds;
+import net.namesake.social.Deed;
+import net.namesake.social.DeedType;
 import net.namesake.social.Gossip;
 import net.namesake.social.Memories;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -302,6 +305,128 @@ class NpcSchemaTest {
             assertEquals(new UUID(i, i), survivor.id());
             assertEquals(100L + i, survivor.birthTick());
         }
+    }
+
+    /**
+     * <b>Schema 7, and it is the first migration since schema 3 that rewrites rather than assumes.</b>
+     *
+     * <p>Three additive ones ran in a row and each said out loud that "additive" is a claim rather
+     * than a default. This one is the other kind: the owner ruled 32 → 128 slots at the close of
+     * session 08 and session 08 had already done the arithmetic — at the readable codec's 122 B a
+     * deed that worst case is 6.26 MB against a 2 MB ceiling. So the format changed, and every ring
+     * on disk has to be converted.
+     *
+     * <p><b>The assertion is on what would actually break rather than on the rewrite count</b>, for
+     * the fourth time — although here the count is also a real number rather than the zero the three
+     * additive fixes return, which is itself worth pinning. What breaks is silent: vanilla's
+     * {@code CompoundTag.getByteArray} returns an empty array for a key holding the wrong tag type,
+     * so a ring this fix did not convert loads as a villager who remembers nothing and is written
+     * back that way.
+     */
+    @Test
+    @DisplayName("a schema-6 deed ring is repacked, and every field survives the conversion")
+    void deedRingsArePackedAtSchemaSeven() {
+        CompoundTag tag = registryTagAtVersion(6);
+
+        // A schema-6 ring, written exactly as that build wrote one: a ListTag of compounds through
+        // Deed.CODEC, which is still the encoding the gossip deque uses.
+        UUID holder = new UUID(0, 0);
+        UUID actor = UUID.fromString("0a0a0a0a-1111-2222-3333-444444444444");
+        ListTag ring = new ListTag();
+        for (int day = 0; day < 5; day++) {
+            Deed deed = Deed.of(day == 0 ? DeedType.KILLED_RESIDENT : DeedType.FED_HUNGRY,
+                            actor, holder, 3, day)
+                    .withSeverity((byte) (day == 0 ? 100 : 40));
+            ring.add(Deed.CODEC.encodeStart(NbtOps.INSTANCE, deed).getOrThrow());
+        }
+        CompoundTag entry = new CompoundTag();
+        entry.putIntArray("holder", net.minecraft.core.UUIDUtil.uuidToIntArray(holder));
+        entry.put("ring", ring);
+        ListTag memories = new ListTag();
+        memories.add(entry);
+        tag.put("memories", memories);
+
+        NpcSchema.Result result = NpcSchema.migrate(tag);
+
+        assertEquals(6, result.foundVersion());
+        assertEquals(NpcSchema.CURRENT, result.resultVersion());
+        assertEquals(5, result.recordsRewritten(),
+                "this fix genuinely rewrites, unlike the three additive ones before it");
+
+        // The whole hazard: read by this build, the converted ring has to come back as five deeds
+        // rather than as nothing.
+        Memories reloaded = new Memories();
+        assertEquals(0, reloaded.readFrom(tag), "a converted ring is not damage");
+        List<Deed> loaded = reloaded.of(holder);
+        assertEquals(5, loaded.size(), "every slot survived, in order");
+        assertEquals(DeedType.KILLED_RESIDENT, loaded.get(0).type());
+        assertEquals(100, loaded.get(0).severity());
+        assertEquals(40, loaded.get(1).severity(), "severity is not lost in the conversion");
+        assertEquals(actor, loaded.get(1).actor(), "and the actor came through the palette");
+        assertEquals(holder, loaded.get(1).subject());
+        assertEquals(3, loaded.get(1).settlementId());
+        assertEquals(Deed.FIRST_HAND, loaded.get(1).confidence());
+
+        // The two fields schema 6 could not know about take the only values that are true of every
+        // deed it could write: no particular object, and it happened once.
+        assertEquals(Deed.NO_ITEM, loaded.get(1).item());
+        assertEquals(1, reloaded.slotsOf(holder).get(1).repeats());
+    }
+
+    /**
+     * <b>The seam between a frozen fixer and a living format, pinned where a future session will
+     * find it.</b>
+     *
+     * <p>{@code NpcSchema.fixPackedDeedRings} writes schema 7's layout longhand rather than calling
+     * {@code Memories.save}, because a datafixer describes a shape that is frozen in the past —
+     * calling the current writer would make it mean "whatever the newest format is", and a schema-8
+     * change would silently rewrite schema-6 saves into schema-8 bytes stamped schema 7. That loads,
+     * and it is wrong.
+     *
+     * <p>The cost of freezing it is that two places now know the layout, and this is what stops them
+     * drifting apart unnoticed. <b>When a later session changes the packed record, this test is meant
+     * to go red</b> — and the fix is to give that session its own fixer, not to update the constant
+     * in the schema-7 one.
+     */
+    @Test
+    @DisplayName("the packed ring this fix writes is the one Memories reads")
+    void thePackedRingThisFixWritesIsTheOneMemoriesReads() {
+        UUID holder = new UUID(4, 4);
+        UUID actor = UUID.fromString("0b0b0b0b-1111-2222-3333-444444444444");
+
+        // What Memories itself produces for one deed...
+        Memories live = new Memories();
+        live.remember(holder, Deed.of(DeedType.GIFT_WANTED, actor, holder, 7, 11));
+        CompoundTag written = new CompoundTag();
+        live.save(written);
+        int liveSlotBytes = written.getList("memories", Tag.TAG_COMPOUND).getCompound(0)
+                .getByteArray("ring").length;
+
+        // ...and what the fixer produces for the same deed, out of the schema-6 shape.
+        CompoundTag old = registryTagAtVersion(6);
+        ListTag ring = new ListTag();
+        ring.add(Deed.CODEC.encodeStart(NbtOps.INSTANCE,
+                Deed.of(DeedType.GIFT_WANTED, actor, holder, 7, 11)).getOrThrow());
+        CompoundTag entry = new CompoundTag();
+        entry.putIntArray("holder", net.minecraft.core.UUIDUtil.uuidToIntArray(holder));
+        entry.put("ring", ring);
+        ListTag memories = new ListTag();
+        memories.add(entry);
+        old.put("memories", memories);
+        NpcSchema.migrate(old);
+        int fixedSlotBytes = old.getList("memories", Tag.TAG_COMPOUND).getCompound(0)
+                .getByteArray("ring").length;
+
+        assertEquals(liveSlotBytes, fixedSlotBytes, """
+                The schema 7 fixer and Memories disagree about how wide a packed slot is. The fixer \
+                is frozen on purpose — it describes schema 7 for ever — so if the record has changed, \
+                the change owes a schema 8 and a fixer of its own. Do not update the constant in \
+                fixPackedDeedRings.""");
+
+        Memories fromFixer = new Memories();
+        assertEquals(0, fromFixer.readFrom(old));
+        assertEquals(live.of(holder), fromFixer.of(holder),
+                "and the two encodings have to decode to the same deed, not merely to the same size");
     }
 
     @Test
