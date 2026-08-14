@@ -200,6 +200,32 @@ Per-culture tics: openers, tag questions, address terms, formality bias. The res
 **Rule.** The stranger pool must *explicitly say it does not know you*. Silence reads as permission;
 a gap has to be authored as a negative.
 
+**Ruled by the owner at the close of session 08, before this session starts, so it opens with three
+obligations rather than one.** Two of the three fire by themselves if they are not met.
+
+1. **The residency band reads `trust`.** Measured, not chosen: warmth is unreachable and gossip does
+   not change that, while the third resident crosses 20 trust on day 28. See `DESIGN.md` §5.
+2. **`Bond.warmth` needs a real non-display consumer, and its exemption expires at this session's
+   close.** Paying trust with the band leaves warmth written by every kindness and read by nothing —
+   §1's forbidden shape. §5's *second* residency route, or whether a villager will accept a gift at
+   all, are the candidates. **It may not be the dialogue pool selection**, which `Bond.trust`'s own
+   ledger entry already rules a display, and which is the lie session 03 caught `cultureId` telling.
+3. **Memory depth: richer per memory, a repeat count, and 32 → 128 slots — all three.** Do the two
+   cheap ones first and raise `RING_CAPACITY` last: 128 slots puts the worst case at 6.26 MB of NBT
+   against a 2 MB ceiling and 186 KB gzipped against 100 KB, so **both `MemoriesTest` ceilings go
+   red** and it needs the packed fixed-width ring, a re-ruled ceiling with the measurement in hand,
+   and hard rule 1 in full — **schema 7, a datafixer, a load test.** Both new fields owe a
+   non-display consumer for the same reason as (2); eviction and session 12's trade band are the
+   candidates offered.
+
+**Before writing a line:** archive a schema-6 save from both loaders at **`a81490c`**, because (3)
+almost certainly bumps the schema. Session 06's archives were lost and 07 had to rebuild one.
+
+**Also owed here: session 08's playtest**, which the owner could not run. Feed three or four
+*different* villagers, wait an in-game hour, then `/namesake debug deeds` on somebody who was not
+watching — three or four because the blur fires on a coin. **This session's exit criterion must not
+be allowed to stand in for it.**
+
 **Exit.** Acceptance steps 1–3 pass. Cross residency and villagers stop saying *stranger* and start
 using your name.
 
@@ -347,6 +373,16 @@ generations and keeps latency out of the interaction path entirely.
    genuinely are not read by anything until 09. The temptation was to name `Bond.apply`, which reads
    all four, is not a display, and would have passed every check in `SocialValueLedgerTest`. It is
    also the writer looking at its own work, which is the exact lie `cultureId` told in session 03.
+
+   **Updated at the close of session 08, and the two axes due at 09 have separated.** The owner ruled
+   the residency band reads **`trust`**, which gives trust a landing spot with a date. **`warmth` now
+   has none** — it is written by every kindness and read by nothing the moment the band reads trust,
+   which is exactly the shape this risk names, arriving from a direction session 05 did not predict:
+   not "nobody got round to it" but "the consumer we were both relying on turned out to want the
+   other axis". The owner declined both escapes — moving the expiry to 12, and deleting the field —
+   so session 09 owes warmth a real non-display consumer or the build goes red on its own. **That is
+   the mechanism working exactly as designed, and it is the first time it has bitten on a field
+   somebody was actively planning to pay.**
 
    **Armed the same way risk 4 was**, against this ledger's own status board, so it fails loudly at
    the close of the owing session rather than quietly. `debt` is the longest of the five and the one
