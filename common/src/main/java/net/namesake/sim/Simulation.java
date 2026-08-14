@@ -7,6 +7,7 @@ import net.namesake.npc.NpcRegistry;
 import net.namesake.npc.Persona;
 import net.namesake.npc.TraitRoll;
 import net.namesake.settlement.Settlement;
+import net.namesake.social.Bond;
 import net.namesake.social.Deed;
 import net.namesake.social.DeedBus;
 import net.namesake.social.DeedType;
@@ -192,8 +193,8 @@ public final class Simulation {
      * save — so the simulation keeps the truth here and the report prints both, with the difference
      * between them named.
      */
-    public record History(UUID personaId, int[] warmthByDay, int contactDays, int firstContactDay,
-                          int peakWarmth, int peakDay) {
+    public record History(UUID personaId, int[] warmthByDay, int[] trustByDay, int contactDays,
+                          int firstContactDay, int peakWarmth, int peakDay) {
     }
 
     /** Everything one run produced. */
@@ -247,12 +248,17 @@ public final class Simulation {
         List<Moment> chronicle = new ArrayList<>();
         Map<UUID, History> histories = new LinkedHashMap<>();
         Map<UUID, int[]> warmth = new LinkedHashMap<>();
+        // Trust as well as warmth, because they behave completely differently over a hundred days —
+        // warmth decays and trust does not — and DESIGN.md §5's residency threshold reads both.
+        // Session 09 is what has to choose between them, and this is the column it chooses on.
+        Map<UUID, int[]> trust = new LinkedHashMap<>();
         Map<UUID, Integer> contact = new LinkedHashMap<>();
         Map<UUID, Integer> first = new LinkedHashMap<>();
         Map<UUID, Integer> peak = new LinkedHashMap<>();
         Map<UUID, Integer> peakDay = new LinkedHashMap<>();
         for (Persona resident : residents) {
             warmth.put(resident.id(), new int[plan.days()]);
+            trust.put(resident.id(), new int[plan.days()]);
             contact.put(resident.id(), 0);
             first.put(resident.id(), -1);
             peak.put(resident.id(), 0);
@@ -279,10 +285,11 @@ public final class Simulation {
             // The day's close, read the way a mechanic would read it: through the decayed view,
             // because that is the number any consumer of a bond actually sees.
             for (Persona resident : residents) {
-                int today = registry.bonds().at(resident.id(), PLAYER, day).warmth();
-                warmth.get(resident.id())[day] = today;
-                if (today > peak.get(resident.id())) {
-                    peak.put(resident.id(), today);
+                Bond bond = registry.bonds().at(resident.id(), PLAYER, day);
+                warmth.get(resident.id())[day] = bond.warmth();
+                trust.get(resident.id())[day] = bond.trust();
+                if (bond.warmth() > peak.get(resident.id())) {
+                    peak.put(resident.id(), (int) bond.warmth());
                     peakDay.put(resident.id(), day);
                 }
             }
@@ -305,6 +312,7 @@ public final class Simulation {
 
         for (Persona resident : residents) {
             histories.put(resident.id(), new History(resident.id(), warmth.get(resident.id()),
+                    trust.get(resident.id()),
                     contact.get(resident.id()), first.get(resident.id()),
                     peak.get(resident.id()), peakDay.get(resident.id())));
         }

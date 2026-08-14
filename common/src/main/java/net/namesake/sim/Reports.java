@@ -62,7 +62,61 @@ public final class Reports {
         lines.addAll(ringDump(outcome));
         lines.add("");
         lines.addAll(ringTruncation(outcome));
+        lines.add("");
+        lines.addAll(residencyThreshold(outcome));
         return lines;
+    }
+
+    /**
+     * <b>What session 09's residency threshold would actually cost, on each axis.</b>
+     *
+     * <p>{@code DESIGN.md} §5 grants residency at a <i>known</i> band with <b>three</b> residents,
+     * and {@code Bond.trust} and {@code Bond.warmth} are the two exemptions that expire at the close
+     * of session 09 — so this is the one report session 07 owes 09 directly rather than owing 12.
+     *
+     * <p>The two axes are printed side by side because they do not behave alike over a hundred days
+     * and nothing before this could show it: warmth decays a point a day and trust does not, so a
+     * threshold that reads warmth is a threshold only the people a player directly gives things to
+     * can ever cross. Which axis residency reads is session 09's ruling; this is the table it is
+     * ruled against.
+     */
+    public static List<String> residencyThreshold(Simulation.Outcome outcome) {
+        List<String> lines = new ArrayList<>();
+        lines.add("--- what a residency threshold would cost, per axis ---");
+        lines.add("  DESIGN.md §5 grants residency on a known band with three residents, and");
+        lines.add("  Bond.trust and Bond.warmth are the two exemptions that expire at session 09.");
+        lines.add("  The in-game day the THIRD resident crossed each mark:");
+
+        StringBuilder header = new StringBuilder("    mark    ");
+        for (int mark : DialogueStats.LADDER) {
+            header.append(String.format(Locale.ROOT, "%8d", mark));
+        }
+        lines.add(header.toString());
+        lines.add(axisRow(outcome, "warmth", Simulation.History::warmthByDay));
+        lines.add(axisRow(outcome, "trust", Simulation.History::trustByDay));
+        lines.add("  'never' means no three residents reached it in " + outcome.plan().days()
+                + " days at this model.");
+        return lines;
+    }
+
+    /** One axis's row: the day a third resident first held each mark at once. */
+    private static String axisRow(Simulation.Outcome outcome, String axis,
+                                  java.util.function.Function<Simulation.History, int[]> series) {
+        StringBuilder row = new StringBuilder(String.format(Locale.ROOT, "    %-8s", axis));
+        for (int mark : DialogueStats.LADDER) {
+            int day = -1;
+            for (int candidate = 0; candidate < outcome.plan().days() && day < 0; candidate++) {
+                int at = candidate;
+                long held = outcome.histories().values().stream()
+                        .filter(history -> series.apply(history)[at] >= mark)
+                        .count();
+                if (held >= 3) {
+                    day = candidate;
+                }
+            }
+            row.append(String.format(Locale.ROOT, "%8s", day < 0 ? "never" : day));
+        }
+        return row.toString();
     }
 
     /**
