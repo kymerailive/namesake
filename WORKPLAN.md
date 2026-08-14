@@ -3503,8 +3503,8 @@ discriminates "persisted" by the presence of a `Codec`, and a packed ring slot h
 
 ### Session 10 — 2026-08-15 — roads and cross-settlement propagation — SHIP-OR-KILL
 
-**Shipped.** `RANGE_PLACEHOLDER`, pushed to `origin/main`. CI green on all three jobs — build and
-test, and the attach-bet harness on each loader.
+**Shipped.** `3d60037..3914b55` plus this ledger entry, pushed to `origin/main`. CI green on all
+three jobs — build and test, and the attach-bet harness on each loader.
 
 **A villager in a village you have never done anything in says they have heard of you.** Feed six
 villagers in the first village, let the day turn, and walk down the road: *"Hm. Someone mentioned
@@ -3673,7 +3673,9 @@ the one definition and the fixture moves with the route.
 | `verify` | **12** | the archived **schema-7** world, and **no migration ran** |
 | `verify` | **12** | the same world again |
 
-UNIT_PLACEHOLDER
+**378 unit tests**, up from 339, real JUnit XML, `failures=0 errors=0 skipped=0` — thirty-nine new
+ones across four new files, and the road package's are all about arithmetic over a fixture heightmap
+rather than about a world.
 
 The exit criterion, on screen, on both loaders — a villager in a village the player has never done
 anything in, chosen because their ring holds a deed of the player's that they did not witness:
@@ -3756,9 +3758,50 @@ sentence ship-or-kill is made of.
    only the one file it broke, and refuses a row whose `sed` matched nothing — because a breakage that
    never happened reports "NOTHING FAILED" for a guard that is perfectly fine.
 
-#### Rule 3: BREAKAGES_PLACEHOLDER
+#### Rule 3: seventeen deliberate breakages, each watched to fail and then removed
 
-BREAKAGE_TABLE_PLACEHOLDER
+Session 09's discipline, kept: the failing test's **name** is captured rather than the build's exit
+status, and a row whose `sed` matched nothing is refused rather than reported as green, because a
+breakage that never happened reads exactly like a guard that is fine.
+
+| Breakage | Result |
+|---|---|
+| The border carries the *telling* rather than the carrier's own copy | **4 red**, including *"your name reaches the next village by the day after, without you going there"* — step 5, by name |
+| A story may cross a border from anywhere, not only from where it happened | **Red.** *"a story crosses a border only from the place it happened, so a name goes one town"* |
+| A story from elsewhere is told on the day it happened | **5 red**, including the save round trip and the drain's dirty flag |
+| A road-borne telling takes at the same-settlement rate | **Red.** *"the far village takes a road-borne telling at 0.15, not at the local 0.35"* |
+| The lune test is skipped, so every Delaunay edge is a road | **5 red**, including the two-hundred-world equivalence and *"a village in the middle breaks the long road past it"* |
+| The all-pairs fallback removed, so a degenerate triangulation loses roads | **13 red** — three villages in a line have no triangles at all, and most of this session rests on two settlements being neighbours |
+| Every dimension shares one graph | **2 red.** *"a bell in the Nether is nobody's neighbour"*, and *"no road, no crossing"* |
+| A road pays nothing for climbing a mountain | **Red.** *"a road goes round a mountain, through the one gap in it"* |
+| A road pays nothing for walking into the sea | **Red.** *"a route that can only cross an ocean is found and refused"* |
+| Any route at all is worth laying blocks along | **Red**, the same one — the A\* weight's only consumer |
+| The open queue loses its tie-break | **NOTHING FAILED** — see below |
+| …the same breakage, after the fixture that reaches it | **Red.** *"a long road over flat ground walks to the goal instead of searching the whole box"* |
+| A road is one block wide | **Red.** *"paving is three wide across the road, whichever way the road is going"* |
+| The settlement table stops counting its own changes | **Red.** *"a village registered after the graph was built is in it"* |
+| An opener stops being its own sentence | **Red.** *"an opener is its own sentence, so the line after it may keep its capital"* |
+| A culture may open and tag with the same word | **Red.** *"a culture never says its own word twice in one sentence"* |
+| The away column counts the villagers at home | **2 red**, including the one-settlement control |
+| **`oak_planks` added to the materialiser's allowlist** | **The harness, red, on both halves of the leg it is for:** *"0 of 24 planks are untouched: a road does not go through somebody's floor"* |
+
+**The eleventh row is the one worth reading, and it took two tries to reach the guard.** Removing the
+tie-break on the open queue turned nothing red, because the rolling-terrain fixture has few ties to
+break. The first replacement did not reach it either: it ran flat ground *due east*, where every
+deviation costs more and the cheapest path is therefore unique, so there were still no ties. The
+case that matters is flat ground on a bearing that is neither straight nor a perfect diagonal, where
+every ordering of the steps costs the same — **measured at 120 expansions with the tie-break and
+1,100 without**, which is also why the budget is three hundred rather than the fifteen hundred the
+second attempt used. **A threshold above the broken number is a guard that is still not reached**,
+and that is a third distinct way this project has written a test that could not fail.
+
+**And the control row caught a defect in the pass itself.** The first run of this table reported
+`*** NOTHING FAILED ***` on every row, including ones that plainly should have gone red — because
+the extractor used `grep -P` and this shell's locale refuses it, so it silently produced nothing. A
+breakage pass whose instrument returns empty is the most confident wrong report available. **The
+control row exists for exactly that and it is the reason the table above is worth reading**; it is
+also why the last row is a harness run rather than an assertion, because the allowlist is the one
+claim in this session that no unit test can make.
 
 #### Not ruled at close, and it is the half the whole session is for
 
