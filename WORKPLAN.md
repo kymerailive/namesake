@@ -3503,8 +3503,8 @@ discriminates "persisted" by the presence of a `Codec`, and a packed ring slot h
 
 ### Session 10 — 2026-08-15 — roads and cross-settlement propagation — SHIP-OR-KILL
 
-**Shipped.** `3d60037..3914b55` plus this ledger entry, pushed to `origin/main`. CI green on all
-three jobs — build and test, and the attach-bet harness on each loader.
+**Shipped.** `c885d32..a761856` plus this correction, pushed to `origin/main`. CI green on all three
+jobs — build and test, and the attach-bet harness on each loader.
 
 **A villager in a village you have never done anything in says they have heard of you.** Feed six
 villagers in the first village, let the day turn, and walk down the road: *"Hm. Someone mentioned
@@ -3681,15 +3681,29 @@ The exit criterion, on screen, on both loaders — a villager in a village the p
 anything in, chosen because their ring holds a deed of the player's that they did not witness:
 
 ```
-Fabric     Trykkrukdok Svekdin   Hm. Someone mentioned you, in passing.
-NeoForge   Zhosryzvusk Svekdin   You come up in conversation.
+Fabric     Zivirk Gvakvor      Hm. There's talk. Nothing bad.
+NeoForge   Svyryarn Svekdin    Hm. Someone mentioned you, in passing.
 ```
 
-and the road they came down, out of `/namesake debug roads`:
+**Who says it and which of the eight lines they pick differs between runs, and that is the mechanism
+rather than instability.** A world mints persona ids at random, the transfer coin is a hash of the
+story and the hearer, and the line is seeded from the speaker — so a village of Karsk hillmen who
+have all heard about you produce eight different second-hand sentences between them. Earlier runs of
+this same leg said *"You come up in conversation."* and *"I heard about you before I met you."* What
+is asserted is the register rather than the string: `Register.ABOUT_OTHERS`, selected because a ring
+holds a deed of yours that its holder did not witness.
+
+And the road they came down, out of `/namesake debug roads` — thirteen chunks at 1.6× the cost of
+flat ground, 299 of its 577 columns laid:
 
 ```
-0-1        299/ 577 laid, 278 refused, 13c x1.6
+0-1        299/ 577 laid, 133 refused, 13c x1.6
 ```
+
+The refused count moves between runs and the laid count does not: a column is refused when it is not
+natural ground, and it is *answered* only in a chunk that happens to be loaded when the materialiser
+reaches it. **That is the bound working rather than a number wobbling** — a road finishes as somebody
+walks it.
 
 **The cross-build load test is the interesting one this time, because of what it did not do.** Every
 session since 04 has run this against a save written by the previous build and watched a fixer
