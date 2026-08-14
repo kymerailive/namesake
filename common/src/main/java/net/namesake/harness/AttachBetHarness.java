@@ -1,8 +1,10 @@
 package net.namesake.harness;
 
+import net.minecraft.commands.CommandSource;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -33,6 +35,9 @@ import net.namesake.npc.NpcRegistry;
 import net.namesake.npc.NpcSchema;
 import net.namesake.npc.Persona;
 import net.namesake.platform.PersonaLink;
+import net.namesake.sim.PlayerModel;
+import net.namesake.sim.Reports;
+import net.namesake.sim.Simulation;
 import net.namesake.settlement.Need;
 import net.namesake.settlement.Settlement;
 import net.namesake.settlement.Specialty;
@@ -51,6 +56,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -599,11 +605,107 @@ public final class AttachBetHarness {
 
                 recordBonds(registry, actor);
                 recordMemories(registry);
+                runTheSimulation(server, player);
                 writeSubjects(level);
                 advance(server, 5);
             }
             default -> finish(server, true);
         }
+    }
+
+    // --- session 07: the simulation, inside a real server ------------------------------------------
+
+    /**
+     * Runs a hundred in-game days from inside a running game, and proves it changed nothing here.
+     *
+     * <p><b>Not a new leg, and that is a decision rather than a shortcut.</b> {@code WORKPLAN.md}
+     * draws the line: anything a unit test can prove belongs in a unit test, and session 07's report
+     * layout, percentiles, bucketing and arithmetic are all pure and all covered there. The harness
+     * grows one leg per session that <i>has</i> one, and this session's numbers do not need a game.
+     * So this is four extra assertions inside a phase that was already running — no new launch, no
+     * new CI job, and about a millisecond of the six minutes the phase already costs.
+     *
+     * <p><b>Three claims, and none of them is checkable in {@code :common}.</b>
+     *
+     * <ol>
+     *   <li><b>A hundred days completes without wedging a server.</b> The simulation runs
+     *       synchronously on the server thread, so a slow one is a stall a player would feel. The
+     *       unit test measures it against the ledger's one-minute criterion; this measures it against
+     *       a tick, which is the number that actually matters.</li>
+     *   <li><b>It does not touch this world.</b> Structurally it cannot — its registry is built with
+     *       {@code new} and never handed to a {@code DimensionDataStorage} — but "structurally
+     *       cannot" is a claim, and this project queries rather than claiming. By this point the live
+     *       registry holds nine personas, a settlement, four bonds and eight deeds across four rings,
+     *       which is the state a mistake here would damage.</li>
+     *   <li><b>The commands survive the real dispatcher.</b> {@code CommandLayoutTest} measures the
+     *       row builders; this measures what Brigadier actually emits to a player, which is the thing
+     *       somebody reads off a screen. Session 06 shipped a carriage return that was invisible to
+     *       every instrument in the repo because they all read a log file, and a log file has no
+     *       width.</li>
+     * </ol>
+     */
+    private static void runTheSimulation(MinecraftServer server, ServerPlayer player) {
+        NpcRegistry registry = NpcRegistry.get(server);
+        String before = registry.size() + "/" + registry.bonds().size() + "/"
+                + registry.memories().size();
+
+        long begun = System.nanoTime();
+        Simulation.Outcome outcome = Simulation.run(
+                Simulation.Plan.standard(20260814L, 100, PlayerModel.ATTENTIVE));
+        long millis = (System.nanoTime() - begun) / 1_000_000L;
+
+        record(outcome.chronicle().size() == 100,
+                "SIMULATE a hundred in-game days emitted " + outcome.chronicle().size()
+                        + " deeds on the server thread in " + millis + " ms");
+        // Fifty milliseconds is one tick. A run that costs more than a tick is a stall a player
+        // would feel, whatever the ledger's minute-long ceiling says.
+        record(millis < 50L, "SIMULATE the run cost " + millis + " ms, against a 50 ms tick");
+
+        String after = registry.size() + "/" + registry.bonds().size() + "/"
+                + registry.memories().size();
+        record(before.equals(after), "SIMULATE this world is untouched at " + after
+                + " persona(s)/bond(s)/deed(s) — the simulation's registry is its own");
+
+        List<String> emitted = new ArrayList<>();
+        CommandSource sink = new CommandSource() {
+            @Override
+            public void sendSystemMessage(Component component) {
+                emitted.addAll(List.of(component.getString().split("\n", -1)));
+            }
+
+            @Override
+            public boolean acceptsSuccess() {
+                return true;
+            }
+
+            @Override
+            public boolean acceptsFailure() {
+                return true;
+            }
+
+            @Override
+            public boolean shouldInformAdmins() {
+                return false;
+            }
+        };
+        CommandSourceStack capturing = new CommandSourceStack(sink, player.position(),
+                player.getRotationVector(), player.serverLevel(), 4, "Harness",
+                Component.literal("Harness"), server, player);
+
+        for (String command : List.of("namesake debug stats", "namesake debug earnrate",
+                "namesake debug simulate 100 ATTENTIVE")) {
+            server.getCommands().performPrefixedCommand(capturing, command);
+        }
+
+        record(!emitted.isEmpty(), "SIMULATE the three session 07 commands emitted "
+                + emitted.size() + " line(s) through the real dispatcher");
+        String widest = emitted.stream().max(Comparator.comparingInt(String::length)).orElse("");
+        record(widest.length() <= Reports.CHAT_WIDTH,
+                "SIMULATE the widest line a player sees is " + widest.length() + " characters, "
+                        + "against a " + Reports.CHAT_WIDTH + "-character chat width: |" + widest + "|");
+        record(emitted.stream().noneMatch(line -> line.contains("\r")),
+                "SIMULATE no line carries a carriage return, which Minecraft draws as a "
+                        + "missing-glyph box");
     }
 
     /** Moves one persona's villager, and stops it falling out of the sky. */
