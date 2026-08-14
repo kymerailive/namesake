@@ -81,18 +81,47 @@ public record Voice(String opener, String tag, String strangerAddress, float for
      * {@code 1 - formality}. That is what makes formality a mechanism rather than a label — Tal-Qir
      * opens five sentences in six and tags one; Meridian does the reverse.
      *
-     * <p>A tag only attaches to a line that ends in a full stop. Hanging <i>, no?</i> off a question
-     * or an exclamation produces a sentence nobody would say, and the pools contain plenty of both.
+     * <p><b>A tag question turns a statement into a question, so it only belongs on a statement.</b>
+     * Three things stop it landing where it would produce a sentence nobody would say, and all three
+     * were found by reading the rendered output rather than by reasoning about the mechanism:
+     *
+     * <ul>
+     *   <li><b>Not on a question or an exclamation.</b> <i>"What do you want, no?"</i> The pools
+     *       contain plenty of both, so this is checked on the punctuation.</li>
+     *   <li><b>Not on a parting.</b> A goodbye is an instruction rather than a claim, and
+     *       <i>"Go on, then, aye?"</i> and <i>"On your way, aye?"</i> both read as somebody who has
+     *       lost their thread. This is why the method takes a {@link Register} rather than only a
+     *       string.</li>
+     *   <li><b>Not on something too short to hang one off.</b> The hostile pool opens with
+     *       <i>"You."</i> and closes with <i>"Go."</i>, and <i>"You, yes?"</i> is not a sentence in
+     *       any register. {@link #TAGGABLE_LENGTH} is where that stops.</li>
+     * </ul>
      */
-    public String inflect(String line, long seed) {
+    public String inflect(String line, Register register, long seed) {
         String spoken = line;
         if (coin(seed) < formality) {
             spoken = opener + " " + spoken;
         }
-        if (spoken.endsWith(".") && coin(mix(seed)) < 1.0F - formality) {
+        if (canTag(spoken, register) && coin(mix(seed)) < 1.0F - formality) {
             spoken = spoken.substring(0, spoken.length() - 1) + ", " + tag;
         }
         return spoken;
+    }
+
+    /**
+     * Shorter than this and there is nothing to hang a question on.
+     *
+     * <p>Sixteen, which is where the hostile pool's one-word lines sit and where a real clause
+     * starts. Measured on the <i>inflected</i> string, so a culture that has already put its opener
+     * in front has that much less to prove.
+     */
+    static final int TAGGABLE_LENGTH = 16;
+
+    /** Whether a tag question can honestly go on the end of this. */
+    static boolean canTag(String spoken, Register register) {
+        return spoken.endsWith(".")
+                && register != Register.PARTING
+                && spoken.length() >= TAGGABLE_LENGTH;
     }
 
     /** A number in {@code [0, 1)} from a seed. Deterministic: a report and a game must agree. */

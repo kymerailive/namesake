@@ -101,7 +101,7 @@ public final class Dialogue {
                 ^ speaker.id().getLeastSignificantBits() ^ seed)
                 ^ ((long) pool.ordinal() * 31L + register.ordinal() + (long) turn * 1009L));
         String line = Lines.at(pool, register, mixed).replace(Lines.ADDRESS, address);
-        return new Spoken(pool, register, address, voice.inflect(line, mixed));
+        return new Spoken(pool, register, address, voice.inflect(line, register, mixed));
     }
 
     /**

@@ -2,6 +2,10 @@ package net.namesake.sim;
 
 import net.namesake.culture.Culture;
 import net.namesake.culture.Names;
+import net.namesake.dialogue.Lines;
+import net.namesake.dialogue.Pool;
+import net.namesake.dialogue.Register;
+import net.namesake.dialogue.Voice;
 import net.namesake.npc.Persona;
 import net.namesake.social.Bond;
 import net.namesake.social.Deed;
@@ -65,6 +69,67 @@ public final class Reports {
         lines.addAll(ringTruncation(outcome));
         lines.add("");
         lines.addAll(residencyThreshold(outcome));
+        lines.add("");
+        lines.addAll(dialogueSample(outcome.plan().cultureId()));
+        return lines;
+    }
+
+    /**
+     * <b>A page of what villagers actually say, so the lines can be read without playing.</b>
+     *
+     * <p>Session 09 ships a hundred and sixty authored sentences, and whether they are any good is
+     * the owner's ruling and nothing in this repo can have an opinion about it. What this repo
+     * <i>can</i> do is put them somewhere they can be read — and the memory of how this owner
+     * engages is explicit: they said plainly that an abstract "does 32 feel right" question did not
+     * mean anything to them, and that the concrete before-and-after is what they engage with. A
+     * report is the cheapest before-and-after available.
+     *
+     * <p>Rendered rather than listed: the culture's opener and tag are applied, and the address slot
+     * is filled both ways, because <b>the swap is the thing being judged</b>. Two cultures rather
+     * than six, so it is a page rather than a chapter — this settlement's own, and the one furthest
+     * from it in formality.
+     */
+    public static List<String> dialogueSample(byte cultureId) {
+        Culture own = Culture.byId(cultureId);
+        Culture other = own == Culture.MERIDIAN ? Culture.TALQIR : Culture.MERIDIAN;
+
+        List<String> lines = new ArrayList<>();
+        lines.add("--- what a villager actually says ---");
+        lines.add("  160 authored lines: four pools x five registers x eight. Selected by bond state");
+        lines.add("  and by what their ring holds; never generated. One line of each, from two");
+        lines.add("  cultures, with the address slot filled both ways — the swap is the whole pitch.");
+
+        for (Culture culture : List.of(own, other)) {
+            Voice voice = Voice.of(culture);
+            lines.add("");
+            lines.add(String.format(Locale.ROOT,
+                    "  %s — opens '%s', tags '%s', calls a stranger '%s', formality %.2f",
+                    culture.displayName(), voice.opener(), voice.tag(), voice.strangerAddress(),
+                    voice.formality()));
+            for (Pool pool : Pool.values()) {
+                lines.add("");
+                for (Register register : Register.values()) {
+                    // A fixed seed per cell, so two runs of one report read the same. The address is
+                    // the stranger word before residency and a name after it, and both are shown on
+                    // the same sentence wherever the line has a slot to put one in.
+                    long seed = (long) pool.ordinal() * 31L + register.ordinal();
+                    String template = Lines.at(pool, register, seed);
+                    lines.add(String.format(Locale.ROOT, "    %-13s %s",
+                            register, voice.inflect(
+                                    template.replace(Lines.ADDRESS, voice.strangerAddress()),
+                                    register, seed)));
+                    if (template.contains(Lines.ADDRESS)) {
+                        lines.add(String.format(Locale.ROOT, "    %-13s %s", "  ...resident",
+                                voice.inflect(template.replace(Lines.ADDRESS, "Kymerailive"),
+                                        register, seed)));
+                    }
+                }
+                lines.add("    ^ " + pool);
+            }
+        }
+        lines.add("");
+        lines.add("  the stranger pool says it does not know you in so many words, in every line of");
+        lines.add("  its greeting, about-you and about-others registers. Silence reads as permission.");
         return lines;
     }
 

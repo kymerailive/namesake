@@ -245,10 +245,12 @@ class DialogueTest {
         assertTrue(talqir.formality() > meridian.formality(), "the fixture has the right pair");
 
         for (long seed = 0; seed < 1000; seed++) {
-            if (talqir.inflect("A quiet place, mostly.", seed).startsWith(talqir.opener())) {
+            if (talqir.inflect("A quiet place, mostly.", Register.SMALL_TALK, seed)
+                    .startsWith(talqir.opener())) {
                 formal++;
             }
-            if (meridian.inflect("A quiet place, mostly.", seed).startsWith(meridian.opener())) {
+            if (meridian.inflect("A quiet place, mostly.", Register.SMALL_TALK, seed)
+                    .startsWith(meridian.opener())) {
                 informal++;
             }
         }
@@ -262,10 +264,12 @@ class DialogueTest {
         int talqirTags = 0;
         int meridianTags = 0;
         for (long seed = 0; seed < 1000; seed++) {
-            if (talqir.inflect("A quiet place, mostly.", seed).endsWith(talqir.tag())) {
+            if (talqir.inflect("A quiet place, mostly.", Register.SMALL_TALK, seed)
+                    .endsWith(talqir.tag())) {
                 talqirTags++;
             }
-            if (meridian.inflect("A quiet place, mostly.", seed).endsWith(meridian.tag())) {
+            if (meridian.inflect("A quiet place, mostly.", Register.SMALL_TALK, seed)
+                    .endsWith(meridian.tag())) {
                 meridianTags++;
             }
         }
@@ -275,16 +279,57 @@ class DialogueTest {
                 + " and Tal-Qir " + formalTags);
     }
 
+    /**
+     * <b>A tag question turns a statement into a question, so it only belongs on a statement.</b>
+     *
+     * <p>All three of these were found by reading the rendered output rather than by reasoning about
+     * the mechanism, which is the point: <i>"Go, aye?"</i>, <i>"On your way, aye?"</i> and
+     * <i>"You, yes?"</i> are all perfectly correct string concatenation and none of them is a
+     * sentence anybody would say.
+     */
     @Test
-    @DisplayName("a tag question is never hung off a question or an exclamation")
+    @DisplayName("a tag is never hung off a question, an exclamation, a goodbye or one word")
     void aTagOnlyAttachesToAStatement() {
         for (Culture culture : Culture.values()) {
             Voice voice = Voice.of(culture);
             for (long seed = 0; seed < 200; seed++) {
-                assertFalse(voice.inflect("What do you want?", seed).endsWith(voice.tag()),
+                assertFalse(voice.inflect("What do you want?", Register.GREETING, seed)
+                                .endsWith(voice.tag()),
                         () -> culture + " hung " + voice.tag() + " off a question");
-                assertFalse(voice.inflect("You'll be missed!", seed).endsWith(voice.tag()),
+                assertFalse(voice.inflect("You'll be missed!", Register.PARTING, seed)
+                                .endsWith(voice.tag()),
                         () -> culture + " hung " + voice.tag() + " off an exclamation");
+                assertFalse(voice.inflect("Come back when you can.", Register.PARTING, seed)
+                                .endsWith(voice.tag()),
+                        () -> culture + " turned a goodbye into a question with " + voice.tag());
+                assertFalse(voice.inflect("You.", Register.GREETING, seed).endsWith(voice.tag()),
+                        () -> culture + " hung " + voice.tag() + " off one word");
+            }
+        }
+    }
+
+    /** Every line a villager can actually say, rendered, with nothing hung where it does not belong. */
+    @Test
+    @DisplayName("no parting and no one-word line comes out as a question")
+    void nothingShortOrFinalIsTurnedIntoAQuestion() {
+        for (Culture culture : Culture.values()) {
+            Voice voice = Voice.of(culture);
+            for (Pool pool : Pool.values()) {
+                for (Register register : Register.values()) {
+                    for (String template : Lines.of(pool, register)) {
+                        String line = template.replace(Lines.ADDRESS, voice.strangerAddress());
+                        for (long seed = 0; seed < 8; seed++) {
+                            String spoken = voice.inflect(line, register, seed);
+                            if (!spoken.endsWith(voice.tag())) {
+                                continue;
+                            }
+                            assertNotEquals(Register.PARTING, register,
+                                    () -> "a goodbye became a question: " + spoken);
+                            assertTrue(spoken.length() >= Voice.TAGGABLE_LENGTH + voice.tag().length(),
+                                    () -> "too short to hang a question on: " + spoken);
+                        }
+                    }
+                }
             }
         }
     }
