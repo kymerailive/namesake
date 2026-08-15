@@ -5151,8 +5151,9 @@ decided it. No changes to the 16-session shape.
 
 ### Session 13 — 2026-08-15 — day plan I, the free slots
 
-**Shipped.** `13c750f..RANGE_PENDING` plus this ledger commit, pushed to `origin/main`. CI green on
-all three jobs — build and test, and the attach-bet harness on each loader.
+**Shipped.** `13c750f..96fc556` plus this ledger commit, pushed to `origin/main`. CI green on all
+three jobs — build and test, and the attach-bet harness on each loader. Both loaders were also run
+locally, `setup` and `verify`, and both pass on both phases.
 
 **The session opened on three ruled numbers that do not compose, and all three are in one section.**
 Sessions 08, 10, 11 and 12 each opened on one or two; §7 had three, and the third is the one the
