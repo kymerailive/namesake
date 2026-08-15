@@ -748,10 +748,18 @@ public final class AttachBetHarness {
                 // whether six villagers three of whom are eight blocks out *looks* like anything is
                 // a question only a picture can put to a person.
                 ServerPlayer watcher = player(server);
-                watcher.teleportTo(level, workshopSite.getX() + 0.5, workshopSite.getY() + 9,
-                        workshopSite.getZ() - 26.5, 0.0F, 22.0F);
-                lookAt = tick + 20;
-                beginAwait(200);
+                // FLYING, and the first version of this leg forgot it. configure() puts the player
+                // in creative and does not switch flight on, so a camera placed nine blocks up
+                // simply falls for the twenty ticks it is given to settle — and the picture that
+                // came out was a close-up of tall grass with the workshop a stripe along the top.
+                // A screenshot is only evidence if it is a screenshot of the thing.
+                watcher.getAbilities().flying = true;
+                watcher.getAbilities().invulnerable = true;
+                watcher.onUpdateAbilities();
+                watcher.teleportTo(level, workshopSite.getX() + 0.5, workshopSite.getY() + 12,
+                        workshopSite.getZ() - 22.5, 0.0F, 30.0F);
+                lookAt = tick + 40;
+                beginAwait(400);
             }
             case 38 -> {
                 if (stillWaiting(server, () -> tick >= lookAt, false,
