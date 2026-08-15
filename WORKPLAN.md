@@ -32,8 +32,16 @@ Where any other document disagrees on sequence, this wins.
   `HEARD_BELL_TIME` with no expiry, `HIDE` is the only vanilla package with no
   `UpdateActivityFromSchedule`, and its one exit needs a hiding place that a villager with no bed
   nearby can never get. It is named — `Posture.BELL_LOCKED` — and **the day plan was one missing line
-  from causing it.** **460 unit tests, up from 437**, and the attach-bet harness grew a day-plan leg
-  in each phase.
+  from causing it.** **And the budget bit for the first time.** Session 04's profiler was rerun
+  because this is the first session to put a real payload anywhere, and at §8's own ninety-six-loaded
+  scenario the day plan cost **7.20 µs against a ~5.95 µs budget** — more than the whole mod, on its
+  own. One line fixed most of it: the boundary offset is a 64-bit hash and it was being computed per
+  villager per tick to answer a question that only changes inside the sixty-four ticks after a
+  boundary. **7.20 → 4.78 µs**, and what is left is ≈34 ns a loaded villager — half a microsecond in
+  the world a player actually has, four fifths of the budget at the population the architecture is
+  sized against, and **four times it at four hundred.** Which of those the number should be ruled
+  against is the owner's. **460 unit tests, up from 437**, and the attach-bet harness grew a day-plan
+  leg in each phase — **39 in `verify`**, and both loaders green on both phases.
   Before that: session 12, **and what a village thinks of you is what it charges you.** Walk
   up to a librarian who is warm to you and a book costs fifteen emeralds where a stranger pays
   twenty and somebody they have not forgiven pays twenty-seven — in a real trade window, with
@@ -5311,6 +5319,58 @@ jitter carved out of the remainder narrows it further. Blending toward a uniform
 spread makes the coverage a property of the arithmetic rather than of a distribution the next culture
 added would move.
 
+
+#### The budget moved, so session 04's profiler was rerun — and it found something
+
+**This is the first session to put a real payload anywhere, and the instrument earned its keep on the
+first run.** `-Dnamesake.profile=namesake`, Fabric, on an **AMD Ryzen 5 9600X**, eight cells of a
+1,200-tick window each after a 400-tick warm-up, with the day frozen at **3000** rather than 2000 —
+changed this session, because the clock frozen *on* the LABOUR_I boundary leaves every villager whose
+offset is not zero in `DAWN` for ever and the day plan reports a cost of nothing.
+
+`Steering.onServerTick`, mean per tick:
+
+| cell | first run | after the fix |
+|---|---|---|
+| idle, no villagers | 1.37 µs | 1.47 µs |
+| sweep 400 records, no entities | 1.46 µs | 1.48 µs |
+| **DESIGN §8's own scenario: 96 loaded + 304 records** | **7.20 µs** | **4.78 µs** |
+| 100 loaded | 8.76 µs | 5.34 µs |
+| 400 loaded | 39.79 µs | 23.64 µs |
+
+**The first number is the finding: at the ninety-six loaded villagers §8 sizes the architecture
+against, the day plan alone cost 7.20 µs — more than the whole mod's ~5.95 µs budget, on its own,
+before the sweep.** Nothing else in the mod has ever come close.
+
+**The cause was one line and it is the one the design argues hardest for.** `DayPlan.slotFor` calls
+`offsetOf`, which is a 64-bit mix hash and a handful of multiplies, and it was running **per loaded
+villager per tick** — to answer a question whose answer changes only inside the sixty-four ticks
+after a boundary. A villager already served for the slot the clock is in has crossed by definition,
+so the hash is skipped: one enum comparison instead. That is 7.20 → **4.78 µs**, and the second
+change beside it — `hasMemoryValue` before `getMemory`, so the common case allocates no `Optional` —
+is why the 400-villager cell fell by more than a third as well.
+
+**What is left is real and is named rather than rounded away.** Subtracting the empty-roster floor,
+the marginal cost is **≈34 ns per loaded villager per tick at 96, and ≈55 ns at 400.** So:
+
+| population | day plan costs |
+|---|---|
+| **eleven** — the measured maximum in a real generated world | **~0.5 µs** |
+| sixty to a hundred — what §8 designs against | 2–5 µs |
+| four hundred — §8's deliberately pessimistic figure | **23.6 µs, four times the budget** |
+
+**Two things follow and both are the owner's rather than mine.** The sweep's payload budget is
+untouched — `PersonaSweep.advance` reads 1.29 µs, exactly where session 04 left it, because the day
+plan is not in the sweep. But **the ~5.95 µs total is now genuinely tight**: at §8's own 96-loaded
+scenario the day plan spends four fifths of it and the sweep spends most of the rest. Session 04
+ruled that the budget is *"deliberately not raised to meet"* the 35 ms of real headroom, and that
+*"the discipline is the point — raise it when a payload has been priced and does not fit, never the
+first time it pinches."* **This is the first payload to be priced.** It fits at the population a real
+world produces and it does not fit at the population the architecture is sized against, and which of
+those two the number should be ruled against is a decision, not a measurement.
+
+**Session 14 should read this before it writes `ERRAND`**, because an activity with its own behaviour
+list is a larger per-entity payload than a slot comparison, and it lands on top of this.
 #### The schema did not move
 
 **Schema 8, unchanged, for the second session running.** A plan derived from a persona, a settlement
@@ -5570,6 +5630,17 @@ back and photographs it.
 - **The day plan is a per-loaded-entity cost and the sweep payload budget is still unspent.** Session
   14's `ERRAND` is the first thing that might want the sweep, and it should be argued rather than
   assumed: a record with no entity has no walk target either.
+- **READ THE PROFILER SECTION ABOVE BEFORE WRITING `ERRAND`.** The day plan spends four fifths of the
+  ~5.95 µs budget at the ninety-six loaded villagers `DESIGN.md` §8 sizes the architecture against,
+  and a custom activity with its own behaviour list is a larger per-entity payload than a slot
+  comparison. It lands **on top of** this rather than beside it. Session 04 ruled that the budget is
+  raised only *"when a payload has been priced and does not fit"* — this is the first payload to be
+  priced, and whether the number should be ruled against a real world's eleven loaded villagers or
+  against §8's four hundred is **the owner's to decide**, not session 14's to assume.
+- **Anything added to the per-tick loop must earn it the way the slot short-circuit did.** Computing
+  a 64-bit hash per loaded villager per tick cost 2.4 µs on its own and was invisible until it was
+  measured; the guard against the next one is that `Steering.onServerTick` has a meter and the
+  profiler has a cell for it.
 - `DeedBus.witnessScan`, `DeedBus.emit` and `Gossip.drain` **still have meters pointed at nothing**,
   unchanged and for the unchanged reasons. `Steering.onServerTick` has one that is pointed at
   something.

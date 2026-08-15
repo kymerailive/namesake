@@ -372,6 +372,8 @@ public final class Steering {
     private static void tickLevel(ServerLevel level, LevelState levelState) {
         long gameTime = level.getGameTime();
         long dayTime = level.getDayTime();
+        // ONCE PER LEVEL PER TICK, and it is what keeps this method affordable. See the loop below.
+        DaySlot clockSlot = DaySlot.at(dayTime);
 
         List<Integer> gone = null;
         for (Map.Entry<Integer, Tracked> entry : levelState.roster.entrySet()) {
@@ -393,10 +395,22 @@ public final class Steering {
                 }
                 continue;
             }
-            // Their own slot, not the clock's. Two villagers standing next to each other are in
+            // Their own slot, not the clock's — two villagers standing next to each other are in
             // different slots for up to DayPlan.SPREAD ticks after every boundary, which is the
             // transition wave and the reason the whole village does not path at once.
-            DaySlot slot = DayPlan.slotFor(tracked.persona, dayTime);
+            //
+            // BUT ONLY WHEN IT CAN DIFFER, and that short-circuit is worth 5 µs of a 5.95 µs budget.
+            // DayPlan.slotFor calls offsetOf, which is a 64-bit mix hash and a handful of
+            // multiplies, and running it per loaded villager per tick measured **7.20 µs at the
+            // ninety-six villagers DESIGN.md §8 sizes the mod against** — the day plan alone over
+            // the whole mod's budget. If a villager was already served for the slot the clock is
+            // in, they have crossed by definition and slotFor would answer with the clock's slot,
+            // so the hash is skipped. In steady state that is every villager on every tick, and
+            // the offset is paid only inside the sixty-four ticks after a boundary where it means
+            // anything.
+            DaySlot slot = tracked.servedSlot == clockSlot
+                    ? clockSlot
+                    : DayPlan.slotFor(tracked.persona, dayTime);
 
             if (tracked.standoff != null) {
                 if (slot.isLabour() && isSteerable(tracked.villager.getBrain())) {
@@ -459,6 +473,12 @@ public final class Steering {
         Villager villager = tracked.villager;
         Brain<Villager> brain = villager.getBrain();
 
+        // hasMemoryValue before getMemory, because Brain.getMemory allocates an Optional and this
+        // runs for every steered villager on every tick. In the common case — no walk target at all
+        // — that is one map lookup and a return, with nothing on the heap.
+        if (!brain.hasMemoryValue(MemoryModuleType.WALK_TARGET)) {
+            return;
+        }
         Optional<WalkTarget> target = brain.getMemory(MemoryModuleType.WALK_TARGET);
         if (target.isEmpty()) {
             return;
