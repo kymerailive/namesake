@@ -10,15 +10,20 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.arguments.EntityArgument;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.namesake.Namesake;
 import net.namesake.culture.Culture;
+import net.namesake.day.DayPlan;
+import net.namesake.day.DaySlot;
+import net.namesake.day.Steering;
 import net.namesake.culture.Cultures;
 import net.namesake.culture.Names;
 import net.namesake.npc.NpcRegistry;
@@ -114,6 +119,16 @@ public final class NamesakeCommands {
                                                 IntegerArgumentType.getInteger(context, "count")))))
                         .then(Commands.literal("settlements")
                                 .executes(NamesakeCommands::dumpSettlements))
+                        // Session 13's instrument, and the one the exit criterion is read with:
+                        // which of the villagers around you the plan expects at a workstation,
+                        // which it deliberately sent away, and which are neither because they are
+                        // stuck. Read-only; the plan persists nothing, so there is nothing here it
+                        // could disturb.
+                        .then(Commands.literal("dayplan")
+                                .executes(context -> dumpDayPlan(context, DEFAULT_DUMP))
+                                .then(Commands.argument("count", IntegerArgumentType.integer(1, 200))
+                                        .executes(context -> dumpDayPlan(context,
+                                                IntegerArgumentType.getInteger(context, "count")))))
                         // Session 10's instrument: which settlements are neighbours, and how much of
                         // the road between them exists as blocks. Read-only — the graph is derived
                         // from the settlement table on demand and nothing here builds anything.
@@ -563,6 +578,93 @@ public final class NamesakeCommands {
         String report = out.toString();
         source.sendSuccess(() -> Component.literal(report), false);
         Namesake.LOGGER.info("[debug bonds] {}", report);
+        return nearest.size();
+    }
+
+    /**
+     * <b>Session 13's instrument: what the day plan expects each villager near you to be doing.</b>
+     *
+     * <p>The exit criterion is <i>at 09:00 every workstation has someone within arm's reach — except
+     * the ones eight blocks away doing nothing, and you can hear which is which</i>. Both halves of
+     * that need the same distinction, and this is where it is drawn: a villager who is silent
+     * because the plan sent them away reads {@code STANDOFF}, and a villager who is silent because
+     * they cannot get anywhere reads {@code STUCK} or {@code BELL_LOCKED}. Without the second, the
+     * first is unfalsifiable — every silent villager would look like a success.
+     *
+     * <p>The {@code arm's reach} column is {@code WorkAtPoi}'s own 1.73 rather than a distance
+     * chosen here, and {@code work} is {@code LAST_WORKED_AT_POI} — the memory
+     * {@code WorkAtPoi.start} stamps in the same breath as it plays the sound and calls
+     * {@code restock()}. So "has this villager actually worked" is read off the engine's own record
+     * of it rather than inferred from where they are standing.
+     */
+    private static int dumpDayPlan(CommandContext<CommandSourceStack> context, int limit) {
+        CommandSourceStack source = context.getSource();
+        ServerLevel level = source.getLevel();
+        Vec3 origin = source.getPosition();
+        NpcRegistry registry = NpcRegistry.get(source.getServer());
+
+        long dayTime = level.getDayTime();
+        DaySlot slot = DaySlot.at(dayTime);
+        int timeOfDay = (int) Math.floorMod(dayTime, (long) DaySlot.DAY_LENGTH);
+
+        List<Villager> nearest = level.getEntitiesOfClass(Villager.class,
+                        new AABB(origin, origin).inflate(48)).stream()
+                .sorted(Comparator.comparingDouble(v -> v.position().distanceToSqr(origin)))
+                .limit(limit)
+                .toList();
+
+        StringBuilder out = new StringBuilder("day ").append(Deed.dayOf(level))
+                .append(", ").append(String.format(Locale.ROOT, "%02d:%02d",
+                        Math.floorMod(timeOfDay / 1000 + 6, 24), timeOfDay % 1000 * 60 / 1000))
+                .append(" (dayTime ").append(timeOfDay).append(")")
+                .append("\n  slot ").append(slot).append(" ").append(slot.startsAt())
+                .append("-").append(slot.endsAt())
+                .append(", vanilla ").append(slot.vanillaActivity().getName())
+                .append(slot.isLabour() ? " — the standoff applies" : " — the plan says nothing here")
+                .append("\n  ").append(Steering.describe(level))
+                .append("\n  industry >= ").append(DayPlan.INDUSTRY_TO_WORK)
+                .append(" turns up for work (p25 of the real generator, so about one in four does not)");
+
+        int nameColumn = 14;
+        out.append("\n  ").append(pad("who", nameColumn)).append(" ind  off  posture      job");
+
+        int steered = 0;
+        int trouble = 0;
+        for (Villager villager : nearest) {
+            Persona persona = PersonaService.personaOf(villager).orElse(null);
+            if (persona == null || !persona.isGenerated()) {
+                continue;
+            }
+            Steering.Posture posture = Steering.postureOf(villager);
+            if (posture == Steering.Posture.STANDOFF || posture == Steering.Posture.WALKING_OUT) {
+                steered++;
+            }
+            if (posture == Steering.Posture.STUCK || posture == Steering.Posture.BELL_LOCKED) {
+                trouble++;
+            }
+            BlockPos job = Steering.jobSiteOf(villager);
+            out.append("\n  ").append(pad(nameOf(persona), nameColumn))
+                    .append(String.format(Locale.ROOT, "%+4d %4d  %-11s",
+                            persona.trait(Persona.INDUSTRY), DayPlan.offsetOf(persona, slot),
+                            posture))
+                    .append(job == null ? "   —"
+                            : String.format(Locale.ROOT, " %3dm",
+                                    (int) Math.round(Math.sqrt(job.distSqr(villager.blockPosition())))));
+        }
+        if (nearest.isEmpty()) {
+            // Every section prints its own absence. Session 11's rule, at a fourth surface.
+            out.append("\n  no villager is loaded within 48 blocks of you.");
+        }
+        out.append("\n  ").append(steered).append(" standing off, ").append(trouble)
+                .append(" neither working nor standing off on purpose");
+        if (trouble > 0) {
+            out.append(" — see STUCK/BELL_LOCKED above, which is a villager who cannot get anywhere"
+                    + " rather than one who has been told not to");
+        }
+
+        String report = out.toString();
+        source.sendSuccess(() -> Component.literal(report), false);
+        Namesake.LOGGER.info("[debug dayplan] {}", report);
         return nearest.size();
     }
 

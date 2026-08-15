@@ -19,6 +19,7 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.entity.monster.ZombieVillager;
+import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.entity.npc.VillagerProfession;
 import net.minecraft.world.item.trading.MerchantOffer;
@@ -479,7 +480,358 @@ public final class AttachBetHarness {
             case 19, 20, 21, 22, 23, 24 -> runRoadCheck(server, level);
             case 25, 26, 27, 28, 29 -> runNoticeBoardCheck(server, level);
             case 30, 31, 32 -> runStandingBandCheck(server, level);
+            case 33, 34, 35, 36, 37 -> runDayPlanCheck(server, level);
             default -> finish(server, true);
+        }
+    }
+
+    // --- session 13: the day plan, at real workstations --------------------------------------------
+
+    /** How far from the counter the workshop sits, so neither leg can hear the other. */
+    private static final int WORKSHOP_OFFSET = 200;
+
+    /** Six villagers and six workstations: three who work and three who do not. */
+    private static final int WORKERS = 6;
+
+    /** Ten blocks apart, so one villager's standoff cannot land on another's workstation. */
+    private static final int BENCH_SPACING = 10;
+
+    private static BlockPos workshopSite;
+    private static final List<Villager> WORKERS_PRESENT = new ArrayList<>();
+    private static final List<BlockPos> BENCHES = new ArrayList<>();
+    private static final Set<UUID> DILIGENT = new HashSet<>();
+
+    /** The widest split the transition wave was ever seen to produce, in a running game. */
+    private static int waveSplit;
+
+    /**
+     * <b>Session 13's exit criterion, and the two halves of it that a machine can hold.</b>
+     *
+     * <p><i>At 09:00 every workstation has someone within arm's reach — except the ones eight blocks
+     * away doing nothing, and you can hear which is which. Lazy villagers demonstrably do not
+     * restock.</i>
+     *
+     * <h2>What this leg polls for, and why it is not a number of ticks</h2>
+     *
+     * <p>{@code WorkAtPoi} has a {@code CHECK_COOLDOWN} of 300 ticks and then a
+     * {@code level.random.nextInt(2) != 0} coin on top of it, so a villager standing <i>on</i> its
+     * workstation starts work about once every <b>six hundred</b> ticks. <b>"Every workstation has
+     * someone within arm's reach" is therefore a claim about a thirty-second average and not about
+     * any given second</b>, and a leg that sampled positions on one tick would be measuring a coin.
+     *
+     * <p>So the observable is not a position. It is {@code LAST_WORKED_AT_POI} — the memory
+     * {@code WorkAtPoi.start} stamps in the same breath as it plays the work sound and calls
+     * {@code restock()}. All three are one gate, so <b>reaching that memory is reaching all three</b>,
+     * and the leg waits for the memory rather than for the clock.
+     *
+     * <p>And the lazy half cannot be polled for at all, because it is an <i>absence</i>. So it is
+     * measured against an event instead of against a deadline: <b>wait until every diligent villager
+     * has worked, then assert that no lazy one has.</b> If the three who are supposed to work have
+     * all worked, enough time has passed that a fourth would have too. That is the session 12 lesson
+     * one turn further — poll for the condition the thing you are about to do actually needs — with
+     * the extra step that the condition for asserting a negative is somebody else's positive.
+     */
+    private static void runDayPlanCheck(MinecraftServer server, ServerLevel level) {
+        switch (step) {
+            case 33 -> {
+                workshopSite = new BlockPos(villageSite.getX() - WORKSHOP_OFFSET, 200,
+                        villageSite.getZ() + WORKSHOP_OFFSET);
+                teleport(player(server), level, workshopSite.getX(), 200, workshopSite.getZ());
+                beginAwait(2400);
+            }
+            case 34 -> {
+                if (stillWaiting(server, () -> level.isLoaded(workshopSite), false,
+                        "empty ground for the workshop")) {
+                    return;
+                }
+                workshopSite = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                        workshopSite);
+                buildWorkshop(level);
+                teleport(player(server), level, workshopSite.getX(), workshopSite.getY(),
+                        workshopSite.getZ());
+                record(BENCHES.size() == WORKERS,
+                        "PLAN stood " + BENCHES.size() + " workstation(s) up on empty ground, "
+                                + BENCH_SPACING + " blocks apart, with no bell anywhere near them");
+                beginAwait(6000);
+            }
+            case 35 -> {
+                // Four conditions, and each one is needed by something below rather than by the
+                // clock. Findable by id is session 12's lesson. A persona is what the plan reads.
+                // A JOB_SITE is what there is to stand off *from*. And an offer is what a restock
+                // resets — a villager with no trade cannot demonstrate not restocking.
+                if (stillWaiting(server, () -> WORKERS_PRESENT.size() == WORKERS
+                                && WORKERS_PRESENT.stream().allMatch(v ->
+                                        level.getEntity(v.getId()) == v
+                                                && PersonaService.personaOf(v).isPresent()
+                                                && net.namesake.day.Steering.jobSiteOf(v) != null
+                                                && !v.getOffers().isEmpty()),
+                        true, "six villagers to take a workstation and stock a counter")) {
+                    return;
+                }
+                record(WORKERS_PRESENT.stream().allMatch(v ->
+                                net.namesake.day.Steering.jobSiteOf(v) != null),
+                        "PLAN all six villagers claimed a workstation of their own");
+
+                assignIndustry(server);
+                // Uses are raised on everybody's offers now, so a reset later is evidence that
+                // WorkAtPoi.start ran rather than that nothing ever needed resetting.
+                for (Villager villager : WORKERS_PRESENT) {
+                    villager.getOffers().forEach(offer -> {
+                        offer.resetUses();
+                        offer.increaseUses();
+                    });
+                }
+                // Let the clock run for the first time this world has had one, so the boundary at
+                // 2000 is crossed by villagers rather than by a setDayTime.
+                server.getGameRules().getRule(GameRules.RULE_DAYLIGHT).set(true, server);
+                level.setDayTime(net.namesake.day.DaySlot.LABOUR_I.startsAt() - 40);
+                waveSplit = 0;
+                beginAwait(1200);
+            }
+            case 36 -> {
+                // Sampled every tick on the way past, because the wave is the one thing here that
+                // only exists *during* a boundary. A tick later there is nothing left to see.
+                sampleTheWave(server, level);
+                if (stillWaiting(server, () -> WORKERS_PRESENT.stream()
+                                .filter(v -> !isDiligent(v))
+                                .allMatch(v -> net.namesake.day.Steering.standoffOf(v).isPresent()),
+                        false, "every lazy villager to be given somewhere to stand")) {
+                    return;
+                }
+                record(waveSplit > 0,
+                        "WAVE the village crossed the 2000 boundary over several ticks rather than "
+                                + "in one — at its widest, " + waveSplit + " of " + WORKERS
+                                + " villager(s) had crossed while the rest had not");
+
+                // Nine o'clock, and frozen there. WorkAtPoi needs about six hundred ticks a
+                // villager and LABOUR_I is only three thousand long, so a running clock would end
+                // the slot before the slowest coin landed and the leg would be measuring the
+                // schedule instead of the mechanic.
+                server.getGameRules().getRule(GameRules.RULE_DAYLIGHT).set(false, server);
+                level.setDayTime(3000);
+                beginAwait(24000);
+            }
+            case 37 -> {
+                // THE POLL THIS WHOLE LEG TURNS ON. Not a tick count, and not a position: the
+                // memory WorkAtPoi.start stamps. See the method note.
+                if (stillWaiting(server, () -> WORKERS_PRESENT.stream()
+                                .filter(AttachBetHarness::isDiligent)
+                                .allMatch(v -> v.getBrain()
+                                        .hasMemoryValue(MemoryModuleType.LAST_WORKED_AT_POI)),
+                        true, "every diligent villager to reach WorkAtPoi.start at least once")) {
+                    return;
+                }
+                checkTheStandoffHeld(server, level);
+                restoreTheClock(server, level);
+                writeSubjects(level);
+                advance(server, 5);
+            }
+            default -> finish(server, true);
+        }
+    }
+
+    private static boolean isDiligent(Villager villager) {
+        return PersonaService.personaOf(villager).map(p -> DILIGENT.contains(p.id())).orElse(false);
+    }
+
+    /**
+     * The transition wave, caught in the act.
+     *
+     * <p>{@code DayPlan.offsetOf} is measured over 4,536 personas in a unit test; what a unit test
+     * cannot say is whether the runtime <i>reads</i> it. This is the check that it does: at some
+     * tick during the crossing, some of these six villagers are in {@code LABOUR_I} and the rest are
+     * still in {@code DAWN}. If the offset were computed and ignored — which is exactly what this
+     * session shipped for an hour before a test caught it — every villager would cross on the same
+     * tick and this would read zero.
+     */
+    private static void sampleTheWave(MinecraftServer server, ServerLevel level) {
+        long dayTime = level.getDayTime();
+        int crossed = 0;
+        int total = 0;
+        for (Villager villager : WORKERS_PRESENT) {
+            Persona persona = PersonaService.personaOf(villager).orElse(null);
+            if (persona == null || !persona.isGenerated()) {
+                continue;
+            }
+            total++;
+            if (net.namesake.day.DayPlan.slotFor(persona, dayTime) == net.namesake.day.DaySlot.LABOUR_I) {
+                crossed++;
+            }
+        }
+        if (crossed > 0 && crossed < total) {
+            waveSplit = Math.max(waveSplit, crossed);
+        }
+    }
+
+    /** Half the village industrious, half not — written onto the personas the plan actually reads. */
+    private static void assignIndustry(MinecraftServer server) {
+        NpcRegistry registry = NpcRegistry.get(server);
+        DILIGENT.clear();
+        int index = 0;
+        for (Villager villager : WORKERS_PRESENT) {
+            Persona persona = PersonaService.personaOf(villager).orElseThrow();
+            boolean diligent = index++ % 2 == 0;
+            // Well clear of the threshold on both sides, so the leg is testing the mechanic rather
+            // than the boundary. DayPlanDistributionTest is where the threshold itself is measured.
+            registry.put(persona.withTrait(Persona.INDUSTRY, (byte) (diligent ? 60 : -40)));
+            if (diligent) {
+                DILIGENT.add(persona.id());
+            }
+        }
+    }
+
+    private static void restoreTheClock(MinecraftServer server, ServerLevel level) {
+        server.getGameRules().getRule(GameRules.RULE_DAYLIGHT).set(false, server);
+        // Back to where configure() left it, so the verify phase opens on the world it expects.
+        level.setDayTime(18000);
+    }
+
+    /**
+     * <b>The exit criterion, clause by clause.</b>
+     *
+     * <p>Every assertion here is by effect on something vanilla wrote — {@code LAST_WORKED_AT_POI},
+     * an offer's use count, a block position — rather than on a flag of ours. A spent flag reads as
+     * success; a reset use count is a restock that actually happened.
+     */
+    private static void checkTheStandoffHeld(MinecraftServer server, ServerLevel level) {
+        List<Villager> diligent = WORKERS_PRESENT.stream()
+                .filter(AttachBetHarness::isDiligent).toList();
+        List<Villager> lazy = WORKERS_PRESENT.stream()
+                .filter(v -> !isDiligent(v)).toList();
+
+        long worked = diligent.stream()
+                .filter(v -> v.getBrain().hasMemoryValue(MemoryModuleType.LAST_WORKED_AT_POI))
+                .count();
+        record(worked == diligent.size(),
+                "PLAN every industrious villager reached WorkAtPoi.start — the sound, the "
+                        + "LAST_WORKED_AT_POI stamp and the restock are one gate (" + worked
+                        + " of " + diligent.size() + ")");
+
+        long lazyWorked = lazy.stream()
+                .filter(v -> v.getBrain().hasMemoryValue(MemoryModuleType.LAST_WORKED_AT_POI))
+                .count();
+        record(lazyWorked == 0,
+                "PLAN no lazy villager reached WorkAtPoi.start, measured after every industrious "
+                        + "one already had (" + lazyWorked + " of " + lazy.size() + " did)");
+
+        // "Lazy villagers demonstrably do not restock", and this is the demonstration rather than
+        // the inference: restock() resets every offer's use count, the uses were raised before the
+        // slot began, and a counter whose uses are still up is a counter nobody restocked.
+        long restocked = diligent.stream().filter(AttachBetHarness::wasRestocked).count();
+        long lazyRestocked = lazy.stream().filter(AttachBetHarness::wasRestocked).count();
+        record(restocked > 0,
+                "RESTOCK " + restocked + " of " + diligent.size() + " industrious villager(s) had "
+                        + "their offer uses reset, so the claim below is about something rather "
+                        + "than about nothing");
+        record(lazyRestocked == 0,
+                "RESTOCK no lazy villager restocked — their counters still hold the uses this leg "
+                        + "put on them (" + lazyRestocked + " of " + lazy.size() + " reset)");
+
+        // And where everybody is standing, which is the half a player sees. Asserted on both vanilla
+        // metrics, because that is what the standoff is an intersection of.
+        int atWork = 0;
+        for (Villager villager : diligent) {
+            BlockPos job = net.namesake.day.Steering.jobSiteOf(villager);
+            if (job != null && net.namesake.day.DayPlan.isWithinArmsReach(job,
+                    villager.blockPosition())) {
+                atWork++;
+            }
+        }
+        record(atWork > 0, "PLAN " + atWork + " of " + diligent.size() + " industrious villager(s) "
+                + "are inside WorkAtPoi's 1.73 m right now — a snapshot rather than the criterion, "
+                + "because they stroll between spells of work");
+
+        int standingOff = 0;
+        int wrongPlace = 0;
+        for (Villager villager : lazy) {
+            BlockPos job = net.namesake.day.Steering.jobSiteOf(villager);
+            BlockPos where = villager.blockPosition();
+            if (job == null) {
+                continue;
+            }
+            if (net.namesake.day.DayPlan.isWithinArmsReach(job, where)) {
+                wrongPlace++;
+            } else if (job.distManhattan(where) <= net.namesake.day.DayPlan.VANILLA_JOB_SITE_TOLERANCE) {
+                standingOff++;
+            }
+        }
+        record(wrongPlace == 0,
+                "STANDOFF no lazy villager is within arm's reach of their workstation, which is the "
+                        + "position WorkAtPoi's own gate reads (" + wrongPlace + " were)");
+        record(standingOff > 0,
+                "STANDOFF " + standingOff + " of " + lazy.size() + " lazy villager(s) are parked "
+                        + "inside vanilla's Manhattan-9 tolerance and outside 1.73 — the annulus "
+                        + "the whole mechanic is built on");
+
+        // The veto, which is what holds them there. Without this the leg would pass on a world
+        // where the standoff happened to survive because nothing contested it.
+        String counts = net.namesake.day.Steering.describe(level);
+        boolean vetoed = counts.contains("declined") && !counts.contains("0 job-site walk target");
+        record(vetoed,
+                "VETO vanilla offered the job site back and it was declined — " + counts
+                        + ". StrollToPoi re-asserts the workstation every 80 ticks for anybody "
+                        + "within ten metres, so a standoff that was never contested would be a "
+                        + "standoff that is not holding, it is merely early");
+
+        // And the two postures that say a silent villager was meant to be silent. This is the
+        // clause the inherited bug makes necessary: a stuck villager is silent exactly like a lazy
+        // one, so without a name for it "you can hear which is which" is met by a false positive.
+        long stuck = WORKERS_PRESENT.stream()
+                .map(net.namesake.day.Steering::postureOf)
+                .filter(p -> p == net.namesake.day.Steering.Posture.STUCK
+                        || p == net.namesake.day.Steering.Posture.BELL_LOCKED)
+                .count();
+        record(stuck == 0,
+                "PLAN no villager in this workshop is stuck or bell-locked (" + stuck + "), so "
+                        + "every silence above is a silence the plan chose");
+    }
+
+    /** True if this villager's offers have been reset since the leg raised them. */
+    private static boolean wasRestocked(Villager villager) {
+        return !villager.getOffers().isEmpty()
+                && villager.getOffers().stream().allMatch(offer -> offer.getUses() == 0);
+    }
+
+    /**
+     * A flat platform, six workstations ten blocks apart, and six villagers.
+     *
+     * <p><b>No bell, deliberately.</b> A bell writes {@code HEARD_BELL_TIME} into everything within
+     * 32 blocks with no expiry, and {@code ReactToBell} then holds them in {@code HIDE} — which is
+     * the mechanism behind the villagers stuck in their own houses. Putting one here would make this
+     * leg intermittently measure that instead of the standoff, which is exactly the shape of defect
+     * session 12's counter leg cost three red {@code main}s to.
+     */
+    private static void buildWorkshop(ServerLevel level) {
+        int half = BENCH_SPACING * WORKERS / 2 + 6;
+        for (int dx = -half; dx <= half; dx++) {
+            for (int dz = -12; dz <= 12; dz++) {
+                level.setBlockAndUpdate(workshopSite.offset(dx, -1, dz),
+                        Blocks.STONE.defaultBlockState());
+                for (int dy = 0; dy <= 3; dy++) {
+                    level.setBlockAndUpdate(workshopSite.offset(dx, dy, dz),
+                            Blocks.AIR.defaultBlockState());
+                }
+            }
+        }
+
+        BENCHES.clear();
+        WORKERS_PRESENT.clear();
+        for (int i = 0; i < WORKERS; i++) {
+            int x = (i - WORKERS / 2) * BENCH_SPACING;
+            BlockPos bench = workshopSite.offset(x, 0, 0);
+            // setBlockAndUpdate, because that path is what reaches ServerLevel#onBlockStateChange
+            // and registers the point of interest. Session 03's finding, and without it these are
+            // decorative lecterns and nobody takes a job.
+            level.setBlockAndUpdate(bench, Blocks.LECTERN.defaultBlockState());
+            BENCHES.add(bench);
+
+            Villager villager = EntityType.VILLAGER.spawn(level, bench.offset(0, 0, 2),
+                    MobSpawnType.COMMAND);
+            if (villager == null) {
+                throw new IllegalStateException("could not spawn workshop villager " + i);
+            }
+            villager.setPersistenceRequired();
+            WORKERS_PRESENT.add(villager);
         }
     }
 

@@ -15,6 +15,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.namesake.Namesake;
 import net.namesake.board.NoticeBoard;
 import net.namesake.command.NamesakeCommands;
+import net.namesake.day.Steering;
 import net.namesake.harness.AttachBetHarness;
 import net.namesake.harness.ProfilerHarness;
 import net.namesake.npc.PersonaService;
@@ -37,7 +38,13 @@ public final class NamesakeFabric implements ModInitializer {
         Namesake.init();
 
         // Fires for fresh spawns and for chunk loads alike (ServerLevel.EntityCallbacks#onTrackingStart).
-        ServerEntityEvents.ENTITY_LOAD.register((entity, level) -> PersonaService.onEntityLoad(entity));
+        ServerEntityEvents.ENTITY_LOAD.register((entity, level) -> {
+            PersonaService.onEntityLoad(entity);
+            // After the mint, never before: session 13's roster only wants villagers that already
+            // have a generated persona, and the line above is what generates one.
+            Steering.onVillagerLoaded(entity);
+        });
+        ServerEntityEvents.ENTITY_UNLOAD.register((entity, level) -> Steering.onVillagerUnloaded(entity));
 
         // Fires inside Mob.convertTo, before the new entity is added to the level. Covers both
         // villager -> zombie villager and the cure back, since both go through convertTo.
@@ -119,6 +126,7 @@ public final class NamesakeFabric implements ModInitializer {
             VerbNetwork.onServerStopping();
             SettlementRegistrar.onServerStopping();
             RoadNetwork.onServerStopping();
+            Steering.onServerStopping();
         });
 
         // Spends whatever settlement survey a villager's arrival asked for, a few chunks at a
@@ -131,6 +139,11 @@ public final class NamesakeFabric implements ModInitializer {
             SettlementRegistrar.onServerTick(server);
             Gossip.onServerTick(server);
             RoadNetwork.onServerTick(server);
+            // Session 13. Deliberately at the END of the tick, and it is the whole mechanism: the
+            // brain runs during the entity tick, so a walk target written by a vanilla behaviour
+            // this tick is not acted on by MoveToTargetSink until the next one. This hook is the
+            // window in between. See Steering.declineTheJobSite.
+            Steering.onServerTick(server);
             AttachBetHarness.onServerTick(server);
             ProfilerHarness.onServerTick(server);
         });

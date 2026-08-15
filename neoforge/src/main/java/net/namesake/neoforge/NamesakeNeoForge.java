@@ -7,6 +7,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.namesake.Namesake;
 import net.namesake.board.NoticeBoard;
 import net.namesake.command.NamesakeCommands;
+import net.namesake.day.Steering;
 import net.namesake.harness.AttachBetHarness;
 import net.namesake.harness.ProfilerHarness;
 import net.namesake.npc.PersonaService;
@@ -24,6 +25,7 @@ import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
+import net.neoforged.neoforge.event.entity.EntityLeaveLevelEvent;
 import net.neoforged.neoforge.event.entity.living.LivingConversionEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDamageEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
@@ -52,6 +54,7 @@ public final class NamesakeNeoForge {
         // PersistentEntitySectionManager#addEntity fires this for chunk loads as well as fresh
         // spawns, so it covers the same ground as Fabric's ENTITY_LOAD.
         NeoForge.EVENT_BUS.addListener(NamesakeNeoForge::onEntityJoin);
+        NeoForge.EVENT_BUS.addListener(EntityLeaveLevelEvent.class, NamesakeNeoForge::onEntityLeave);
         NeoForge.EVENT_BUS.addListener(NamesakeNeoForge::onConversion);
         NeoForge.EVENT_BUS.addListener(NamesakeNeoForge::onRegisterCommands);
         NeoForge.EVENT_BUS.addListener(NamesakeNeoForge::onEntityInteract);
@@ -75,6 +78,17 @@ public final class NamesakeNeoForge {
             return;
         }
         PersonaService.onEntityLoad(event.getEntity());
+        // After the mint, never before: session 13's roster only wants villagers that already have
+        // a generated persona, and the line above is what generates one.
+        Steering.onVillagerLoaded(event.getEntity());
+    }
+
+    /** Fires on unload, death and removal alike, which is the same ground as Fabric's ENTITY_UNLOAD. */
+    private static void onEntityLeave(EntityLeaveLevelEvent event) {
+        if (event.getLevel().isClientSide()) {
+            return;
+        }
+        Steering.onVillagerUnloaded(event.getEntity());
     }
 
     /**
@@ -183,6 +197,7 @@ public final class NamesakeNeoForge {
         VerbNetwork.onServerStopping();
         SettlementRegistrar.onServerStopping();
         RoadNetwork.onServerStopping();
+        Steering.onServerStopping();
     }
 
     /**
@@ -197,6 +212,8 @@ public final class NamesakeNeoForge {
         SettlementRegistrar.onServerTick(event.getServer());
         Gossip.onServerTick(event.getServer());
         RoadNetwork.onServerTick(event.getServer());
+        // Session 13, at the END of the tick — see NamesakeFabric for why that is the mechanism.
+        Steering.onServerTick(event.getServer());
         AttachBetHarness.onServerTick(event.getServer());
         ProfilerHarness.onServerTick(event.getServer());
     }
