@@ -478,15 +478,25 @@ public final class AttachBetHarness {
             case 18 -> runGossipCheck(server, level);
             case 19, 20, 21, 22, 23, 24 -> runRoadCheck(server, level);
             case 25, 26, 27, 28, 29 -> runNoticeBoardCheck(server, level);
-            case 30, 31 -> runStandingBandCheck(server, level);
+            case 30, 31, 32 -> runStandingBandCheck(server, level);
             default -> finish(server, true);
         }
     }
 
     // --- session 12: the bands, at a real counter -------------------------------------------------
 
-    /** The villager the band legs trade with. Spawned here, so it starts with no bond at all. */
+    /**
+     * The two villagers the band legs use. Spawned by the harness, so each starts with no bond and
+     * no vanilla gossip at all.
+     *
+     * <p><b>Two rather than one, and the second is a defect being fixed rather than tidiness.</b>
+     * Punching the first would give it a vanilla {@code MINOR_NEGATIVE} gossip about this player, and
+     * {@code updateSpecialPrices} would then add a markup of its own to every later reading — which
+     * is correct behaviour and made every band on the ladder read two emeralds high. The ladder is
+     * measured on a villager nobody has touched; the blow lands on one of its own.
+     */
     private static Villager trader;
+    private static Villager punchbag;
 
     /**
      * <b>The two consumers that only a running game can show.</b>
@@ -545,6 +555,26 @@ public final class AttachBetHarness {
                         counterSite);
                 teleport(player(server), level, counterSite.getX(), counterSite.getY(),
                         counterSite.getZ());
+                trader = standUpATrader(level, 2);
+                punchbag = standUpATrader(level, -2);
+                record(trader != null && punchbag != null,
+                        "BAND stood two villagers up on empty ground two hundred blocks from the "
+                                + "village, so nothing this run already measured can hear the blow");
+                beginAwait(1200);
+            }
+            case 32 -> {
+                // A poll rather than an assumption, and CI is what said so. A villager is minted a
+                // persona by the entity-load hook, and a chunk that is block-loaded is not yet
+                // necessarily entity-ticking on a runner three to four times slower than this
+                // machine — so spawning and reading the persona in one tick passed here and turned
+                // main red there. Session 01's general rule, arriving for the sixth time: wait for
+                // the condition you actually care about, never for a number of ticks.
+                if (stillWaiting(server, () -> trader != null && punchbag != null
+                                && PersonaService.personaOf(trader).isPresent()
+                                && PersonaService.personaOf(punchbag).isPresent(),
+                        false, "the two traders to be minted a persona each")) {
+                    return;
+                }
                 checkTheCounter(server, level);
                 writeSubjects(level);
                 advance(server, 5);
@@ -587,13 +617,6 @@ public final class AttachBetHarness {
 
     private static void checkTheCounter(MinecraftServer server, ServerLevel level) {
         ServerPlayer player = player(server);
-        trader = standUpATrader(level, 2);
-        // TWO villagers, and the second one is a defect being fixed rather than tidiness. Punching
-        // the first would give it a vanilla MINOR_NEGATIVE gossip about this player, and vanilla's
-        // own updateSpecialPrices would then add a markup of its own to every subsequent reading —
-        // which is correct behaviour and made every band on the ladder read two emeralds high. The
-        // ladder is measured on a villager nobody has touched; the blow lands on one of its own.
-        Villager punchbag = standUpATrader(level, -2);
         if (trader == null || punchbag == null) {
             record(false, "BAND could not stand a villager up to trade with");
             return;

@@ -28,7 +28,7 @@ Where any other document disagrees on sequence, this wins.
   this one could claim: `runClient` on Fabric mints a fresh player every launch, so the person
   running `verify` is genuinely somebody else — sixteen villagers across two settlements, all
   speaking a stranger line and all charging ×1.00, while the player who earned something still has
-  it. **437 unit tests, 137 harness legs in `setup` and 35 in `verify`** (38 on a migrating run).
+  it. **437 unit tests, 138 harness legs in `setup` and 35 in `verify`** (38 on a migrating run).
   Two ruled numbers did not compose and the session opened on both, as 08, 10 and 11 did: the price
   band's axis, and §10 step 5's **0.95**, which is not on the ruled ladder and — measured — is not
   what one gift two villages away produces either. The number gave way, to **1.00**, and the finding
@@ -4814,7 +4814,7 @@ JVMs would be measuring the harness.
 
 | phase | legs | run against |
 |---|---|---|
-| `setup` | **137** (120 before this session) | a fresh world on the session 12 build |
+| `setup` | **138** (120 before this session) | a fresh world on the session 12 build |
 | `verify` | **35** (29 before) | that world, saved and reloaded |
 | `verify` | **38** | the archived **schema-7** world, migrating 7 → 8 |
 | `verify` | **34** | the same world again — `no migration expected: world is already at schema 8` |
@@ -4850,19 +4850,29 @@ unrelated `verify` legs red. **A witness scan is a two-hundred-block problem whe
 testing is violence.** The counter now stands on empty ground two hundred blocks from anything, and
 the blow lands on a second villager so the ladder is measured on one nobody has touched.
 
-**3. A village that already trusts you does not gouge you over one shove, and that is correct.** One
+**3. CI found the one defect four green local runs could not, and it is session 01's rule for the
+sixth time.** The band leg spawned its two villagers and read their personas **in the same tick**,
+which passed on this machine every time and turned `main` red on both loaders at
+`BAND and a persona of their own, minted on sight`. A persona is minted by the entity-load hook, and
+a chunk that is *block*-loaded is not necessarily *entity*-ticking yet on a runner three to four
+times slower — so the spawn had happened and the mint had not. The fix is the rule session 01 wrote
+after the same class of thing three times: **poll for the condition you actually care about, with a
+deadline, never for a number of ticks and never for the tick after the thing you asked for.** The
+leg now waits for both personas to exist before it reads either.
+
+**4. A village that already trusts you does not gouge you over one shove, and that is correct.** One
 blow into a village at 30–100 trust moves the struck villager by two points and changes nobody's
 band. Step 6 works in the acceptance script because B *has not* taken you in yet — which is the
 script being right about where to run it rather than the mechanism being weak. It is worth knowing
 before a playtest: **punch somebody you have been kind to for a month and nothing will happen to the
 price.**
 
-**4. `Standing.of` tests hostility before warmth, and it is session 09's ordering rather than a new
+**5. `Standing.of` tests hostility before warmth, and it is session 09's ordering rather than a new
 one.** A villager you have been kind to and then struck is wary of you, not warm to you: warmth
 decays a point a day toward four tenths of its peak, so a player who was generous last week is still
 warm today whatever they did this morning. Trust going negative is what says *and then you did this*.
 
-**5. A one-item trade cannot move, at any band.** A quarter of one rounds to nothing, and vanilla's
+**6. A one-item trade cannot move, at any band.** A quarter of one rounds to nothing, and vanilla's
 own `clamp(…, 1, maxStackSize)` would refuse it anyway. So the cheapest trades in the game are the
 same price to everybody. That is a real property of a band expressed as a fraction of a price, and it
 is in a test with its own name rather than left to be found.
@@ -4901,6 +4911,13 @@ name them, and the second of the three is `BAND STEP 7`.
 - `$env:JAVA_HOME` still must be pinned to JDK 21. Kill the dev client between runs, and delete
   `<loader>/run/saves/namesake_attachbet` before a `setup`. A watchdog exit still makes Gradle report
   a failure over a PASS verdict — **read the verdict file**, which happened once this session.
+- **A new harness leg's first draft will assume a tick that has not happened.** Session 13 adds legs
+  about villagers walking to workstations, which is the most timing-dependent thing this harness has
+  ever asserted. This session shipped a leg that spawned a villager and read its persona in the same
+  tick — green here four times, red on both loaders in CI, because a chunk that is block-loaded is
+  not necessarily entity-ticking on a runner three to four times slower. **Poll for the condition,
+  with a deadline. Never for a number of ticks, and never for "the tick after the thing I asked
+  for."**
 - **The schema-7 archives are at `C:\MCA Reborn Rework\.archives\schema7-1770423`**, with their
   subjects files, for both loaders — and they were used: the load test above is them. **And a
   schema-8 pair is already waiting at `C:\MCA Reborn Rework\.archives\schema8-session12`**, taken
