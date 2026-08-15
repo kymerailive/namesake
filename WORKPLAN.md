@@ -40,7 +40,7 @@ Where any other document disagrees on sequence, this wins.
   boundary. **7.20 → 4.78 µs**, and what is left is ≈34 ns a loaded villager — half a microsecond in
   the world a player actually has, four fifths of the budget at the population the architecture is
   sized against, and **four times it at four hundred.** Which of those the number should be ruled
-  against is the owner's. **464 unit tests, up from 437**, and the attach-bet harness grew a day-plan
+  against is the owner's. **466 unit tests, up from 437**, and the attach-bet harness grew a day-plan
   leg in each phase — **39 in `verify`**, and both loaders green on both phases.
   Before that: session 12, **and what a village thinks of you is what it charges you.** Walk
   up to a librarian who is warm to you and a book costs fifteen emeralds where a stranger pays
@@ -415,6 +415,16 @@ mod still works without it.
 ### Session 15 — Art, config, playtest
 **Build.** ~25 greyscale textures. Renderer swap for `EntityType.VILLAGER` onto the vanilla humanoid
 model. Skin and hair colormaps. Culture palette tinting. The documented "gentle" config preset.
+
+**Also owed here, ruled by the owner at the close of session 13: `Residency.TRUST_THRESHOLD` rises,
+because three in-game days to a discount is too fast.** It lands at 15 rather than 14 for the same
+reason the standing split does — that constant *is* `Standing.TRUSTED_TRUST`, so moving it moves what
+every villager in the world charges and re-measures every band threshold session 12 set.
+**28 is the recommendation and it is measured**: 24 leaves the median at three days and only 28 moves
+it to four, taking *inside three days* from 80.6% of a real population to 23.6%. The table is
+`PersonalityDistributionTest.whatEachTrustThresholdCosts`, and whatever number 15 picks it also owes
+`DESIGN.md` §5's *"the third resident crosses on day 28"* a re-measurement, because that figure was
+taken at 20.
 
 **Also owed here, ruled by the owner at the close of session 11: whether a village comes with a Notice
 Board already standing.** A lectern *is* a board, and a village only has one if it generated a library
@@ -5654,6 +5664,115 @@ harder rather than less — a leg can assert that three villagers are five to ei
 workstation and be describing a village that looks like nothing at all. The leg now stands the player
 back and photographs it.
 
+
+
+#### The owner's four rulings at the close, and what each one costs
+
+The session closed by putting the open questions back to the owner rather than carrying them. All
+four were ruled, and two of them changed the code.
+
+**1. The tick budget is measured against ninety-six and stays at ~5.95 µs. Session 14 pays.**
+Recorded above, in the profiler section. The cost is stated there rather than here because it is
+session 14's to plan around, not a fact about session 13.
+
+**2. The bell lock is repaired rather than reported.** Recorded above. The objection was raised and
+overruled, and the repair invents nothing — it runs `SetHiddenState`'s own exit.
+
+**3. Session 12's board phrases and warmth decay: both closed, neither moves.**
+
+- *"Do the four reachable board phrases read right?"* — **yes, ruled, closed.** Four reachable
+  phrases are enough, and the two that a player cannot reach are correct behaviour rather than a
+  defect: `has not met you` is unreachable because `Board.of` counts a stranger instead of naming
+  them, and `will not forget` needs one witnessed killing.
+- *"Does the fall from `WARM` back to `TRUSTED` read as intended or as decay a player would
+  resent?"* — **as intended, ruled, closed.** `Bond.DECAY_TARGET` is untouched. The design session
+  12 argued for — *the discount you keep versus the discount you have to keep earning* — is the one
+  the owner wants, including its ceiling: past a peak of about forty-nine the top discount is
+  permanent, and that stands.
+
+**4. Three in-game days to a discount is TOO FAST. It should cost more — and this session did not
+change it, deliberately.**
+
+`Residency.TRUST_THRESHOLD` is the number, and since session 12 it is read twice:
+`Standing.TRUSTED_TRUST` **is** that constant rather than a copy of it, so moving it moves **what
+every villager in the world charges** as well as when a village takes you in. That makes this a
+re-measurement of every band threshold rather than an edit — which is precisely what session 12 ruled
+the standing split would be, and precisely why that landed at **15 with the config**. This lands
+there with it.
+
+**What is delivered instead of the change is the number to make it with**, measured over the real
+generator so nobody has to guess. Trust does not decay and a day is worth at most one
+personality-scaled `Bond.DAILY_CAP`, so days-to-threshold is `ceil(threshold / allowance)` and the
+spread is the allowance's — 4 to 12, commonest 8 and 9:
+
+| threshold | median days | p90 | share inside three days |
+|---|---|---|---|
+| **20 — today** | 3 | 4 | **80.6%** |
+| 24 | 3 | 4 | 63.8% |
+| **28** | **4** | 5 | **23.6%** |
+| 32 | 4 | 6 | 9.1% |
+| 40 | 5 | 7 | 0.0% |
+| 48 | 6 | 8 | 0.0% |
+
+The row for 20 is the check on the rest: it reads 80.6% against session 12's simulated **77%**, and
+the two agreeing to within a few points is what says this arithmetic and the instrument describe the
+same world. (The arithmetic is the optimistic bound — it assumes the allowance is filled every day —
+which is why it sits slightly above the measured figure.)
+
+**The recommendation is 28, and the reason is the median rather than the share.** *Too fast* is a
+statement about how long it takes, and **24 does not change how long it takes** — the median stays at
+three days and only the tail moves. Twenty-eight is the smallest candidate that moves the median to
+four, and it takes *inside three days* from four villagers in five to fewer than one in four, which
+turns three days from the ordinary case into the lucky one. Above 32 the curve flattens and the cost
+is paid in patience rather than in feel.
+
+`PersonalityDistributionTest.whatEachTrustThresholdCosts` is that table, kept rather than run once,
+so session 15 changes the number against data and can re-run it against whatever else it moves.
+#### The playtest, and the two questions it is asking
+
+The owner ruled at the close of the session that **both** feel questions are theirs: whether five to
+eight blocks reads as *over there* rather than as a villager who wandered off, and whether one
+villager in four reads as the right number of idlers. This is the script, and it was **checked
+against the source before being written down** — session 12's seventh instrument, which found four
+reachability facts that 437 unit tests and 140 harness legs could not.
+
+**Launch:** `.\gradlew.bat :fabric:runClient` from `C:\MCA Reborn Rework`, no `-Pharness`. Create or
+open a normal world in creative and find a village with villagers who have jobs. *(A plain
+`runClient` is **not** muted — `HarnessClient.unattended` only mutes an armed run.)*
+
+**Question one — does one in four read right?** Stand in the village where you can see several
+workstations. `/time set 3000` — that is 09:00, inside `LABOUR_I`, and the only slot besides
+`LABOUR_II` where the plan has an opinion. Wait a few seconds, then `/namesake debug dayplan`.
+
+The `posture` column is the answer: `WORKING` is a villager the plan left entirely to vanilla,
+`STANDOFF` is one it sent away, `WALKING_OUT` is one on the way. Count them, then look up. **The
+question is whether the village still reads as working.**
+
+**Question two — does five to eight blocks read as deliberate?** Pick a villager who reads `WORKING`
+and force them lazy: `/namesake debug settrait industry -40` while looking at them.
+
+**Then cross a boundary, and this step is not optional.** The plan caches a villager's traits and
+refreshes them **only when they cross a slot boundary** — a registry lookup per villager per tick is
+what took this session over its tick budget once already. So a trait set at 09:00 does nothing until
+the next crossing. `/time set 1900`, wait five seconds, `/time set 3000`. Now they cross `LABOUR_I`
+again with the new industry and walk out.
+
+Watch where they stop. **The question is whether that reads as a villager standing about rather than
+as a villager who got lost.**
+
+**Four things that will look like bugs and are not.**
+
+- **A villager who works, then walks off, then works again.** `WorkAtPoi` has a 300-tick cooldown and
+  a coin on top, so a *diligent* villager is at their bench for a fraction of any given second and
+  strolls in between. The plan does not touch them at all.
+- **`NO_JOB`.** A nitwit or an unemployed villager has no workstation to stand off from. Nothing to
+  see; find one with a trade.
+- **Nothing happening outside 09:00–13:00 and 14:00–18:00.** Those are the two labour slots and the
+  plan is silent everywhere else, by design — `HAUL` and `NOON` belong to session 14's `ERRAND`.
+- **Do not ring the bell.** It writes `HEARD_BELL_TIME` into everything within 32 blocks and puts the
+  village into `HIDE`, where the plan deliberately does nothing. If you do ring it, a villager may
+  read `BELL_LOCKED` — **that is the inherited bug, and seeing one is worth telling me about**, even
+  though the plan now opens it after a minute.
 #### Carried into session 14
 
 - `$env:JAVA_HOME` still must be pinned to JDK 21. Kill the dev client between runs, and delete
@@ -5690,7 +5809,19 @@ back and photographs it.
   unchanged and for the unchanged reasons. `Steering.onServerTick` has one that is pointed at
   something.
 - **`DESIGN.md` §5's second route being much the cheaper of the two** is still open and still not
-  this session's, and the trust threshold is still read twice.
-- **The three rulings on feel from session 12 are still open** and session 13 did not touch any of
-  them: whether three in-game days to a discount reads as earned, whether the four reachable board
-  phrases read right, and whether the fall from *warm to you* back to *trusts you* reads as intended.
+  this session's.
+- **All three of session 12's rulings on feel were put back to the owner at this session's close and
+  all three were answered.** Two are closed and move nothing: the four reachable board phrases read
+  right, and the fall from *warm to you* back to *trusts you* is intended. **The third is a change
+  session 15 owes:** three in-game days to a discount is **too fast**, and
+  `Residency.TRUST_THRESHOLD` should rise. See the rulings section above for the measured table and
+  why **28** is the recommendation — and note that it lands at 15 rather than 14 for the same reason
+  the standing split does, because that constant *is* `Standing.TRUSTED_TRUST` and moving it
+  re-measures every band threshold session 12 set.
+- **Session 13's own two feel questions are the owner's and unanswered**: whether five to eight
+  blocks reads as *over there*, and whether one villager in four reads as the right number of idlers.
+  The script is above, checked against the source. **Neither number should be tuned before that
+  playtest** — both came off the generator rather than out of anybody's head.
+- **The bell lock repair has no reproduction.** `SteeringTest.theBellLockRepairIsNarrow` holds the
+  decision; nothing holds that the decision is ever reached in a running game. **Build the leg** —
+  ring a bell beside a bedless villager, assert the deadlock, assert it opens after a minute.

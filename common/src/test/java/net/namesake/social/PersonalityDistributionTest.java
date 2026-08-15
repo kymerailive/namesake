@@ -300,6 +300,56 @@ class PersonalityDistributionTest {
         return percentile(sorted(gaps), percent);
     }
 
+    /**
+     * <b>How many in-game days of daily kindness each candidate trust threshold costs.</b>
+     *
+     * <p>Reported rather than asserted, and it exists because of a ruling. The owner ruled at the
+     * close of session 13 that <b>three days to a discount is too fast and it should cost more</b>,
+     * and {@code Residency.TRUST_THRESHOLD} is the number that decides it — read twice since session
+     * 12, because {@code Standing.TRUSTED_TRUST} <i>is</i> that constant rather than a copy. Moving
+     * it moves what every villager in the world charges <i>and</i> when a village takes you in.
+     *
+     * <p>So whoever moves it should pick from this table rather than from a feeling about the
+     * number. Trust does not decay and a day is worth at most one personality-scaled
+     * {@code Bond.DAILY_CAP}, so days-to-threshold is {@code ceil(threshold / allowance)} and the
+     * spread across a real population is the spread of the allowance — measured 4 to 12, commonest
+     * 8 and 9.
+     *
+     * <p>The row for 20 is the one to read the others against: it reproduces session 12's measured
+     * <b>77% inside three days</b>, which is what says this arithmetic agrees with the instrument.
+     */
+    @Test
+    @DisplayName("what each candidate trust threshold would cost in in-game days")
+    void whatEachTrustThresholdCosts() {
+        List<Sample> population = population(20260815L);
+        StringBuilder report = new StringBuilder(
+                "\n=== days of daily kindness to reach a trust threshold ===\n")
+                .append(String.format(Locale.ROOT, "  %d personas; allowance is Personality"
+                        + ".allowance, capped at Bond.DAILY_CAP%n", population.size()))
+                .append("  threshold    median   p90   share reaching it inside 3 days\n");
+
+        for (int threshold : new int[]{20, 24, 28, 32, 40, 48}) {
+            List<Float> days = new ArrayList<>();
+            int insideThree = 0;
+            for (Sample sample : population) {
+                int allowance = Math.max(1, sample.allowance());
+                int taken = (threshold + allowance - 1) / allowance;
+                days.add((float) taken);
+                if (taken <= 3) {
+                    insideThree++;
+                }
+            }
+            float[] sorted = sorted(days);
+            report.append(String.format(Locale.ROOT, "  %9d %9.0f %5.0f %28.1f%%%n",
+                    threshold, percentile(sorted, 50), percentile(sorted, 90),
+                    insideThree * 100.0 / population.size()));
+        }
+        report.append("  (Residency.TRUST_THRESHOLD is ").append(Residency.TRUST_THRESHOLD)
+                .append(" — and it is also Standing.TRUSTED_TRUST, so a change here moves every "
+                        + "price in the world)\n");
+        System.out.println(report);
+    }
+
     @Test
     @DisplayName("two villagers of one settlement differ, not only two villagers of one world")
     void withinOneSettlementPeopleStillDiffer() {
