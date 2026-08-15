@@ -4518,7 +4518,7 @@ shape.
 
 ### Session 12 — 2026-08-15 — standing bands
 
-**Shipped.** `3a22d0c..RANGE` plus this ledger commit, pushed to `origin/main`. CI green on all three
+**Shipped.** `3a22d0c..1fa6578` plus this ledger commit, pushed to `origin/main`. CI green on all three
 jobs — build and test, and the attach-bet harness on each loader.
 
 **What a village thinks of you is now what it charges you.** A librarian who is warm to you sells a
