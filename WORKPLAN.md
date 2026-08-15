@@ -21,8 +21,9 @@ Where any other document disagrees on sequence, this wins.
   settlement had no name, so it has a derived one, from the bell and the culture, costing zero bytes.
   **Widths here are pixels rather than characters**, against `Window.calculateScale`'s 320×240 floor,
   and the advance table that makes that pure is pinned to the real `Font` by a harness leg — which
-  found five of its numbers wrong on the first run that reached it. **415 unit tests, 119 harness legs
-  in `setup` and 29 in `verify`.**
+  found five of its numbers wrong on the first run that reached it. **415 unit tests, 120 harness legs
+  in `setup` and 29 in `verify`.** **And the owner played it: *"Noticeboard worked!"*** — so no
+  playtest is outstanding, for the second session running.
   Before that: session 10, **and the thesis is machinery.** Feed six villagers in one village,
   wait a day, walk to a village down the road that you have never done anything in, and a villager
   there says *"Someone mentioned you, in passing."* — because somebody who was standing in the first
@@ -4327,24 +4328,41 @@ advance table was wrong on five characters when it was written, and the harness 
 That is rule 3 with the failure and the fix in the right order for once: the guard produced a genuine
 red before it produced a green, and nobody arranged it.
 
-#### Not ruled at close, and one of them is the exit criterion
+#### Ruled at close, by the owner: the board was played, and it worked
 
-**The exit criterion is the owner's and it has not been run.** *A new player who has read nothing can
-open the board and correctly explain what the mod tracks* is a person test like session 03's and
-session 10's, and no test in this repository can have an opinion about it.
+**The owner's words, kept because a paraphrase of a ruling is not a ruling: *"Noticeboard worked!"***
+Run in a real world, on Fabric, from the pushed build, with a lectern the owner stood up themselves.
 
-**What was checked is stated precisely so it is not mistaken for the criterion.** Every row of every
-state the board has fits the budget, measured in pixels rather than characters; the layout, the absence
-branches, the standing naming and the direction arithmetic are enumerated rather than sampled; and the
-board has been opened by a real player through vanilla's own interaction path, in two villages, on both
-loaders, drawn with the real font — and photographed. **It was also read before it was handed over**,
-in five states printed by the build and in four screenshots, which is where four of this session's five
-defects came from.
+**One clause of the criterion is not met and is folded rather than dropped, exactly as session 10's
+was.** The criterion says *a **new player who has read nothing** can open the board and correctly
+explain what the mod tracks*, and the owner wrote the brief. What is ruled is that **the board lands
+on somebody who knows the mod**; what is untested is whether it explains the mod to somebody who does
+not. **Session 15's exit criterion is already that test** — *a stranger plays 45 minutes and can
+describe, unprompted, something a villager remembered about them* — which is where session 10 folded
+the same clause of standing risk 2. So it is measured there rather than carried here as an
+outstanding playtest, and **the count of those is back to zero.**
 
-**The playtest script:** stand a lectern anywhere inside a village and right-click it with an empty
-hand. Do it in the village you have been giving things to, then walk down the road and do it in the
-next one. **The second board is the one to read** — it should say *No history.* under what they have
-seen you do, and name your first village under what they have been told.
+**What the machine checked is stated precisely so it is not mistaken for the criterion.** Every row of
+every state the board has fits the budget, measured in pixels rather than characters; the layout, the
+absence branches, the standing naming and the direction arithmetic are enumerated rather than sampled;
+and the board is opened by a real player through vanilla's own interaction path, in two villages, on
+both loaders, drawn with the real font — and photographed. **It was also read before it was handed
+over**, in five states printed by the build and in four screenshots, which is where four of this
+session's five defects came from. None of that is the ruling above; the ruling is a person opening it
+and it working.
+
+**The script it was run against:** stand a lectern anywhere inside a village and right-click it with
+an empty hand; do it in the village you have been giving things to, then walk down the road and do it
+in the next one.
+
+**And one thing about the dev client is worth recording here rather than only in the code, because it
+would have looked like a defect.** `runClient` on Fabric mints a new `PlayerNNN` — and therefore a new
+offline UUID — on **every launch**: 402, 292, 657, 197, 750 across this session's runs. Bonds and
+deeds are keyed to that UUID, so **an existing Fabric world's history belongs to a previous launch's
+player and a new launch sees a blank board.** Nothing is broken; a playtest on Fabric has to be one
+sitting. NeoForge is always `Dev` and does not have this problem. It is the same shape as session 10's
+stale working copy — the mod is fine and the launcher is not — and it is the practical half of the
+cross-loader asymmetry the verify leg found.
 
 **Discoverability is the open question, it is a feel question, and so it is the owner's.** A lectern is
 a notice board, and a village only has one if it generated a library or has a librarian; a player who
@@ -4402,7 +4420,8 @@ lead with the gossip is still the owner's.** Two lines in `registerFor`, unchang
   *shows* both routes and their progress, which is the first time either number has been visible to a
   player at all, so a playtest of the board is also a first read of whether that balance is right.
 
-**Ledger change.** Session 11 → done, session 12 → NEXT. **No risk movement and no exemption
+**Ledger change.** Session 11 → done, session 12 → NEXT, **and the exit criterion is ruled met by the
+owner in the same sitting rather than carried forward.** **No risk movement and no exemption
 movement** — none fell due, and for the fifth session running the forcing function was not what kept
 rule 5 honest; what did was adding a package to `DISPLAY_PACKAGES` before writing the code that would
 have wanted out of it. Five decisions added to `DESIGN.md` §2, taking the count 66 → 71, plus §9's
