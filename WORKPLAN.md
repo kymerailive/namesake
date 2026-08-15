@@ -5161,7 +5161,7 @@ decided it. No changes to the 16-session shape.
 
 ### Session 13 — 2026-08-15 — day plan I, the free slots
 
-**Shipped.** `13c750f..96fc556` plus this ledger commit, pushed to `origin/main`. CI green on all
+**Shipped.** `13c750f..baf4b21` plus this ledger commit, pushed to `origin/main`. CI green on all
 three jobs — build and test, and the attach-bet harness on each loader. Both loaders were also run
 locally, `setup` and `verify`, and both pass on both phases.
 
@@ -5808,6 +5808,25 @@ half of that ruling arriving: **the runner is not only a worse place to measure,
 to find a race.** A leg that is green on this machine and a coin toss on CI is not a flaky leg — it is
 a defect that needs a slower machine to reach, and the correct response is to find it rather than to
 widen the deadline.
+
+**And then it found a second one, in this session's own leg, one push later.** With the generation
+defect fixed, NeoForge went red again on:
+
+> `FAIL  PLAN 0 of 3 industrious villager(s) are inside WorkAtPoi's 1.73 m right now — a snapshot
+> rather than the criterion, because they stroll between spells of work`
+
+**The message is right and the assertion should never have been standing next to it.** `WorkAtPoi`
+runs on a 300-tick cooldown and then a coin, so *how many villagers are at their bench at this
+instant* is a sample of that coin — it passed here on every run and failed on the runner, where all
+three happened to be strolling. It is a logged line now. The claim the criterion is actually about —
+that they reached `WorkAtPoi.start` at all — is asserted off the memory the engine stamps and is
+untouched.
+
+**The lazy-villagers-in-the-annulus line beside it stays asserted, and the difference is the point.**
+A vetoed villager is not going anywhere, so a run where none of them is in the band is a run where the
+standoff is not holding. One of those two numbers samples a coin and the other samples nothing, and
+they looked identical until a slower machine told them apart. **Writing "this is a snapshot rather
+than the criterion" into an assertion's own failure message is not the same as not asserting it.**
 
 #### Carried into session 14
 
