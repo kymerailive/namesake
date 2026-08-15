@@ -344,6 +344,15 @@ mod still works without it.
 **Build.** ~25 greyscale textures. Renderer swap for `EntityType.VILLAGER` onto the vanilla humanoid
 model. Skin and hair colormaps. Culture palette tinting. The documented "gentle" config preset.
 
+**Also owed here, ruled by the owner at the close of session 11: whether a village comes with a Notice
+Board already standing.** A lectern *is* a board, and a village only has one if it generated a library
+or has a librarian — so today the player places one. The alternative is the settlement survey standing
+one up beside the bell when there is none within the membership radius: one vanilla block, idempotent
+against what is already there, and no persisted state, because "is there a lectern near the bell" is a
+question the world answers. It is a **world change** of the kind session 10 put behind a switch, which
+is why it belongs beside `-Dnamesake.roads=off` and the "gentle" preset rather than in session 11.
+**Decide it with the rest of how much of itself this mod puts into somebody's world.**
+
 **Note.** Art is genuinely deferrable to here — a dividend of the attach architecture. Everything
 through session 14 is playable and testable with vanilla villager appearance.
 
@@ -4342,6 +4351,17 @@ describe, unprompted, something a villager remembered about them* — which is w
 the same clause of standing risk 2. So it is measured there rather than carried here as an
 outstanding playtest, and **the count of those is back to zero.**
 
+**And exactly which board was read is recorded, because the log says and it is not the whole script.**
+The debug line is `Notice board at BlockPos{143, 70, 342} opened for Player30: 31 line(s), 4 watched,
+0 heard` — **one board, in the home village, with four things the village watched and nothing it had
+been told.** So what the owner ruled on is the *watched* half: the header, the residency routes, the
+standing column and the deed rows. **The hearsay row — session 10's loose end, and the reason this
+board is more than a summary — was not on their screen.** It is checked by machine in a real game on
+both loaders, it is photographed, and it was read off a screenshot before the hand-over; what has not
+happened is the owner meeting it in their own world. That is a smaller gap than the criterion's other
+clause and it is written down rather than rounded up, because *"it worked"* about four watched deeds
+is not a ruling about a sentence nobody saw.
+
 **What the machine checked is stated precisely so it is not mistaken for the criterion.** Every row of
 every state the board has fits the budget, measured in pixels rather than characters; the layout, the
 absence branches, the standing naming and the direction arithmetic are enumerated rather than sampled;
@@ -4364,23 +4384,31 @@ sitting. NeoForge is always `Dev` and does not have this problem. It is the same
 stale working copy — the mod is fine and the launcher is not — and it is the practical half of the
 cross-loader asymmetry the verify leg found.
 
-**Discoverability is the open question, it is a feel question, and so it is the owner's.** A lectern is
-a notice board, and a village only has one if it generated a library or has a librarian; a player who
-does not know that has to place one. Three answers exist and none is obviously right: leave it (a
-lectern is cheap and many villages already have one); have the settlement survey stand one up beside
-the bell, which is a world change of the kind session 10 put behind a switch; or say so in a line of
-dialogue, which is session 09's territory and would need a register. **Session 15 owns config and is
-where this lands if the answer is a switch.**
+**Discoverability — ruled by the owner at close: decide it at session 15, with the config.** A lectern
+is a notice board, and a village only has one if it generated a library or has a librarian; a player
+who does not know that has to place one, which is what the owner did. Three answers were offered and
+the third was taken: leave it (a lectern is cheap and many villages already have one); have the
+settlement survey stand one up beside the bell, which is a world change of the kind session 10 put
+behind a switch; or park it for session 15. **So it is on session 15's build list rather than in a
+comment**, beside the roads switch and the "gentle" preset, which is where a decision about how much
+of itself this mod puts into somebody's world belongs.
 
-**And `Dialogue.registerFor` was left alone, deliberately, with the reason written down.** Session 10
-handed up the question of whether a villager whose ring holds a story about you should lead with it,
-because `ABOUT_OTHERS` sits on turn 1 and a player who talks once to each villager never reaches it.
-**The board is half an answer and not the whole one.** A hearsay row on the board is the same content
-with no turn count in front of it, so it is now reachable in one click by anybody who finds a board —
-but a player who never finds one still needs three right-clicks, and the two surfaces are for different
-things: the board is where you go to *look something up*, and the dialogue is where it *happens to
-you*. So the board lowers the cost of the ordering without removing it, and **whether a villager should
-lead with the gossip is still the owner's.** Two lines in `registerFor`, unchanged.
+**The standing column was ruled to read correctly and is not to be changed for its own sake.** *Has
+not met you · knows you · warm to you · wary of you*, against the four names in the owner's own
+village. Session 12 may still print five band names instead — the argument for that is that five
+bands sharing four pools makes two of them indistinguishable here — but it is now an improvement
+rather than a fix, and the four phrases are the fallback if the five read worse.
+
+**And `Dialogue.registerFor` is ruled at last, by the owner, and the answer is to leave it.** Session
+10 handed up the question of whether a villager whose ring holds a story about you should lead with it,
+because `ABOUT_OTHERS` sits on turn 1 and a player who talks once to each villager never reaches it —
+and it was the one open item of the three that session 11 could plausibly have decided. **The ruling
+is that a villager greets you before they gossip about you**, and the board is where you go to look
+something up. That is the reading session 10's own log leaned toward — *nothing is broken and the
+ordering is arguably right* — and the board is what makes it affordable: the same content is now one
+click away for anybody who finds a lectern, so the cost of the greeting no longer hides the payload,
+it only delays it. **`registerFor` is unchanged and the question is closed rather than parked.** Two
+of the three items session 10 handed up remain, and neither is about dialogue.
 
 #### Carried into session 12
 
@@ -4419,9 +4447,17 @@ lead with the gossip is still the owner's.** Two lines in `registerFor`, unchang
   day 6 against the trust band at day 28 — is still open and still not this session's. The board now
   *shows* both routes and their progress, which is the first time either number has been visible to a
   player at all, so a playtest of the board is also a first read of whether that balance is right.
+- **The hearsay row has not been read by the owner in their own world**, only by machine on both
+  loaders and by eye on a screenshot. It is not an outstanding playtest — the criterion is ruled met —
+  but it is the one part of this board nobody has met by accident, and session 12's own playtest walks
+  between two villages anyway for step 7. **Open a board in the far village while you are there.**
 
 **Ledger change.** Session 11 → done, session 12 → NEXT, **and the exit criterion is ruled met by the
-owner in the same sitting rather than carried forward.** **No risk movement and no exemption
+owner in the same sitting rather than carried forward.** Four things ruled at close and three of them
+close something: the board works, discoverability goes to session 15's build list, the standing column
+stays as it reads, and **`Dialogue.registerFor` is settled — a villager greets you before they gossip
+about you** — which retires one of the three items session 10 handed up and leaves two, neither about
+dialogue. **No risk movement and no exemption
 movement** — none fell due, and for the fifth session running the forcing function was not what kept
 rule 5 honest; what did was adding a package to `DISPLAY_PACKAGES` before writing the code that would
 have wanted out of it. Five decisions added to `DESIGN.md` §2, taking the count 66 → 71, plus §9's
