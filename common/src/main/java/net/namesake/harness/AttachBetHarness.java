@@ -567,16 +567,28 @@ public final class AttachBetHarness {
                 beginAwait(1200);
             }
             case 32 -> {
-                // A poll rather than an assumption, and CI is what said so. A villager is minted a
-                // persona by the entity-load hook, and a chunk that is block-loaded is not yet
-                // necessarily entity-ticking on a runner three to four times slower than this
-                // machine — so spawning and reading the persona in one tick passed here and turned
-                // main red there. Session 01's general rule, arriving for the sixth time: wait for
-                // the condition you actually care about, never for a number of ticks.
+                // A poll rather than an assumption, and CI said so three times before this condition
+                // was right. The first draft read the personas in the tick it spawned; the second
+                // polled for the personas, which is a *different* condition and not the one a
+                // right-click needs.
+                //
+                // A villager is minted a persona from `onTrackingStart`, which vanilla fires while
+                // the entity is being added to its section — but `level.getEntity(id)` reads the
+                // *visible* storage, which is only populated once that chunk's entity status reaches
+                // TICKING. So there is a window, one tick wide on this machine and evidently wider on
+                // a runner, in which the villager has a persona and cannot be found by id. And
+                // `ServerGamePacketListenerImpl.handleInteract` resolves its target by id and returns
+                // **silently** when it cannot, so every price in the leg reads as untouched.
+                //
+                // Session 01's rule, and the part of it that keeps being the hard bit: it is not
+                // enough to poll instead of sleeping — **poll for the condition the thing you are
+                // about to do actually needs.**
                 if (stillWaiting(server, () -> trader != null && punchbag != null
+                                && level.getEntity(trader.getId()) == trader
+                                && level.getEntity(punchbag.getId()) == punchbag
                                 && PersonaService.personaOf(trader).isPresent()
                                 && PersonaService.personaOf(punchbag).isPresent(),
-                        false, "the two traders to be minted a persona each")) {
+                        false, "the two traders to be findable by id and minted a persona each")) {
                     return;
                 }
                 checkTheCounter(server, level);
@@ -651,7 +663,10 @@ public final class AttachBetHarness {
         record(trader.isAlive() && punchbag.isAlive()
                         && level.getEntity(trader.getId()) == trader
                         && level.getEntity(punchbag.getId()) == punchbag,
-                "BAND and both are still alive and findable by id, which is what a right-click needs");
+                "BAND and both are still alive and findable by id, which is what a right-click needs"
+                        + " (alive " + trader.isAlive() + "/" + punchbag.isAlive()
+                        + ", findable " + (level.getEntity(trader.getId()) == trader)
+                        + "/" + (level.getEntity(punchbag.getId()) == punchbag) + ")");
         UUID persona = PersonaService.personaOf(trader).map(Persona::id).orElse(null);
         UUID bruised = PersonaService.personaOf(punchbag).map(Persona::id).orElse(null);
         record(persona != null && bruised != null,
