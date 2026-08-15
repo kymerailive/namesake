@@ -188,14 +188,30 @@ public final class ProfilerHarness {
     private static final List<String> VILLAGE_ROWS = new ArrayList<>();
 
     /**
+     * The day time every cell was frozen at until session 14: mid-morning, inside
+     * {@code DaySlot.LABOUR_I} and a thousand ticks past the widest transition spread.
+     */
+    private static final int LABOUR_MORNING = 3000;
+
+    /**
      * One measured configuration.
      *
      * @param records    how many fixture persona records the sweep walks
      * @param payload    whether the sweep runs the probe payload or only its own frame
      * @param mcProfiler whether Minecraft's own profiler records during the window
+     * @param dayTime    <b>the hour this cell measures, and session 14 is why it is a field.</b> A
+     *                   tick happens at one time of day, so a per-tick budget is a claim about the
+     *                   <i>worst</i> hour rather than about the sum of them — and the day plan does
+     *                   entirely different work at eleven o'clock (everybody on an errand) than at
+     *                   nine (one villager in four vetoed at a workstation). One frozen hour would
+     *                   have priced session 14 at zero and been perfectly confident about it.
      */
     private record Cell(String name, int sites, int perSite, int records, boolean payload,
-                        boolean mcProfiler) {
+                        boolean mcProfiler, int dayTime) {
+
+        Cell(String name, int sites, int perSite, int records, boolean payload, boolean mcProfiler) {
+            this(name, sites, perSite, records, payload, mcProfiler, LABOUR_MORNING);
+        }
 
         int villagers() {
             return sites * perSite;
@@ -245,6 +261,8 @@ public final class ProfilerHarness {
             return List.of(
                     new Cell("idle, no villagers", 0, 0, 0, false, false),
                     new Cell("96 loaded (8 sites x 12)", 8, 12, 0, false, false),
+                    new Cell("96 loaded at 11:00 (HAUL)", 8, 12, 0, false, false, ERRAND_MIDDAY),
+                    new Cell("96 loaded at 21:00 (NIGHT)", 8, 12, 0, false, false, ERRAND_NIGHT),
                     new Cell("100 loaded (4 x 25)", 4, 25, 0, false, false),
                     new Cell("200 loaded (8 x 25)", 8, 25, 0, false, false),
                     new Cell("400 loaded (16 x 25)", 16, 25, 0, false, false),
@@ -255,11 +273,27 @@ public final class ProfilerHarness {
                 new Cell("sweep 400 records, frame only", 0, 0, 400, false, false),
                 new Cell("sweep 400 records, probe payload", 0, 0, 400, true, false),
                 new Cell("DESIGN scenario: 96 loaded + 304 records", 8, 12, 304, true, false),
+                // Session 14's two, and they are the point of the run rather than an addition. The
+                // ~5.95 µs budget is a per-tick number and a tick happens at one time of day, so
+                // what has to be priced is not "the standoff plus the errands" but the most
+                // expensive HOUR. These are the two hours session 14 puts work in that nine o'clock
+                // does not: every villager on an errand, and the watch out with the rest asleep.
+                new Cell("DESIGN scenario at 11:00 (HAUL): 96 loaded + 304 records",
+                        8, 12, 304, true, false, ERRAND_MIDDAY),
+                new Cell("DESIGN scenario at 21:00 (NIGHT): 96 loaded + 304 records",
+                        8, 12, 304, true, false, ERRAND_NIGHT),
                 new Cell("100 loaded (4 x 25)", 4, 25, 0, false, false),
                 new Cell("200 loaded (8 x 25)", 8, 25, 0, false, false),
                 new Cell("400 loaded (16 x 25)", 16, 25, 0, false, false),
+                new Cell("400 loaded at 11:00 (HAUL)", 16, 25, 0, false, false, ERRAND_MIDDAY),
                 new Cell("400 loaded + 400 records swept", 16, 25, 400, true, false));
     }
+
+    /** Inside {@code DaySlot.HAUL} and past the spread: every villager is on an errand. */
+    private static final int ERRAND_MIDDAY = 5500;
+
+    /** Inside {@code DaySlot.NIGHT}: the watch is out and everybody else is in bed. */
+    private static final int ERRAND_NIGHT = 15000;
 
     // --- driver -----------------------------------------------------------------------------------
 
@@ -490,6 +524,9 @@ public final class ProfilerHarness {
 
     /** Rebuilds the world to match a cell: this many villagers at these sites, these records. */
     private static void populate(MinecraftServer server, ServerLevel level, Cell target) {
+        // Before the villagers, so the ones spawned into this cell resolve their first activity
+        // against the hour being measured rather than against the previous cell's.
+        level.setDayTime(target.dayTime());
         // Every mob, not just the villagers. Villagers with beds and jobs spawn iron golems, and a
         // teardown that only removed villagers left the golems behind — so each cell inherited
         // every golem the cells before it had produced, and the second launch inherited the first
@@ -584,8 +621,10 @@ public final class ProfilerHarness {
         REPORT.add("");
         REPORT.add("### " + cell.name());
         REPORT.add(String.format(Locale.ROOT,
-                "  villagers %d, fixture records %d, payload %s",
-                cell.villagers(), cell.records(), cell.payload() ? "probe" : "none"));
+                "  villagers %d, fixture records %d, payload %s, day time %d (%02d:00, slot %s)",
+                cell.villagers(), cell.records(), cell.payload() ? "probe" : "none",
+                cell.dayTime(), Math.floorMod(cell.dayTime() / 1000 + 6, 24),
+                net.namesake.day.DaySlot.at(cell.dayTime())));
         REPORT.add("  whole server tick   " + TICKS.describeMicros());
 
         // Two clocks and an accounting check on one line. If the sampling loop skipped or repeated
@@ -641,6 +680,22 @@ public final class ProfilerHarness {
         // save, so anything the first left behind — golems, dropped items, animals that wandered
         // in — is in the second's numbers, and a tick time is not evidence of our cost until that
         // has been ruled out rather than assumed.
+        // WHAT THE DAY PLAN WAS ACTUALLY DOING, and it is here because a cheap cell and an idle cell
+        // report the same number. Session 13 froze the clock ON the LABOUR_I boundary and every
+        // villager whose offset was not zero stayed in DAWN for ever, so the day plan measured as
+        // free; session 14 adds two hours whose whole content is a mechanic that might not have
+        // fired. A measurement of nothing is the most confident wrong number available.
+        REPORT.add("  the day plan        " + net.namesake.day.Steering.describe(server.overworld()));
+        if (!SUBJECTS.isEmpty()) {
+            Map<String, Integer> postures = new LinkedHashMap<>();
+            for (Villager villager : SUBJECTS) {
+                if (!villager.isRemoved()) {
+                    postures.merge(net.namesake.day.Steering.postureOf(villager).name(), 1,
+                            Integer::sum);
+                }
+            }
+            REPORT.add("  postures            " + postures);
+        }
         REPORT.add("  also in the grid    " + entityCensus(server.overworld()));
         REPORT.add("  registry            "
                 + NpcRegistry.get(server).size() + " persona(s), "
@@ -1101,9 +1156,13 @@ public final class ProfilerHarness {
         // whole population has crossed and the steady state being measured is the real one: the
         // industrious at their workstations and the lazy parked and being vetoed. Both phases share
         // this method, so the vanilla baseline moves with it and the two still subtract.
-        level.setDayTime(3000);
-        Namesake.LOGGER.info("[profile] configured: normal difficulty, no spawning, day frozen "
-                + "at 3000 — inside LABOUR_I and past the transition spread, one creative player");
+        level.setDayTime(LABOUR_MORNING);
+        // FROZEN, AND NOW PER CELL. Session 13 set this once and every cell measured mid-morning;
+        // session 14 moved it onto Cell, because a per-tick budget is a claim about the most
+        // expensive hour and the day plan does different work in different ones. This is only the
+        // value the run opens on — see populate().
+        Namesake.LOGGER.info("[profile] configured: normal difficulty, no spawning, daylight cycle "
+                + "off, one creative player. Each cell freezes the clock at its own hour.");
     }
 
     private static ServerPlayer player(MinecraftServer server) {

@@ -30,6 +30,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.BedBlock;
+import net.minecraft.world.level.block.BellBlock;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.level.levelgen.Heightmap;
@@ -85,6 +86,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -482,8 +484,564 @@ public final class AttachBetHarness {
             case 25, 26, 27, 28, 29 -> runNoticeBoardCheck(server, level);
             case 30, 31, 32 -> runStandingBandCheck(server, level);
             case 33, 34, 35, 36, 37, 38 -> runDayPlanCheck(server, level);
+            case 39, 40, 41, 42, 43, 44, 45, 46, 47 -> runErrandCheck(server, level);
             default -> finish(server, true);
         }
+    }
+
+    // --- session 14: the bell lock, reproduced — and then the errand day --------------------------
+
+    /** The bell this leg stands up beside the workshop. Both legs below need it, for opposite reasons. */
+    private static BlockPos bellSite;
+
+    /** One bed per worker, placed only after the bell lock has been reproduced. */
+    private static final List<BlockPos> BEDS = new ArrayList<>();
+
+    /** The personas this leg makes bold enough to stand watch. */
+    private static final Set<UUID> WATCHMEN = new HashSet<>();
+
+    /** Where each worker was standing when an errand slot began, so "they moved" is a fact. */
+    private static final Map<UUID, BlockPos> WHERE_THEY_STARTED = new HashMap<>();
+
+    /** The villager this leg deliberately strands in ERRAND, to watch the watchdog end it. */
+    private static UUID strayVillager;
+
+    /**
+     * <b>Session 13 owed this leg and session 14 pays it, and then builds its own on the same
+     * fixture.</b>
+     *
+     * <p>Two mechanics, in this order, because the order is what makes both of them possible:
+     *
+     * <ol>
+     *   <li><b>The bell lock, reproduced.</b> Session 13 diagnosed it at source, named it
+     *       {@code Posture.BELL_LOCKED} and — on the owner's ruling — repaired it by running
+     *       {@code SetHiddenState}'s own exit after 1,200 ticks. What it could not do was make one
+     *       happen: <i>"nothing in this repository has ever made a villager bell-lock on purpose,
+     *       and until then the evidence that this fires at all is a log line nobody has seen."</i>
+     *       The workshop is the one place in this world where it can be done — six villagers, no
+     *       beds within thirty-two blocks and no HOME memory between them, which is exactly the
+     *       deadlock with no exit. Ring a bell at them and every one of them is stuck for the life
+     *       of the world unless the repair fires.</li>
+     *   <li><b>The errand day.</b> Which needs the very things the bell lock needs the absence of —
+     *       a bell to be a {@code MEETING_POINT} and beds to be {@code HOME}s — so the beds go down
+     *       <i>after</i> the deadlock has been reproduced and opened. One fixture, two legs, and
+     *       neither could use the other's world.</li>
+     * </ol>
+     */
+    private static void runErrandCheck(MinecraftServer server, ServerLevel level) {
+        switch (step) {
+            case 39 -> {
+                NpcRegistry registry = NpcRegistry.get(server);
+                int settlementsBefore = registry.settlements().size();
+                refreshWorkers(level);
+                // Off to one side and central, so every villager is inside the bell's Euclidean 32
+                // — which is the real reach, measured off BellBlockEntity.updateEntities, and is
+                // tighter than the 48-block box it gathers candidates in.
+                bellSite = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                        workshopSite.offset(-5, 0, -6));
+                level.setBlockAndUpdate(bellSite, Blocks.BELL.defaultBlockState());
+                record(level.getPoiManager().getType(bellSite).isPresent(),
+                        "BELL the bell registered as a point of interest at " + bellSite.toShortString()
+                                + " — setBlockAndUpdate is the path that reaches "
+                                + "ServerLevel#onBlockStateChange, and without it this is furniture");
+
+                long inReach = WORKERS_PRESENT.stream()
+                        .filter(v -> bellSite.closerToCenterThan(v.position(), 32.0)).count();
+                record(inReach == WORKERS_PRESENT.size(),
+                        "BELL all " + inReach + " of " + WORKERS_PRESENT.size() + " workers are "
+                                + "inside the bell's own 32 m, which is where "
+                                + "BellBlockEntity.updateEntities writes HEARD_BELL_TIME");
+                long withBeds = WORKERS_PRESENT.stream()
+                        .filter(v -> v.getBrain().hasMemoryValue(MemoryModuleType.HOME)).count();
+                record(withBeds == 0,
+                        "BELL and not one of them has a HOME memory (" + withBeds + "), which is "
+                                + "half of the deadlock: LocateHidingPlace needs a HOME point of "
+                                + "interest within 32 blocks or a HOME memory, and there is neither "
+                                + "on this platform");
+                // Asserted rather than assumed, because a third settlement here would fail the
+                // verify phase's settlement count for a reason that has nothing to do with it.
+                record(registry.settlements().size() == settlementsBefore,
+                        "BELL standing a bell up did not invent a settlement (" + settlementsBefore
+                                + " before, " + registry.settlements().size() + " after) — this "
+                                + "cell was surveyed when these villagers were generated and the "
+                                + "registrar surveys a place once, ever");
+
+                ((BellBlock) Blocks.BELL).attemptToRing(level, bellSite, Direction.NORTH);
+                Namesake.LOGGER.info("[harness] rang the bell at {}", bellSite.toShortString());
+                beginAwait(600);
+            }
+            case 40 -> {
+                // NOT SPRINTED. ReactToBell is a behaviour: it only re-asserts HIDE on a tick the
+                // villager's brain actually runs, and a long sprint outruns the chunk loader — which
+                // is how session 13 measured five frozen villagers and read it as the mechanic
+                // working.
+                if (stillWaiting(server, () -> refreshWorkers(level) == WORKERS
+                                && WORKERS_PRESENT.stream()
+                                .allMatch(v -> net.namesake.day.Steering.isBellLocked(v.getBrain())),
+                        false, "the rung bell to lock every villager into HIDE")) {
+                    return;
+                }
+                refreshWorkers(level);
+                long locked = WORKERS_PRESENT.stream()
+                        .filter(v -> net.namesake.day.Steering.isBellLocked(v.getBrain())).count();
+                record(locked == WORKERS_PRESENT.size(),
+                        "BELL LOCK " + locked + " of " + WORKERS_PRESENT.size() + " villager(s) are "
+                                + "in HIDE with a bell memory and no hiding place — the deadlock "
+                                + "session 13 diagnosed at source and could not reproduce. HIDE is "
+                                + "the only vanilla package with no UpdateActivityFromSchedule, so "
+                                + "the schedule cannot pull them out, and SetHiddenState will not "
+                                + "run without a HIDING_PLACE that LocateHidingPlace cannot give "
+                                + "them");
+                long posture = WORKERS_PRESENT.stream()
+                        .map(net.namesake.day.Steering::postureOf)
+                        .filter(p -> p == net.namesake.day.Steering.Posture.BELL_LOCKED).count();
+                record(posture == WORKERS_PRESENT.size(),
+                        "BELL LOCK and the plan says so out loud: " + posture + " of "
+                                + WORKERS_PRESENT.size() + " read BELL_LOCKED, which is the name "
+                                + "session 13 gave it and the row /namesake debug dayplan prints");
+                // Now sprinted, and the difference from the poll above is the point: what is being
+                // waited for is a comparison against game time inside our own end-of-tick hook, not
+                // a behaviour. Nothing here needs a brain to run.
+                beginAwait(net.namesake.day.Steering.BELL_LOCK_PATIENCE + 900);
+            }
+            case 41 -> {
+                if (stillWaiting(server, () -> refreshWorkers(level) == WORKERS
+                                && WORKERS_PRESENT.stream()
+                                .noneMatch(v -> net.namesake.day.Steering.isBellLocked(v.getBrain())),
+                        true, "the plan to run vanilla's own way out of HIDE")) {
+                    return;
+                }
+                refreshWorkers(level);
+                long stillLocked = WORKERS_PRESENT.stream()
+                        .filter(v -> net.namesake.day.Steering.isBellLocked(v.getBrain())).count();
+                record(stillLocked == 0,
+                        "BELL LOCK the repair opened every one of them (" + stillLocked
+                                + " still stuck) after " + net.namesake.day.Steering.BELL_LOCK_PATIENCE
+                                + " ticks — Steering.unstickTheBellLock runs SetHiddenState's own "
+                                + "else-branch at a villager SetHiddenState cannot reach. This is "
+                                + "the first time in this repository that the decision "
+                                + "SteeringTest holds has been reached in a running game");
+                record(WORKERS_PRESENT.stream().noneMatch(v -> v.getBrain()
+                                .hasMemoryValue(MemoryModuleType.HEARD_BELL_TIME)),
+                        "BELL LOCK and the bell memory is gone rather than merely overruled — "
+                                + "ReactToBell sits in CORE at priority 0 and would re-assert HIDE "
+                                + "within a tick otherwise, which is why erasing it is what makes "
+                                + "the repair stick");
+                record(net.namesake.day.Steering.describe(level).contains("bell lock"),
+                        "BELL LOCK " + net.namesake.day.Steering.describe(level));
+
+                buildBedsAndAssignWatch(server, level);
+                beginAwait(2400);
+            }
+            case 42 -> {
+                // Both memories, and both are vanilla's: AcquirePoi in the CORE package writes HOME
+                // and MEETING_POINT for every villager. An errand walks to one of those two and to
+                // nothing of ours, which is what keeps it off the registry and out of the budget.
+                if (stillWaiting(server, () -> refreshWorkers(level) == WORKERS
+                                && WORKERS_PRESENT.stream().allMatch(v -> v.getBrain()
+                                        .hasMemoryValue(MemoryModuleType.HOME)
+                                        && v.getBrain().hasMemoryValue(MemoryModuleType.MEETING_POINT)),
+                        false, "every worker to claim a bed and find the bell")) {
+                    return;
+                }
+                refreshWorkers(level);
+                long homes = WORKERS_PRESENT.stream()
+                        .filter(v -> v.getBrain().hasMemoryValue(MemoryModuleType.HOME)).count();
+                long bells = WORKERS_PRESENT.stream()
+                        .filter(v -> v.getBrain().hasMemoryValue(MemoryModuleType.MEETING_POINT)).count();
+                record(homes == WORKERS_PRESENT.size() && bells == WORKERS_PRESENT.size(),
+                        "ERRAND every worker holds the two vanilla memories an errand walks to — "
+                                + homes + " HOME, " + bells + " MEETING_POINT of "
+                                + WORKERS_PRESENT.size());
+                enterSlotAt(server, level, net.namesake.day.DaySlot.HAUL.startsAt() + 400);
+                beginAwait(3000);
+            }
+            case 43 -> checkTheHaul(server, level);
+            case 44 -> checkTheHearths(server, level);
+            case 45 -> checkTheWatchdog(server, level);
+            case 46 -> checkTheWatch(server, level);
+            case 47 -> checkTheNightWatch(server, level);
+            default -> finish(server, true);
+        }
+    }
+
+    /**
+     * <b>Eleven o'clock: the roads fill.</b> {@code DESIGN.md} §7 slot 2.
+     *
+     * <p>The observable is not a posture — a posture is a field of ours, and session 13's rule is
+     * that a flag reads as success. It is <b>where they are standing</b>: six villagers who were at
+     * six workstations ten blocks apart are now at one bell. So the poll is on the distance and the
+     * assertions are on the distance; the posture is asserted beside it because the two agreeing is
+     * what says the plan caused it rather than that something else happened to move them.
+     */
+    private static void checkTheHaul(MinecraftServer server, ServerLevel level) {
+        if (stillWaiting(server, () -> refreshWorkers(level) == WORKERS
+                        && WORKERS_PRESENT.stream()
+                        .allMatch(v -> bellSite.distManhattan(v.blockPosition()) <= HAUL_ARRIVED
+                                && v.getBrain().isActive(net.namesake.day.Errand.ACTIVITY)),
+                false, "every villager to reach the bell they were sent to")) {
+            return;
+        }
+        refreshWorkers(level);
+        for (Villager villager : WORKERS_PRESENT) {
+            Namesake.LOGGER.info("[harness] haul {}: {} at {} bell={} job={} — {}",
+                    villager.getId(), net.namesake.day.Steering.postureOf(villager),
+                    villager.blockPosition().toShortString(),
+                    bellSite.distManhattan(villager.blockPosition()),
+                    net.namesake.day.Steering.jobSiteOf(villager) == null ? -1
+                            : net.namesake.day.Steering.jobSiteOf(villager)
+                                    .distManhattan(villager.blockPosition()),
+                    net.namesake.day.Steering.explainErrand(level, villager));
+        }
+
+        long arrived = WORKERS_PRESENT.stream()
+                .filter(v -> bellSite.distManhattan(v.blockPosition()) <= HAUL_ARRIVED).count();
+        record(arrived == WORKERS_PRESENT.size(),
+                "HAUL " + arrived + " of " + WORKERS_PRESENT.size() + " villager(s) walked from "
+                        + "their own workstation to the bell — six benches ten blocks apart, one "
+                        + "place, which is what 'sacks moving one direction' is when the direction "
+                        + "is a place");
+        long moved = WORKERS_PRESENT.stream()
+                .filter(v -> {
+                    BlockPos from = WHERE_THEY_STARTED.get(v.getUUID());
+                    return from != null && bellSite.distManhattan(v.blockPosition())
+                            < bellSite.distManhattan(from);
+                }).count();
+        record(moved >= WORKERS_PRESENT.size() - 1,
+                "HAUL and " + moved + " of " + WORKERS_PRESENT.size() + " are closer to the bell "
+                        + "than they were when the slot began — the one that may not be is whoever "
+                        + "started nearest it");
+        long onErrand = WORKERS_PRESENT.stream()
+                .filter(v -> v.getBrain().isActive(net.namesake.day.Errand.ACTIVITY)).count();
+        record(onErrand == WORKERS_PRESENT.size(),
+                "HAUL and all " + onErrand + " of them are running the ERRAND activity — read off "
+                        + "the brain rather than off the plan's own bookkeeping, because those are "
+                        + "different claims and only one of them is the mechanism");
+        long hauling = WORKERS_PRESENT.stream()
+                .map(net.namesake.day.Steering::postureOf)
+                .filter(p -> p == net.namesake.day.Steering.Posture.HAULING).count();
+        record(hauling == WORKERS_PRESENT.size(),
+                "HAUL and the plan and the brain agree about all " + hauling + " of them");
+        record(net.namesake.day.Steering.strayErrandCount(level) == 0,
+                "HAUL no villager has needed the watchdog's stray branch ("
+                        + net.namesake.day.Steering.strayErrandCount(level) + ") — every errand "
+                        + "running is one the plan can account for");
+
+        // Nobody is at a workstation, which is the half that makes the picture legible: an empty
+        // workshop at eleven o'clock rather than a workshop with people wandering in it.
+        long atWork = WORKERS_PRESENT.stream()
+                .filter(v -> {
+                    BlockPos job = net.namesake.day.Steering.jobSiteOf(v);
+                    return job != null
+                            && net.namesake.day.DayPlan.isWithinArmsReach(job, v.blockPosition());
+                }).count();
+        record(atWork == 0,
+                "HAUL and no villager is within WorkAtPoi's 1.73 m of their own workstation ("
+                        + atWork + "), so the workshop is empty");
+
+        photograph(server, level, "namesake-errand-haul-");
+        enterSlotAt(server, level, net.namesake.day.DaySlot.NOON.startsAt() + 400);
+        beginAwait(3000);
+    }
+
+    /**
+     * <b>Noon: the hearths fill.</b> {@code DESIGN.md} §7 slot 3.
+     *
+     * <p>Asserted against each villager's <b>own</b> {@code HOME} memory rather than against the bed
+     * this leg placed for them, because which bed a villager claims is vanilla's decision and a leg
+     * that assumed it would be measuring its own fixture.
+     */
+    private static void checkTheHearths(MinecraftServer server, ServerLevel level) {
+        if (stillWaiting(server, () -> refreshWorkers(level) == WORKERS
+                        && WORKERS_PRESENT.stream().allMatch(AttachBetHarness::isAtTheirHearth),
+                false, "every villager to reach their own hearth")) {
+            return;
+        }
+        refreshWorkers(level);
+        for (Villager villager : WORKERS_PRESENT) {
+            Namesake.LOGGER.info("[harness] noon {}: {} at {} home={} sleeping={}",
+                    villager.getId(), net.namesake.day.Steering.postureOf(villager),
+                    villager.blockPosition().toShortString(),
+                    villager.getBrain().getMemory(MemoryModuleType.HOME).orElse(null),
+                    villager.isSleeping());
+        }
+        long home = WORKERS_PRESENT.stream().filter(AttachBetHarness::isAtTheirHearth).count();
+        record(home == WORKERS_PRESENT.size(),
+                "NOON " + home + " of " + WORKERS_PRESENT.size() + " villager(s) are at their own "
+                        + "hearth — the bed vanilla gave them, not the one this leg placed");
+        long asleep = WORKERS_PRESENT.stream().filter(Villager::isSleeping).count();
+        record(asleep == 0,
+                "NOON and none of them is asleep in it (" + asleep + "). SleepInBed lives in the "
+                        + "REST package and REST is not running, so the difference between lunch "
+                        + "and a nap is which package is active rather than a flag of ours");
+        long onErrand = WORKERS_PRESENT.stream()
+                .map(net.namesake.day.Steering::postureOf)
+                .filter(p -> p == net.namesake.day.Steering.Posture.AT_HEARTH).count();
+        record(onErrand == WORKERS_PRESENT.size(),
+                "NOON and all " + onErrand + " read AT_HEARTH");
+
+        photograph(server, level, "namesake-errand-noon-");
+        // Straight into a labour slot, which is the watchdog's first layer: an errand lasts exactly
+        // as long as the slot it was issued in.
+        enterSlotAt(server, level, net.namesake.day.DaySlot.LABOUR_II.startsAt() + 400);
+        beginAwait(1200);
+    }
+
+    /**
+     * <b>The deactivation watchdog, and it is the reason this session is the riskiest in the
+     * plan.</b>
+     *
+     * <p>{@code ERRAND} omits {@code UpdateActivityFromSchedule}, because the schedule says
+     * {@code WORK} at eleven o'clock and would switch it off inside twenty ticks. That is precisely
+     * the shape of the bug this world reproduced forty ticks ago: {@code HIDE} is the only vanilla
+     * package with no schedule exit and a bedless villager who hears a bell never comes out of it.
+     * <b>So an errand with no exit is a second bell lock and it would be ours.</b>
+     *
+     * <p>Two claims, and the second is the one no other test could make:
+     *
+     * <ol>
+     *   <li><b>The ordinary exit works.</b> A labour slot begins and every errand ends.</li>
+     *   <li><b>And the one that catches what the ordinary exit cannot.</b> A villager is put into
+     *       {@code ERRAND} <i>behind the plan's back</i> — the same call {@code Steering} makes,
+     *       made by this leg instead — and the watchdog is watched putting them back on vanilla's
+     *       own schedule. Layer 3 exists for a villager the plan has lost track of, and until this
+     *       runs, nothing anywhere holds that it ever fires.</li>
+     * </ol>
+     */
+    private static void checkTheWatchdog(MinecraftServer server, ServerLevel level) {
+        if (stillWaiting(server, () -> refreshWorkers(level) == WORKERS
+                        && WORKERS_PRESENT.stream()
+                        .noneMatch(v -> v.getBrain().isActive(net.namesake.day.Errand.ACTIVITY))
+                        && WORKERS_PRESENT.stream().allMatch(v -> v.getBrain()
+                                .isActive(net.minecraft.world.entity.schedule.Activity.WORK)),
+                false, "the labour slot to end every errand and vanilla's WORK to resume")) {
+            return;
+        }
+        refreshWorkers(level);
+        long left = WORKERS_PRESENT.stream()
+                .filter(v -> v.getBrain().isActive(net.namesake.day.Errand.ACTIVITY)).count();
+        record(left == 0,
+                "WATCHDOG a labour slot began and every errand ended (" + left + " still running). "
+                        + "ERRAND has no UpdateActivityFromSchedule — it cannot, or it would switch "
+                        + "itself off in twenty ticks — so this exit is the plan's own and nothing "
+                        + "in vanilla would have run it");
+        long working = WORKERS_PRESENT.stream()
+                .filter(v -> v.getBrain().isActive(net.minecraft.world.entity.schedule.Activity.WORK))
+                .count();
+        record(working == WORKERS_PRESENT.size(),
+                "WATCHDOG and " + working + " of " + WORKERS_PRESENT.size() + " are back in vanilla's "
+                        + "WORK — the plan does not decide what a villager does next, "
+                        + "brain.updateActivityFromSchedule does, exactly as session 13's bell-lock "
+                        + "repair does");
+
+        // And now the branch that should never fire in a working game, made to fire on purpose.
+        Villager victim = WORKERS_PRESENT.get(0);
+        strayVillager = victim.getUUID();
+        int straysBefore = net.namesake.day.Steering.strayErrandCount(level);
+        boolean took = net.namesake.day.Errand.addActivitySafely(victim.getBrain());
+        record(took && victim.getBrain().isActive(net.namesake.day.Errand.ACTIVITY),
+                "WATCHDOG villager " + victim.getId() + " was put into ERRAND behind the plan's "
+                        + "back, which is what a lost roster entry or a bug in this session's own "
+                        + "bookkeeping would look like from the brain's side");
+        Namesake.LOGGER.info("[harness] stray errand planted on {}; strays so far {}",
+                victim.getId(), straysBefore);
+        beginAwait(600);
+    }
+
+    /**
+     * <b>The watchdog's stray branch, watched firing — and then the night watch.</b>
+     */
+    private static void checkTheWatch(MinecraftServer server, ServerLevel level) {
+        if (stillWaiting(server, () -> {
+            Villager victim = level.getEntity(strayVillager) instanceof Villager found ? found : null;
+            return victim != null
+                    && !victim.getBrain().isActive(net.namesake.day.Errand.ACTIVITY);
+        }, false, "the watchdog to end an errand nobody can account for")) {
+            return;
+        }
+        refreshWorkers(level);
+        Villager victim = level.getEntity(strayVillager) instanceof Villager found ? found : null;
+        record(victim != null && !victim.getBrain().isActive(net.namesake.day.Errand.ACTIVITY),
+                "WATCHDOG the stray errand was ended within the path gate's seven ticks. This is "
+                        + "layer 3: a villager running ERRAND that the plan cannot account for is "
+                        + "put back on vanilla's schedule without being asked how they got there — "
+                        + "which is the layer that does not depend on our own bookkeeping being "
+                        + "right, and is therefore the one that makes ERRAND a window rather than a "
+                        + "state");
+        int strays = net.namesake.day.Steering.strayErrandCount(level);
+        record(strays > 0,
+                "WATCHDOG and it said so: " + strays + " stray errand(s) counted. A watchdog whose "
+                        + "firing nobody can see is a watchdog nobody knows has stopped working");
+
+        // And the last slot: eighteen o'clock, vanilla's own 12000 keyframe, where the schedule
+        // sends the village to bed and the watch does not go.
+        if (WATCHMEN.isEmpty()) {
+            record(false, "WATCH no watchmen were assigned; the fixture failed before this leg");
+            advance(server, 20);
+            return;
+        }
+        enterSlotAt(server, level, net.namesake.day.DaySlot.VIGIL_BEGINS_AT + 500);
+        beginAwait(4000);
+    }
+
+    /**
+     * <b>Eighteen o'clock: the streets empty, and two people do not go in.</b> {@code DESIGN.md}
+     * §7's slots 6b and 7.
+     *
+     * <p>The window opens on vanilla's own 12000 keyframe — the tick {@code VILLAGER_DEFAULT} turns
+     * {@code IDLE} into {@code REST} — which is what makes the watch visible at all: everybody else
+     * is walking home, so two villagers standing at the bell is a picture no other hour of the day
+     * produces. That is why the observable here is a <b>pair</b> of claims rather than one. Two out
+     * would mean nothing if the other four were out too.
+     */
+    private static void checkTheNightWatch(MinecraftServer server, ServerLevel level) {
+        if (stillWaiting(server, () -> refreshWorkers(level) == WORKERS
+                        && WORKERS_PRESENT.stream().filter(AttachBetHarness::isAWatchman)
+                        .allMatch(v -> v.getBrain().isActive(net.namesake.day.Errand.ACTIVITY))
+                        && WORKERS_PRESENT.stream().filter(v -> !isAWatchman(v))
+                        .allMatch(Villager::isSleeping),
+                false, "the watch to take up its post and the rest of the village to go to bed")) {
+            return;
+        }
+        refreshWorkers(level);
+        for (Villager villager : WORKERS_PRESENT) {
+            Namesake.LOGGER.info("[harness] night {}: watch={} {} at {} bell={} sleeping={} — {}",
+                    villager.getId(), isAWatchman(villager),
+                    net.namesake.day.Steering.postureOf(villager),
+                    villager.blockPosition().toShortString(),
+                    bellSite.distManhattan(villager.blockPosition()), villager.isSleeping(),
+                    net.namesake.day.Steering.explainErrand(level, villager));
+        }
+
+        List<Villager> watch = WORKERS_PRESENT.stream()
+                .filter(AttachBetHarness::isAWatchman).toList();
+        List<Villager> abed = WORKERS_PRESENT.stream()
+                .filter(v -> !isAWatchman(v)).toList();
+
+        long onWatch = watch.stream()
+                .filter(v -> net.namesake.day.Steering.postureOf(v)
+                        == net.namesake.day.Steering.Posture.ON_WATCH).count();
+        record(onWatch == watch.size(),
+                "WATCH " + onWatch + " of " + watch.size() + " bold villager(s) are on watch after "
+                        + "the schedule sent the village to bed — REST is on the errand gate's "
+                        + "allowlist for exactly this, because the window opens on the tick the "
+                        + "schedule turns IDLE into REST");
+        long awake = watch.stream().filter(v -> !v.isSleeping()).count();
+        record(awake == watch.size(),
+                "WATCH and " + awake + " of " + watch.size() + " are awake. SleepInBed is in the "
+                        + "REST package and REST is not running for them, which is the suppression "
+                        + "— no flag of ours says 'do not sleep'");
+        long atThePost = watch.stream()
+                .filter(v -> bellSite.distManhattan(v.blockPosition()) <= HAUL_ARRIVED).count();
+        record(atThePost == watch.size(),
+                "WATCH and " + atThePost + " of " + watch.size() + " are at the bell rather than "
+                        + "wherever they happened to be — the post is the meeting point, ruled "
+                        + "inside the village rather than on the perimeter because the edge of a "
+                        + "village after dark is where the mobs are");
+
+        long sleeping = abed.stream().filter(Villager::isSleeping).count();
+        record(sleeping == abed.size(),
+                "WATCH and the other " + sleeping + " of " + abed.size() + " are asleep in their "
+                        + "own beds, which is the half that makes the first half mean anything: "
+                        + "two villagers out is only a watch if the rest of the village is in");
+
+        photograph(server, level, "namesake-errand-watch-");
+        restoreTheClock(server, level);
+        writeSubjects(level);
+        advance(server, 20);
+    }
+
+    private static boolean isAWatchman(Villager villager) {
+        return PersonaService.personaOf(villager)
+                .map(persona -> WATCHMEN.contains(persona.id())).orElse(false);
+    }
+
+    /** Manhattan blocks from the bell that count as having arrived for the haul. */
+    private static final int HAUL_ARRIVED = 12;
+
+    /** True while this villager is at the bed vanilla gave them, whichever one that turned out to be. */
+    private static boolean isAtTheirHearth(Villager villager) {
+        return villager.getBrain().getMemory(MemoryModuleType.HOME)
+                .filter(home -> home.dimension() == villager.level().dimension())
+                .filter(home -> home.pos().distManhattan(villager.blockPosition()) <= 3)
+                .isPresent();
+    }
+
+    /**
+     * Freezes the clock at a moment inside one slot and lets the plan cross into it.
+     *
+     * <p><b>Frozen rather than running, and four hundred ticks in rather than on the boundary.</b>
+     * Session 13's profiler froze the clock <i>on</i> the LABOUR_I boundary and every villager whose
+     * offset was not zero stayed in the previous slot for ever, so the mechanic measured as free.
+     * Four hundred is past the widest spread with room to spare.
+     */
+    private static void enterSlotAt(MinecraftServer server, ServerLevel level, int dayTime) {
+        server.getGameRules().getRule(GameRules.RULE_DAYLIGHT).set(false, server);
+        level.setDayTime(dayTime);
+        WHERE_THEY_STARTED.clear();
+        refreshWorkers(level);
+        WORKERS_PRESENT.forEach(v -> WHERE_THEY_STARTED.put(v.getUUID(), v.blockPosition()));
+        Namesake.LOGGER.info("[harness] clock set to {} ({}), workers at {}", dayTime,
+                net.namesake.day.DaySlot.at(dayTime),
+                WORKERS_PRESENT.stream().map(v -> v.blockPosition().toShortString()).toList());
+    }
+
+    /** Stands the camera back and photographs the workshop. Session 11's sixth instrument. */
+    private static void photograph(MinecraftServer server, ServerLevel level, String name) {
+        ServerPlayer watcher = player(server);
+        watcher.getAbilities().flying = true;
+        watcher.getAbilities().invulnerable = true;
+        watcher.onUpdateAbilities();
+        watcher.teleportTo(level, workshopSite.getX() + 0.5, workshopSite.getY() + 14,
+                workshopSite.getZ() - 26.5, 0.0F, 32.0F);
+        BoardProbe.requestShot(name + PHASE);
+    }
+
+    /**
+     * One bed per worker, and two of the six made bold enough to stand watch.
+     *
+     * <p><b>Assigned rather than rolled</b>, exactly as session 13 assigns industry and for the same
+     * reason: whether a real population produces two watchmen in a village of nine is
+     * {@code DayPlanDistributionTest}'s question and it is measured over 4,536 personas there. This
+     * leg's question is what a watchman <i>does</i>, and a fixture that waited for the roll to hand
+     * it one would be testing the roll.
+     */
+    private static void buildBedsAndAssignWatch(MinecraftServer server, ServerLevel level) {
+        BEDS.clear();
+        for (BlockPos bench : BENCHES) {
+            BlockPos foot = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                    bench.offset(0, 0, 5));
+            level.setBlockAndUpdate(foot, Blocks.RED_BED.defaultBlockState()
+                    .setValue(BedBlock.FACING, Direction.SOUTH)
+                    .setValue(BedBlock.PART, BedPart.FOOT));
+            level.setBlockAndUpdate(foot.relative(Direction.SOUTH),
+                    Blocks.RED_BED.defaultBlockState()
+                            .setValue(BedBlock.FACING, Direction.SOUTH)
+                            .setValue(BedBlock.PART, BedPart.HEAD));
+            BEDS.add(foot);
+        }
+        record(BEDS.size() == BENCHES.size(),
+                "ERRAND laid " + BEDS.size() + " bed(s), one per worker, five blocks from each "
+                        + "bench — placed only now, because the bell lock above needed there to be "
+                        + "no bed within thirty-two blocks of anybody");
+
+        NpcRegistry registry = NpcRegistry.get(server);
+        WATCHMEN.clear();
+        int index = 0;
+        refreshWorkers(level);
+        for (Villager villager : WORKERS_PRESENT) {
+            Persona persona = PersonaService.personaOf(villager).orElseThrow();
+            boolean watches = index++ < 2;
+            registry.put(persona.withTrait(Persona.BOLDNESS,
+                    (byte) (watches ? net.namesake.day.DayPlan.BOLDNESS_TO_WATCH + 40
+                            : net.namesake.day.DayPlan.BOLDNESS_TO_WATCH - 40)));
+            if (watches) {
+                WATCHMEN.add(persona.id());
+            }
+        }
+        record(WATCHMEN.size() == 2,
+                "ERRAND two of six villagers were made bold enough to stand watch, which is "
+                        + "DESIGN.md §7's 'two torches' in a village of six rather than nine");
     }
 
     // --- session 13: the day plan, at real workstations --------------------------------------------
@@ -3426,10 +3984,63 @@ public final class AttachBetHarness {
                     return;
                 }
                 checkTheDayPlanSurvivedReload(server, level);
+                // And then the claim only a reload can make about session 14. Eleven o'clock, so
+                // every villager who came back is due an errand.
+                server.getGameRules().getRule(GameRules.RULE_DAYLIGHT).set(false, server);
+                level.setDayTime(net.namesake.day.DaySlot.HAUL.startsAt() + 400);
+                beginAwait(2400);
+            }
+            case 6 -> {
+                if (stillWaiting(server, () -> level.getEntitiesOfClass(Villager.class,
+                                new AABB(workshopSite).inflate(64)).stream()
+                        .anyMatch(v -> v.getBrain().isActive(net.namesake.day.Errand.ACTIVITY)),
+                        false, "a reloaded villager to be sent on an errand")) {
+                    return;
+                }
+                checkTheErrandSurvivedReload(server, level);
                 finish(server, true);
             }
             default -> finish(server, true);
         }
+    }
+
+    /**
+     * <b>{@code addActivitySafely} against the wipe that actually happens, in a running game.</b>
+     *
+     * <p>This is the one claim in session 14 that no unit test and no single-launch leg can make.
+     * {@code Villager.readAdditionalSaveData} calls {@code refreshBrain}, which replaces the whole
+     * {@code Brain} with {@code copyWithoutBehaviors()} and re-runs vanilla's own
+     * {@code registerBrainGoals} — so <b>every villager in this world lost the {@code ERRAND}
+     * registration when this phase opened the save</b>, along with every other custom activity any
+     * mod ever added. That is the ordinary path rather than an edge case: it happens on every chunk
+     * load, to every villager, for ever.
+     *
+     * <p>{@code ErrandTest} reproduces the wipe with {@code copyWithoutBehaviors} directly and
+     * proves the helper survives it. What it cannot prove is that the thing it reproduces is the
+     * thing the engine does. This is that, against a save written by a previous launch.
+     */
+    private static void checkTheErrandSurvivedReload(MinecraftServer server, ServerLevel level) {
+        List<Villager> back = level.getEntitiesOfClass(Villager.class,
+                new AABB(workshopSite).inflate(64));
+        long onErrand = back.stream()
+                .filter(v -> v.getBrain().isActive(net.namesake.day.Errand.ACTIVITY)).count();
+        record(onErrand > 0,
+                "ERRAND RELOAD " + onErrand + " of " + back.size() + " villager(s) were sent on an "
+                        + "errand after a save, a quit and a reload. Villager.readAdditionalSaveData "
+                        + "calls refreshBrain, which replaces the whole Brain with "
+                        + "copyWithoutBehaviors() and re-runs vanilla's registerBrainGoals — so "
+                        + "ERRAND was wiped off every one of these villagers when this phase opened "
+                        + "the world, and addActivitySafely put it back on demand rather than at "
+                        + "mint. A one-shot registration would have been wrong the first time "
+                        + "anybody walked away from a village and came back");
+        for (Villager villager : back) {
+            Namesake.LOGGER.info("[harness] errand reload {}: {} — {}", villager.getId(),
+                    net.namesake.day.Steering.postureOf(villager),
+                    net.namesake.day.Steering.explainErrand(level, villager));
+        }
+        record(net.namesake.day.Steering.strayErrandCount(level) == 0,
+                "ERRAND RELOAD and the watchdog found no errand it could not account for ("
+                        + net.namesake.day.Steering.strayErrandCount(level) + ")");
     }
 
     /**
