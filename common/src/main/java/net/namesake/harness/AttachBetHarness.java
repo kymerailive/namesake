@@ -7,6 +7,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.network.protocol.game.ServerboundInteractPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Difficulty;
@@ -19,6 +20,8 @@ import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.entity.monster.ZombieVillager;
 import net.minecraft.world.entity.npc.Villager;
+import net.minecraft.world.entity.npc.VillagerProfession;
+import net.minecraft.world.item.trading.MerchantOffer;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -43,6 +46,7 @@ import net.namesake.dialogue.Voice;
 import net.namesake.npc.NpcRegistry;
 import net.namesake.npc.NpcSchema;
 import net.namesake.npc.Persona;
+import net.namesake.npc.PersonaService;
 import net.namesake.platform.PersonaLink;
 import net.namesake.road.RoadEdge;
 import net.namesake.road.RoadGraph;
@@ -65,6 +69,9 @@ import net.namesake.social.Gossip;
 import net.namesake.social.Memories;
 import net.namesake.social.Personality;
 import net.namesake.social.Residency;
+import net.namesake.social.Standing;
+import net.namesake.social.Teaching;
+import net.namesake.social.Trading;
 import net.namesake.verb.ClientInteractionState;
 import net.namesake.verb.ClientPacketSink;
 import net.namesake.verb.GreetPayload;
@@ -168,6 +175,17 @@ public final class AttachBetHarness {
     private static final List<Resident> RESIDENTS = new ArrayList<>();
     private static BlockPos villageSite;
     private static Settlement registeredSettlement;
+
+    /**
+     * Session 12: the player who did everything in the {@code setup} phase.
+     *
+     * <p>Written into the subjects file, because the {@code verify} phase cannot otherwise tell
+     * whether the person running it is the same one. On NeoForge they always are; on Fabric
+     * {@code runClient} mints a fresh {@code PlayerNNN} and therefore a fresh offline UUID on every
+     * launch, so they never are — which is a defect from every other leg's point of view and is
+     * exactly what {@code DESIGN.md} §10 step 7 asks for. See {@code checkStepSeven}.
+     */
+    private static UUID actingPlayer;
 
     /** Session 11: the two lecterns this run stood up, and the far village's bell. */
     private static BlockPos homeBoard;
@@ -283,6 +301,9 @@ public final class AttachBetHarness {
                     return; // still joining
                 }
                 Namesake.LOGGER.info("[harness] phase setup starting");
+                actingPlayer = player.getUUID();
+                Namesake.LOGGER.info("[harness] this launch's player is {} ({})",
+                        player.getGameProfile().getName(), actingPlayer);
                 configure(server, level, player);
                 BlockPos spawn = level.getSharedSpawnPos();
                 testSite = new BlockPos(spawn.getX() + TEST_SITE_OFFSET, spawn.getY(), spawn.getZ());
@@ -457,8 +478,321 @@ public final class AttachBetHarness {
             case 18 -> runGossipCheck(server, level);
             case 19, 20, 21, 22, 23, 24 -> runRoadCheck(server, level);
             case 25, 26, 27, 28, 29 -> runNoticeBoardCheck(server, level);
+            case 30, 31 -> runStandingBandCheck(server, level);
             default -> finish(server, true);
         }
+    }
+
+    // --- session 12: the bands, at a real counter -------------------------------------------------
+
+    /** The villager the band legs trade with. Spawned here, so it starts with no bond at all. */
+    private static Villager trader;
+
+    /**
+     * <b>The two consumers that only a running game can show.</b>
+     *
+     * <p>The band arithmetic, the ladder, the thresholds and every absence branch are pure and are
+     * in {@code StandingTest} and {@code TradingTest} — {@code WORKPLAN.md} draws that line and it
+     * cuts here. What is left needs a world for three reasons, and each of them has broken something
+     * in this project before:
+     *
+     * <ol>
+     *   <li><b>The interaction has to arrive the way a click does.</b> Both loaders hook the
+     *       <i>packet handler</i>, not {@code Player.interactOn}, so this leg drives a real
+     *       {@code ServerboundInteractPacket} through {@code connection.handleInteract} rather than
+     *       calling {@code Trading} directly. Session 11 made the same choice for the board and gave
+     *       the same reason: calling the method proves the method and skips the seam.</li>
+     *   <li><b>Vanilla has to still be able to add its own adjustment on top.</b> This session
+     *       ruled that the band <i>adds to</i> {@code Villager#updateSpecialPrices} rather than
+     *       replacing it, and the only place that claim is testable is a real
+     *       {@code MerchantOffer} on a real villager after real {@code startTrading}.</li>
+     *   <li><b>A price lives on the offer rather than on the viewer</b>, which makes it the one
+     *       consumer of the three that could leak between players. {@code DESIGN.md} §10 step 7 is
+     *       this session's exit criterion, so the leak is driven in the order that would produce it:
+     *       a trusted player prices the counter, and then somebody who has done nothing opens it.</li>
+     * </ol>
+     */
+    /**
+     * Where the counter is set up: empty ground, well away from everything else this run built.
+     *
+     * <p><b>Two hundred blocks, and the number is a defect being fixed rather than a preference.</b>
+     * The first version stood the counter up beside the bell, and one real punch there emitted a deed
+     * that three village residents witnessed — which moved bonds the snapshot at case 24 had already
+     * recorded, and turned four unrelated legs red in the <i>verify</i> phase. A witness scan is
+     * {@code AABB.inflate(24)}, so anything past that is out of earshot; two hundred also puts it
+     * outside the settlement's ninety-six block membership radius, so the traders belong to nowhere
+     * and no village can hear about them.
+     */
+    private static final int COUNTER_OFFSET = 200;
+
+    private static BlockPos counterSite;
+
+    private static void runStandingBandCheck(MinecraftServer server, ServerLevel level) {
+        switch (step) {
+            case 30 -> {
+                ServerPlayer player = player(server);
+                counterSite = new BlockPos(villageSite.getX() + COUNTER_OFFSET, 200,
+                        villageSite.getZ() + COUNTER_OFFSET);
+                teleport(player, level, counterSite.getX(), 200, counterSite.getZ());
+                beginAwait(2400);
+            }
+            case 31 -> {
+                if (stillWaiting(server, () -> level.isLoaded(counterSite), false,
+                        "empty ground away from the village to set a counter up on")) {
+                    return;
+                }
+                counterSite = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                        counterSite);
+                teleport(player(server), level, counterSite.getX(), counterSite.getY(),
+                        counterSite.getZ());
+                checkTheCounter(server, level);
+                writeSubjects(level);
+                advance(server, 5);
+            }
+            default -> finish(server, true);
+        }
+    }
+
+    /**
+     * Stands one librarian up on empty ground and prices their counter.
+     *
+     * <p>A librarian at the top level, because it is the profession whose offers are emeralds for
+     * books — a cost big enough that every band on the ladder moves it by a whole item, which is the
+     * property {@code TradingTest.theCheapestTradeCannotMove} says a one-item cost does not have.
+     */
+    private static Villager standUpATrader(ServerLevel level, int offset) {
+        Villager villager = EntityType.VILLAGER.spawn(level,
+                counterSite.offset(offset, 0, 0), MobSpawnType.COMMAND);
+        if (villager == null) {
+            return null;
+        }
+        villager.setNoAi(true);
+        villager.setVillagerData(villager.getVillagerData()
+                .setProfession(VillagerProfession.LIBRARIAN).setLevel(5));
+        villager.setVillagerXp(250);
+        return villager;
+    }
+
+    private static void checkTheCounter(MinecraftServer server, ServerLevel level) {
+        ServerPlayer player = player(server);
+        trader = standUpATrader(level, 2);
+        // TWO villagers, and the second one is a defect being fixed rather than tidiness. Punching
+        // the first would give it a vanilla MINOR_NEGATIVE gossip about this player, and vanilla's
+        // own updateSpecialPrices would then add a markup of its own to every subsequent reading —
+        // which is correct behaviour and made every band on the ladder read two emeralds high. The
+        // ladder is measured on a villager nobody has touched; the blow lands on one of its own.
+        Villager punchbag = standUpATrader(level, -2);
+        if (trader == null || punchbag == null) {
+            record(false, "BAND could not stand a villager up to trade with");
+            return;
+        }
+        List<Integer> base = new ArrayList<>();
+        for (MerchantOffer offer : trader.getOffers()) {
+            base.add(offer.getBaseCostA().getCount());
+        }
+        record(!base.isEmpty(), "BAND the villager has " + base.size() + " offer(s) to price");
+        UUID persona = PersonaService.personaOf(trader).map(Persona::id).orElse(null);
+        UUID bruised = PersonaService.personaOf(punchbag).map(Persona::id).orElse(null);
+        record(persona != null && bruised != null,
+                "BAND and a persona of their own, minted on sight");
+        if (persona == null || bruised == null || base.isEmpty()) {
+            return;
+        }
+
+        NpcRegistry registry = NpcRegistry.get(server);
+        int today = Deed.dayOf(level);
+
+        // A villager spawned a moment ago has no bond with anybody and no vanilla gossip either,
+        // which is the acceptance script's step 1 as a fixture rather than as a fresh world:
+        // "arrive at A, prices 1.00".
+        List<Integer> neutral = priceAtTheCounter(server, level, trader);
+        record(neutral.equals(base),
+                "BAND STEP 1 a villager who has never met you charges exactly the standing price "
+                        + neutral + " against a base of " + base);
+        record(!player.getRecipeBook().contains(
+                        ResourceLocation.withDefaultNamespace("lectern")),
+                "BAND and teaches you nothing: a stranger does not show you their trade");
+
+        for (Standing band : List.of(Standing.TRUSTED, Standing.WARM, Standing.RESENTED)) {
+            registry.putBond(persona, player.getUUID(), bondFor(band, today));
+            List<Integer> charged = priceAtTheCounter(server, level, trader);
+            List<Integer> wanted = new ArrayList<>(base.size());
+            for (int cost : base) {
+                wanted.add(cost + Trading.adjustmentFor(cost, band.priceMultiplier()));
+            }
+            record(charged.equals(wanted),
+                    "BAND " + band + " (x" + band.priceMultiplier() + ") charges " + charged
+                            + " against a base of " + base);
+        }
+
+        // The recipe, and the state that makes it a mechanic rather than a message: it is in the
+        // player's own recipe book, which vanilla persists per player, and calling it twice teaches
+        // nothing a second time.
+        record(player.getRecipeBook().contains(ResourceLocation.withDefaultNamespace("lectern")),
+                "BAND a librarian who is warm to you has taught you to make a lectern — which is a "
+                        + "notice board, and nothing arranged that");
+        record(Teaching.teach(player, trader, Standing.WARM) == Teaching.Outcome.ALREADY_KNOWN,
+                "BAND and teaches it once: a recipe already known is not taught again");
+
+        checkAStrikeReachesThePrice(server, level, punchbag, bruised);
+        checkTheCounterDoesNotLeak(server, level, persona, base);
+    }
+
+    /**
+     * <b>{@code DESIGN.md} §10 step 6, end to end and through no fixture at all.</b>
+     *
+     * <p>A real punch: vanilla's own damage path, the loader's damage hook, {@code SocialEvents},
+     * {@code DeedBus}, a bond, the band, and the price of a real offer. Session 05 checks the first
+     * half of that chain and the ladder above checks the second, and <b>neither of them checks that
+     * they are joined</b> — which is the shape of defect this project keeps finding.
+     *
+     * <p><b>And it is where the "we add to vanilla" ruling stops being a paragraph.</b> The first
+     * version of this leg asserted the final price equals base plus <i>our</i> adjustment, and went
+     * red at exactly two emeralds over on every reading — because a punch also gives the villager a
+     * vanilla {@code MINOR_NEGATIVE} gossip, and {@code updateSpecialPrices} adds a markup of its own
+     * on top of ours. That is the composition working, so the assertion was wrong rather than the
+     * code: what is checked is that <b>our</b> contribution is exactly the band's, and that the
+     * player who threw the punch pays at least that much more — with vanilla's surplus printed
+     * rather than absorbed, because it is the thing a player will actually see.
+     */
+    private static void checkAStrikeReachesThePrice(MinecraftServer server, ServerLevel level,
+                                                    Villager villager, UUID persona) {
+        ServerPlayer player = player(server);
+        NpcRegistry registry = NpcRegistry.get(server);
+        int today = Deed.dayOf(level);
+        List<Integer> base = new ArrayList<>();
+        for (MerchantOffer offer : villager.getOffers()) {
+            base.add(offer.getBaseCostA().getCount());
+        }
+
+        int before = registry.bonds().at(persona, player.getUUID(), today).trust();
+        player.attack(villager);
+        int after = registry.bonds().at(persona, player.getUUID(), today).trust();
+        record(after < before && after < 0,
+                "BAND STEP 6 one real blow took trust from " + before + " to " + after
+                        + ", unclipped and through the whole pipeline");
+        Standing standing = Standing.of(registry.bonds().at(persona, player.getUUID(), today));
+        record(standing == Standing.WARY && standing.isAgainstYou(),
+                "BAND STEP 6 which puts them in " + standing + ", a band that charges more");
+
+        // Our own contribution, read off the return value rather than off the screen, so the two
+        // systems are separable. Then the screen, which is both of them.
+        Trading.Applied ours = Trading.onTradeOpening(player, villager);
+        int ourDiff = ours.totalDiff();
+        List<Integer> charged = priceAtTheCounter(server, level, villager);
+        int rose = 0;
+        for (int i = 0; i < base.size(); i++) {
+            rose += charged.get(i) - base.get(i);
+        }
+        record(ourDiff == Trading.adjustmentFor(base.get(0), Standing.WARY.priceMultiplier())
+                        * base.size(),
+                "BAND STEP 6 and our own contribution is exactly the band's: +" + ourDiff);
+        record(rose >= ourDiff && rose > 0,
+                "BAND STEP 6 and the price rose for the player who threw it — " + charged
+                        + " against a base of " + base + ": +" + ourDiff + " from the band and +"
+                        + (rose - ourDiff) + " from vanilla's own gossip, which agrees with us "
+                        + "about violence and is added rather than replaced");
+    }
+
+    /**
+     * <b>{@code DESIGN.md} §10 step 7, on the one surface where it could go wrong.</b>
+     *
+     * <p>Bonds are keyed on (holder, viewer) and a board is computed per viewer, so neither can leak
+     * — sessions 05 and 11 hold both, in unit tests. A <b>price</b> is different: it is written onto
+     * a {@code MerchantOffer} that belongs to the villager rather than to anybody looking at them, so
+     * two players share the object. That is the new risk this session introduces, and this is it
+     * driven in the order that would produce it.
+     *
+     * <p><b>The second player here is a real {@code ServerPlayer} on the live integrated server</b> —
+     * its own UUID, its own recipe book, its own everything — constructed without a connection,
+     * because a scripted single-client run cannot produce a second login. What that costs is stated
+     * rather than glossed: no packet reaches them, so this proves the <i>server</i> answers a second
+     * person correctly and not that a second person's screen draws it. The other half of step 7 is
+     * checked in {@code verify}, where on one of the two loaders the player genuinely <i>is</i>
+     * somebody else — see {@code checkStepSeven}.
+     */
+    private static void checkTheCounterDoesNotLeak(MinecraftServer server, ServerLevel level,
+                                                   UUID persona, List<Integer> base) {
+        ServerPlayer stranger;
+        try {
+            stranger = new ServerPlayer(server, level, new com.mojang.authlib.GameProfile(
+                    UUID.nameUUIDFromBytes("a second player who has done nothing"
+                            .getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                    "Nobody"), net.minecraft.server.level.ClientInformation.createDefault());
+        } catch (RuntimeException failure) {
+            record(false, "BAND STEP 7 this loader would not build a second player without a "
+                    + "connection: " + failure);
+            return;
+        }
+
+        // The trusted player prices the counter first, and leaves it priced. If our contribution
+        // were not reset per viewer, this is the state the next person would walk into.
+        NpcRegistry.get(server).putBond(persona, player(server).getUUID(),
+                bondFor(Standing.WARM, Deed.dayOf(level)));
+        Trading.Applied mine = Trading.onTradeOpening(player(server), trader);
+        record(mine.priced() && mine.standing() == Standing.WARM,
+                "BAND STEP 7 the first player prices the counter at " + mine.standing());
+
+        Trading.Applied theirs = Trading.onTradeOpening(stranger, trader);
+        List<Integer> charged = new ArrayList<>();
+        for (MerchantOffer offer : trader.getOffers()) {
+            charged.add(offer.getCostA().getCount());
+        }
+        record(theirs.standing() == Standing.NEUTRAL,
+                "BAND STEP 7 a second player who has done nothing stands " + theirs.standing()
+                        + " at a counter the first player stands " + mine.standing() + " at");
+        record(charged.equals(base),
+                "BAND STEP 7 and pays 1.00 at a counter the first player just discounted "
+                        + charged + " against a base of " + base);
+
+        // And the guard that keeps it true while somebody is actually looking at the screen: a
+        // villager already trading has that player's offers open, so rewriting them would change
+        // what a different person pays, invisibly, after their client has drawn the numbers.
+        trader.setTradingPlayer(player(server));
+        Trading.Applied refused = Trading.onTradeOpening(stranger, trader);
+        record(!refused.priced(),
+                "BAND STEP 7 and the counter is not repriced under an open screen somebody else has");
+        trader.setTradingPlayer(null);
+    }
+
+    /** A bond that lands in exactly this band, built through the record rather than through apply. */
+    private static Bond bondFor(Standing band, int day) {
+        return switch (band) {
+            case RESENTED -> new Bond((byte) Standing.RESENTED_TRUST, (byte) 0, (byte) 0,
+                    (short) 0, day, (short) 0, (byte) 0);
+            case WARY -> new Bond((byte) -1, (byte) 0, (byte) 0, (short) 0, day, (short) 0, (byte) 0);
+            case NEUTRAL -> Bond.fresh(day);
+            case TRUSTED -> new Bond((byte) Standing.TRUSTED_TRUST, (byte) 0, (byte) 0,
+                    (short) 0, day, (short) 0, (byte) 0);
+            // peakWarmth at the same value, so the lazy decay does not eat the fixture on the way
+            // out of the registry — session 09's GiftPolicyTest learned this the same way.
+            case WARM -> new Bond((byte) 0, (byte) Standing.WARM_WARMTH, (byte) 0, (short) 0, day,
+                    (short) 0, (byte) Standing.WARM_WARMTH);
+        };
+    }
+
+    /**
+     * One real right-click, and what the offers cost afterwards.
+     *
+     * <p>Through {@code connection.handleInteract} with a real {@code ServerboundInteractPacket},
+     * which is the path a click actually takes: both loaders hook the packet handler rather than
+     * {@code Player.interactOn}, so anything short of this measures our own method instead of the
+     * seam. The screen is closed afterwards, which is what makes vanilla's own
+     * {@code resetSpecialPrices} run — so each reading starts from the same place a player's would.
+     */
+    private static List<Integer> priceAtTheCounter(MinecraftServer server, ServerLevel level,
+                                                   Villager villager) {
+        ServerPlayer player = player(server);
+        player.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
+        player.setShiftKeyDown(false);
+        player.connection.handleInteract(ServerboundInteractPacket.createInteractionPacket(
+                villager, false, InteractionHand.MAIN_HAND));
+        List<Integer> charged = new ArrayList<>();
+        for (MerchantOffer offer : villager.getOffers()) {
+            charged.add(offer.getCostA().getCount());
+        }
+        player.closeContainer();
+        return charged;
     }
 
     // --- session 05: the witness scan, in a running level ------------------------------------------
@@ -2343,6 +2677,7 @@ public final class AttachBetHarness {
                     return;
                 }
                 checkTheBoardSurvivedReload(server, level);
+                checkStepSeven(server, level);
                 finish(server, true);
             }
             default -> finish(server, true);
@@ -2961,9 +3296,120 @@ public final class AttachBetHarness {
         }
     }
 
+    /**
+     * <b>{@code DESIGN.md} §10 step 7, and this is the closest a scripted run can honestly get.</b>
+     *
+     * <p><i>A second player who has done nothing gets stranger lines and 1.00 prices everywhere.</i>
+     * Session 11 checked it against a synthetic viewer and said out loud that a same-process second
+     * UUID is not a second player. It still is not. What this leg adds is that <b>on Fabric it does
+     * not have to be synthetic</b>: {@code runClient} mints a fresh {@code PlayerNNN} and therefore a
+     * fresh offline UUID on every launch, so the person running {@code verify} is a genuinely
+     * different player — a different profile, a different login, a different connection — reading a
+     * world somebody else played. That is step 7 with a real second connection, arriving free, out of
+     * the launcher quirk session 11 recorded as a nuisance.
+     *
+     * <p><b>On NeoForge the player is always {@code Dev}</b>, so this run has no second person in it
+     * and the leg says which case it is rather than quietly asserting the weaker one. That is the
+     * fourth cross-loader asymmetry this project has been bitten by, used on purpose for once.
+     *
+     * <p>What is <b>not</b> covered either way, stated so it is not read as covered: two players
+     * connected <i>at the same time</i>. {@code runServer} needs an EULA that is not ours to accept
+     * and a scripted run has one client, so the simultaneous case is the owner's to play. The
+     * server-side half of it — one villager's offers, priced for one viewer and then another — is
+     * checked in {@code setup} by {@code checkTheCounterDoesNotLeak}.
+     */
+    private static void checkStepSeven(MinecraftServer server, ServerLevel level) {
+        ServerPlayer player = player(server);
+        UUID viewer = player.getUUID();
+        boolean genuinelySomebodyElse = actingPlayer != null && !actingPlayer.equals(viewer);
+
+        record(true, "STEP 7 this launch's player is " + player.getGameProfile().getName()
+                + " and the save was played by "
+                + (actingPlayer == null ? "a build that did not record who" : actingPlayer)
+                + (genuinelySomebodyElse
+                ? " — a genuinely different player, so step 7 is checked against a real second "
+                + "connection on this loader"
+                : " — the same player, so step 7 is checked against a second persona-less viewer "
+                + "instead, and this loader cannot do better in one client"));
+
+        // Whoever it is, ask the questions of the viewer this run actually has. On the loader where
+        // that is a second player the answers are step 7; on the other they are the invariant that
+        // step 7 rests on, which is worth checking either way.
+        UUID stranger = genuinelySomebodyElse ? viewer
+                : UUID.nameUUIDFromBytes("a second player who has done nothing"
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+        NpcRegistry registry = NpcRegistry.get(server);
+        int today = Deed.dayOf(level);
+        int villagers = 0;
+        int strangers = 0;
+        int atTheStandingPrice = 0;
+        for (Persona persona : registry.all()) {
+            if (!persona.isGenerated()) {
+                continue;
+            }
+            villagers++;
+            Bond bond = registry.bonds().at(persona.id(), stranger, today);
+            Standing standing = Standing.of(bond);
+            if (standing == Standing.NEUTRAL && standing.priceMultiplier() == 1.00F) {
+                atTheStandingPrice++;
+            }
+            if (Dialogue.poolFor(bond, Dialogue.remembersThem(
+                    registry.memories().of(persona.id()), stranger)) == Pool.STRANGER) {
+                strangers++;
+            }
+        }
+
+        record(villagers > 0, "STEP 7 there are " + villagers + " generated villager(s) to ask");
+        record(strangers == villagers,
+                "STEP 7 every one of them speaks a stranger line to somebody who has done nothing ("
+                        + strangers + " of " + villagers + ")");
+        record(atTheStandingPrice == villagers,
+                "STEP 7 and every one of them charges them the standing price ("
+                        + atTheStandingPrice + " of " + villagers + " at x1.00)");
+
+        // "Everywhere" is the word in the criterion, so it is asked of both villages rather than of
+        // the one the player is standing in. Session 09's ResidencyTest holds the per-settlement
+        // half in a unit test; this is the same claim over a real save with two settlements in it.
+        int settlements = registry.settlements().size();
+        int untouched = 0;
+        for (Settlement settlement : registry.settlements().all()) {
+            if (!Residency.isResident(registry, settlement.id(), stranger, today)) {
+                untouched++;
+            }
+        }
+        record(untouched == settlements,
+                "STEP 7 and no settlement in the world has taken them in (" + untouched + " of "
+                        + settlements + "), which is what 'everywhere' means");
+
+        // And the half that is about this session rather than about scoping: the player who DID do
+        // something is still owed what they earned, so a green step 7 cannot be a mod that stopped
+        // working. A run where nobody is above NEUTRAL would pass every assertion above.
+        if (actingPlayer != null) {
+            int earned = 0;
+            for (Persona persona : registry.all()) {
+                if (Standing.of(registry.bonds().at(persona.id(), actingPlayer, today))
+                        != Standing.NEUTRAL) {
+                    earned++;
+                }
+            }
+            record(earned > 0,
+                    "STEP 7 and the player who earned something still has it (" + earned
+                            + " villager(s) above the standing price), so this is per-player scoping "
+                            + "rather than a mod that has stopped working");
+        }
+    }
+
     private static void writeSubjects(ServerLevel level) {
         List<String> lines = new ArrayList<>();
         lines.add("site " + testSite.getX() + " " + testSite.getY() + " " + testSite.getZ());
+        if (actingPlayer != null) {
+            // Session 12: who did all of this. The verify phase needs it to answer a question no
+            // earlier session had to ask — whether the player running *this* launch is the same
+            // person, which is what decides whether this run can check DESIGN.md §10 step 7 for
+            // real. See checkStepSeven.
+            lines.add("actor " + actingPlayer);
+        }
         for (Subject subject : SUBJECTS) {
             lines.add("subject " + subject.personaId() + " " + subject.warmth()
                     + " " + subject.birthTick());
@@ -3042,6 +3488,10 @@ public final class AttachBetHarness {
             switch (parts[0]) {
                 case "site" -> testSite = new BlockPos(Integer.parseInt(parts[1]),
                         Integer.parseInt(parts[2]), Integer.parseInt(parts[3]));
+                // Absent from a file written before session 12, and its absence is load-bearing the
+                // way session 10's road row is: a cross-build run against an older archive has to
+                // report "this save does not say who wrote it" rather than fail to parse.
+                case "actor" -> actingPlayer = UUID.fromString(parts[1]);
                 case "subject" -> SUBJECTS.add(new Subject(UUID.fromString(parts[1]),
                         Byte.parseByte(parts[2]),
                         // A pre-session-03 file has no birthTick column. Read it as "do not check"

@@ -3,7 +3,37 @@
 **The ledger.** What happens next, in order, with exit criteria. Read first, update last.
 Where any other document disagrees on sequence, this wins.
 
-- **Status:** session 11 complete, **and a player can read what a village knows about them.** Stand a
+- **Status:** session 12 complete, **and what a village thinks of you is what it charges you.** Walk
+  up to a librarian who is warm to you and a book costs fifteen emeralds where a stranger pays
+  twenty and somebody they have not forgiven pays twenty-seven — in a real trade window, with
+  vanilla's own struck-through price drawing it for free, because the band *adds to*
+  `Villager#updateSpecialPrices` rather than replacing it. She also teaches you to build a lectern,
+  which is a Notice Board, and nothing arranged that. **Five bands, named, reading trust and warmth:
+  `RESENTED · WARY · NEUTRAL · TRUSTED · WARM`**, and every threshold came off session 07's
+  instrument rather than out of anybody's head — `TRUSTED` *is* `Residency.TRUST_THRESHOLD` rather
+  than a copy of it, so §5's *"residency also grants the trusted price band"* is one constant
+  instead of two that agree, and `RESENTED` at −20 is where one witnessed killing puts a person,
+  halved. **`Dialogue.poolFor` was replaced and the board followed for free**, exactly as session 11
+  promised: pool selection is behaviourally identical, and the board additionally prints six phrases
+  where it printed four, with the owner's ruled four kept word for word.
+  **The session's central ruling is a deletion.** The rule 5 ledger had said since session 05 that
+  `Bond.respect`'s exemption would be paid by the trade price band, and the instrument session 07
+  exists to prevent exactly this failure refused it: **observed maximum respect across a hundred
+  in-game days is zero, zero, zero, zero and four** over the five player models — the four on one
+  villager of nine — against a lowest ladder mark of twenty. So `Bond.respect` is gone, and
+  `Persona.professionId` (which nothing had ever written) and `Deed.item` (three readers built and
+  rejected at 09, no fourth found) with it. **Schema 8, a datafixer, and a load test that migrated
+  104 and 115 records on the two loaders and brought 83 and 94 deeds through.**
+  **And `DESIGN.md` §10 step 7 is met against a real second connection**, which no session before
+  this one could claim: `runClient` on Fabric mints a fresh player every launch, so the person
+  running `verify` is genuinely somebody else — sixteen villagers across two settlements, all
+  speaking a stranger line and all charging ×1.00, while the player who earned something still has
+  it. **437 unit tests, 135 harness legs in `setup` and 35 in `verify`** (38 on a migrating run).
+  Two ruled numbers did not compose and the session opened on both, as 08, 10 and 11 did: the price
+  band's axis, and §10 step 5's **0.95**, which is not on the ruled ladder and — measured — is not
+  what one gift two villages away produces either. The number gave way, to **1.00**, and the finding
+  behind it is worth more than the fix: *hearsay changes what they say, not what they charge.*
+  Before that: session 11, **and a player can read what a village knows about them.** Stand a
   lectern anywhere in a village, right-click it with an empty hand, and it says who there has an
   opinion of you, what they watched you do, and what they were told about you by somebody who came
   down the road — *"fed someone hungry · from Mazhsk, west · 1 heard it"*, in a village the player has
@@ -114,8 +144,8 @@ Where any other document disagrees on sequence, this wins.
 | 09 | Dialogue pools and residency | **done** — 2026-08-15 |
 | 10 | Roads and propagation — **SHIP-OR-KILL** | **done** — 2026-08-15 |
 | 11 | Notice Board | **done** — 2026-08-15 |
-| 12 | Standing bands | **NEXT** |
-| 13 | Day plan I — free slots | pending |
+| 12 | Standing bands | **done** — 2026-08-15 |
+| 13 | Day plan I — free slots | **NEXT** |
 | 14 | Day plan II — ERRAND activity | pending |
 | 15 | Art, config, playtest | pending |
 
@@ -488,6 +518,27 @@ generations and keeps latency out of the interaction path entirely.
    **Deletion was offered at the close of session 05 and the owner ruled the field stays** — so it
    is carried deliberately rather than by inertia, and the expiry at 16 stands unchanged. Session 16
    reads it or deletes it; moving the number is still the thing the mechanism exists to stop.
+
+   **Session 12 is the first time the mechanism took something, and it took three.** All three
+   exemptions falling due at its close went unpaid and all three fields are deleted at schema 8:
+   `Bond.respect`, `Persona.professionId` and `Deed.item`. The reasoning for each is different and
+   is in the session 12 log; what they have in common is that **not one of them was deleted for
+   being small.** `professionId` had never been written at all. `Deed.item` had three non-display
+   readers built for it at session 09 and all three rejected. And `respect` was refused by the
+   instrument that exists for exactly this: **zero, zero, zero, zero and four**, across five player
+   models over a hundred in-game days, against a lowest ladder mark of twenty.
+
+   **The rule cost something real and that is the point of recording it here rather than only in
+   the log.** `DESIGN.md` §6's force-resolution wants *deference up*, so session 16 will add an axis
+   back and pay hard rule 1 for it; and the Notice Board now says *gave them something* where it
+   said *gave them bread*, which is half of the memory depth the owner asked for three times. Both
+   were available as arguments for keeping the fields and neither is a reason: **a field kept for a
+   session that has not happened is the exact shape both reference codebases died of**, and the
+   mechanism has now been tested on fields somebody wanted rather than on fields nobody missed.
+
+   **Two exemptions remain of the five, and they are the two this risk always said were furthest
+   out:** `fear` and `debt`, both at 16, both untouched. Session 12 opened none in their place — the
+   first session since 03 to add a persisted field to nothing and remove three.
 
 ## How a session is verified — ruled 2026-08-13
 
@@ -4464,3 +4515,439 @@ have wanted out of it. Five decisions added to `DESIGN.md` §2, taking the count
 Notice Board clause rewritten, §5's *"no history"* line made real, and §4 step 7's blur note updated
 because the direction it has promised since session 08 is finally built. No changes to the 16-session
 shape.
+
+### Session 12 — 2026-08-15 — standing bands
+
+**Shipped.** `3a22d0c..RANGE` plus this ledger commit, pushed to `origin/main`. CI green on all three
+jobs — build and test, and the attach-bet harness on each loader.
+
+**What a village thinks of you is now what it charges you.** A librarian who is warm to you sells a
+book for **fifteen emeralds** where a stranger pays twenty and somebody they have not forgiven pays
+twenty-seven — in a real trade window, drawn by vanilla's own struck-through price, because the band
+*adds to* `Villager#updateSpecialPrices` rather than replacing it. She also teaches you to build a
+lectern, which is a Notice Board, and nothing arranged that: it falls out of the profession table.
+
+**Five bands, named, reading `trust` and `warmth`:** `RESENTED` (trust ≤ −20, ×1.35) · `WARY`
+(trust < 0, ×1.15) · `NEUTRAL` (×1.00) · `TRUSTED` (trust ≥ 20, ×0.90) · `WARM` (warmth ≥ 20, ×0.75).
+Three consumers and no fourth: the price multiplier, whether one recipe is taught, and which dialogue
+pool is selected.
+
+#### The first contradiction: the band cannot read the axis the ledger promised it
+
+The rule 5 ledger has said since session 05 that `Bond.respect`'s exemption is paid by *the trade
+price band*. **The instrument session 07 exists to prevent this exact failure refused it**, and the
+numbers are worth printing in full because they are the session's central finding.
+
+Observed maximum respect, a hundred in-game days, nine residents, seed 20260815, through the shipped
+record layer:
+
+| | ATTENTIVE | SATURATING | INTERMITTENT | PASSING_THROUGH | CARELESS |
+|---|---|---|---|---|---|
+| **respect max** | 0 | 0 | 0 | 0 | **4** |
+| warmth max | 55 | 100 | 22 | 2 | 88 |
+| trust max | 100 | 100 | 100 | 23 | 100 |
+
+The four is **one villager of nine**; the other eight hold zero. And a witness sweep from nobody
+watching to everybody does not move it by a single point — 0%, 25%, 35%, 50% and 100% witnesses all
+report a maximum of 4 — because a strike's `+1` respect times a witness's half share rounds to
+nothing. `DialogueStats.LADDER`'s lowest mark is **20**. LNK set skill gates at 35–205 against an
+observed 32 and nobody reached the lowest one for months; this would have been worse, **in the
+session whose own instrument was built to stop it.**
+
+**And the deeper reason, which is the one that decided it: respect could never have been decisive.**
+It has exactly two writers. `DEFENDED_RAID` wrote `+12` respect and `+8` trust against **one shared
+per-axis daily allowance**, so no raid ever raised respect without raising trust beside it;
+`STRUCK_RESIDENT` wrote `+1`, which is the only way respect can rise while trust falls and is the
+value a personality weight below neutral rounds away. There was no state of the world a player could
+reach in which a threshold on respect said something a threshold on trust did not.
+
+**The brief offered five ways out, and the cost it named for the first one turns out to be wrong.**
+*"Keep respect and make more deeds write it — changes the deed table, which perturbs every earn-rate
+number sessions 07, 08 and 09 measured."* It does not. `Deeds.deltaFor` computes the four axes
+independently and `Bond.apply` caps them independently, so the respect column could have been
+rewritten without moving one number any of those sessions measured. **The real objection is a design
+one: no deed in the table honestly earns deference except the raid defence that already does.**
+Gifts and feedings do not buy deference; a killing is terror rather than deference and already writes
+`+35` fear. The six-row table is right, and that is why raising the column was refused.
+
+Of the remaining four: **trust** never decays, so a discount earned by turning up for a month is
+kept — which is the property session 09 rejected trust *for the gift gate* and is the right property
+for a price. **Warmth** decays, and its village median is 0–3 against an observed maximum of 55–88 —
+so it cannot carry the whole ladder, and it is exactly right for the top of it. **A composite** was
+the answer, and it is lexicographic rather than a weighted sum, which matters: a weighted sum
+including respect would have been *the band reads a field that never moves*, which is the shape this
+ledger calls naming the writer. **Deleting `Bond.respect`** is the fifth, and it is what shipped.
+
+**So the two discount bands are deliberately different in kind, and that is the design.**
+`TRUSTED` reads trust, which never decays, so consistency buys a discount you keep. `WARM` reads
+warmth, which falls a point an in-game day toward four tenths of its high-water mark, so **the best
+price in the village lapses if you stop coming.** The discount you keep is the one you earned by
+turning up; the discount you have to keep earning is the one for being kind lately.
+
+**Where the four boundaries came from, since the brief's instruction was that none of them come from
+intuition.** `TRUSTED` at 20 **is** `Residency.TRUST_THRESHOLD` rather than a copy of its value, so
+§5's *"residency also grants the trusted price band"* is one constant instead of two that agree —
+measured, none of nine residents is there before about day 20 of one kindness a day, the third
+crosses on day 28, and all nine are there by day 100. `WARM` at 20 is session 09's `WARM_WARMTH`
+moved unchanged, which is why every dialogue and board test written against it still passes. `WARY`
+at 0 is session 09's hostile-pool boundary. And `RESENTED` at −20 is the only genuinely new number:
+it is **where one witnessed killing puts a person, halved.**
+
+| what a player does, once | trust to the subject | to each witness |
+|---|---|---|
+| a bare-handed punch | −1 | −1 |
+| an iron sword (6 damage) | −5 | −2 to −3 |
+| a full-strength blow (8+) | −7 | −3 to −4 |
+| **a killing** | **−54** | **−40 to −42** |
+
+Twenty bare-handed punches to one person reach −19. Eight full blows reach about −24. **One murder
+puts everybody who watched it twice inside the band, immediately and permanently**, because trust
+does not decay in either direction. The comparison is `<=` rather than `<` for the same reason.
+
+#### The second: `DESIGN.md` §10 step 5 said 0.95 and the ladder has no 0.95
+
+Session 08 opened on a contradiction of this shape, session 10 on two, session 11 on two. This one is
+arithmetic, and **the number gave way rather than the ladder** — for two reasons, and the second is
+the interesting one.
+
+1. **The ladder is ruled and it is discrete.** `DESIGN.md` §2's *bands, never raw integers* means a
+   price cannot be a smooth function of a bond; 0.95 is a continuous-multiplier number in a banded
+   world.
+2. **Measured, 0.95 is not what step 5 produces either.** One `FED_HUNGRY` in village A, one hop down
+   the road, read in village B: **two of nine residents hold one point of trust** and the rest hold
+   nothing. After a *hundred* in-game days of daily kindness in A, the neighbouring village's
+   residents hold six or seven — and a saturating player gets one or two of them past 20. No
+   threshold above 1 catches what step 5 describes. Only a boolean could, and a discount for having
+   been *mentioned once* is a discount nothing can ever take away again.
+
+So step 5's price clause is **1.00 — unchanged, and that is the point**, with the finding written
+into `DESIGN.md` §10 rather than only here: **hearsay changes what they say, not what they charge.**
+Reputation reaches a village down the road as a sentence first, and reaches the price only once
+somebody there has actually dealt with you. The observable at step 5 is the line and the hearsay row,
+which is what session 10's ship-or-kill was about and what the owner reacted to.
+
+Step 6's clause is now written down too, at the value the arithmetic produces: **1.15**, because one
+blow puts its subject below zero and no blow at any severity reaches −20.
+
+#### The third: vanilla is already adjusting this number, and we add to it
+
+Nothing in this repository had ever touched `Villager#updateSpecialPrices`, `getPlayerReputation` or
+`specialPriceDiff`. The patched sources were read on both loaders before the call was written — the
+way session 01 read `SavedData.Factory` and session 02 read the interact callbacks — and what they
+say decides it:
+
+- `startTrading` calls `updateSpecialPrices(player)` on **every** window open and `stopTrading` calls
+  `resetSpecialPrices()` on every close, so vanilla's adjustment is already per-open and per-player;
+- `updateSpecialPrices` **adds** two contributions into one accumulator — the gossip reputation,
+  scaled by each offer's own `priceMultiplier`, and Hero of the Village. The method it calls is
+  called `addToSpecialPriceDiff`, and it means it;
+- `getModifiedCostCount` is `clamp(base + demand + specialPriceDiff, 1, maxStackSize)`.
+
+**So the number is an accumulator with two contributors in it already, and we are the third.**
+Replacing vanilla's would suppress the discount for curing a zombie villager and Hero of the Village
+— vanilla behaviour a player knows — which is replacing the entity by the back door, and §2's first
+architectural row is *attach a Persona to the vanilla Villager, never replace the entity.*
+
+**What a player sees when both fire is both, and it costs this session nothing to draw.** Vanilla
+renders a struck-through original cost whenever the diff is non-zero, in both directions — its own
+negative reputation produces a markup through the same field — so the most visible consumer of this
+session ships **no art, no screen and no packet.** A player who has cured a zombie villager *and*
+stands `WARM` gets two discounts; one who murdered somebody in the square gets vanilla's gossip
+markup and ours together. Both systems describe the same relationship from two angles, and ours is
+the one that travels down a road.
+
+**Two guards keep it per-player, and they are the real risk surface of the session.** Bonds are keyed
+on (holder, viewer) and a board is computed per viewer, so neither can leak — sessions 05 and 11 hold
+both in unit tests. A **price** is different: it lives on a `MerchantOffer` belonging to the villager,
+so two players share the object. We reset before we add, because the hook fires on interactions that
+open no window at all; and we decline to reprice a counter somebody else already has open, because
+their client has drawn those numbers already.
+
+#### The budget was three against three, and none of the three is what the consumers read
+
+| field | expired | ruled | why |
+|---|---|---|---|
+| `Persona.professionId` | 12 | **deleted** | **Nothing ever wrote it.** `Persona.create` set it to zero and no wither changed it, so every persona in every save has held the same constant for eleven sessions. Its own ledger entry has said since session 02 that it duplicates what vanilla stores on the villager and to delete it rather than move the number — and `Teaching` reads `getVillagerData().getProfession()`, vanilla's own answer, off the entity standing in front of the player at the only moment a recipe can be taught. Paying it would have meant *first building a write path*, and a write path for it is a cache of vanilla state that can drift. |
+| `Bond.respect` | 12 | **deleted** | The measurement above. |
+| `Deed.item` | 12 | **deleted** | Session 09 built three non-display readers and rejected all three; no fourth appeared. Session 11's board prints the object and explicitly does not pay for it — `net.namesake.board` went into `DISPLAY_PACKAGES` before a line of the board was written, for exactly this moment. |
+
+**So the fit was not a squeeze, it was a miss:** three consumers, three expiring fields, and the
+consumers read none of them. That is the mechanism working rather than failing. An exemption is a
+promise that a mechanic will read the field; three promises came due and none was kept.
+
+**What it cost, stated rather than argued away.** §6's force-resolution wants *deference up*, so
+session 16 adds an axis back and pays hard rule 1 for it. And a board row now reads *gave them
+something* where it read *gave them bread* — half of the memory depth the owner asked for three
+times. `Memories.Slot.repeats` and the 128-slot ring survive; `Deed.item` does not. Both of those
+were available as arguments for keeping the fields and neither is a reason: **a field kept for a
+session that has not happened yet is the exact shape both reference codebases died of.**
+
+**One dividend arrived from a decision made three sessions early.** Session 09 kept the object
+**outside `Deed.id()`**, on the argument that folding it in would hand the ring back its
+grindability. That is why deleting it re-partitions **no ring in any save**: no deed id moves, and
+`MemoriesTest.theDerivationIsPinned` holds the same literal it held at session 09.
+
+#### The fourth thing: `DESIGN.md` §2's standing split, ruled to land at 15
+
+*80% personal / 20% shared, server-configurable* has been ruled since session 02 with nothing behind
+it. A band read off one bond is 100% personal, so the brief asked whether the bands are where it
+lands and, if not, which session is.
+
+**The budget question first, because it was asked to be argued rather than assumed.** It is neither a
+consumer of the band nor a consumer of a field — **it is an *input* to the band**, which is a third
+category. So it does not spend the three-consumer budget; nothing new would read a persisted field.
+But it is not free either: it changes `Standing.of`'s signature and **moves every threshold this
+session measured**, which makes it a re-measurement rather than an addition.
+
+**And the deciding argument is that the mechanism it describes already exists and already works.**
+What a village collectively feels about you already reaches a villager who was not there — that is
+`DESIGN.md` §4 step 7, and session 08 measured it at **78% of a village within two in-game days.** It
+arrives *inside* the personal bond rather than beside it. A blended shared term would be a second
+route to the same place, computed a different way, and this document has ruled against two answers to
+one question five times. The residency name swap is the same shape from the other side: session 09's
+exit criterion is a villager who has **never met you** using your name, because the settlement took
+you in.
+
+So the honest reading is that the split is a **tuning knob on a working mechanism**, not a missing
+mechanism — and a tuning knob nobody can set without a playtest to set it against. **It lands at
+session 15**, which owns the config it is ruled to be part of and owns the playtest that would give
+its number a value. The risk is recorded now rather than found then: **if 15 takes it, 15 re-measures
+every band threshold**, because a 20% shared term changes what every villager in every village
+charges.
+
+#### Hard rule 1, in full
+
+Schema-7 saves were archived from both loaders at **`1770423`** into
+`C:\MCA Reborn Rework\.archives\schema7-1770423`, with their subjects files, **before a line of this
+session was written**. Then the schema-8 build loaded them:
+
+```
+NPC registry datafixer: schema 7 -> 8 (three fields with no consumer deleted: Persona.profession,
+Bond.respect and Deed.item. Every persona, every bond, every packed ring slot and every queued
+rumour on disk is rewritten, and the item palette is dropped) rewrote 104 record(s)      [Fabric]
+Loaded 15 persona(s), 15 bound to an entity, 2 settlement(s), 6 bond(s),
+83 deed(s) across 11 ring(s), 0 rumour(s) in 0 settlement(s) (schema 8)
+
+… rewrote 115 record(s)                                                               [NeoForge]
+Loaded 15 persona(s), … 94 deed(s) across 10 ring(s) … (schema 8)
+```
+
+Then each world was loaded a **second** time, which is the only way session 01's defect 1 is ever
+caught: `no migration expected: world is already at schema 8`. The rewrite reached disk.
+
+**This is the second rewriting migration in the ladder and the widest.** Schemas 4, 5 and 6 were
+additive; 7 repacked the rings; **8 touches all four tables** — every persona loses a key, every bond
+loses a byte, every packed ring slot goes twenty-five bytes to twenty-one, and every queued rumour
+loses an optional field.
+
+**Only one of the three deletions had to be rewritten to be safe, and knowing which is the point.** A
+stale `profession` or `respect` key would simply be ignored by a codec that no longer asks for it —
+that is what a `RecordCodecBuilder` does with an unknown field. **The ring would not:** it is
+fixed-width, so a schema-7 slot read as a schema-8 one is every field after the first two shifted by
+four bytes. A ring of 25-byte slots does not divide by 21 at most lengths and `Memories.readFrom`
+refuses those as damage — but **105 bytes is five slots or three**, and a ring of that length would
+have come back as three deeds made of the wrong bytes. All three keys are dropped anyway: a field
+left on disk that nothing reads is the same shape as a field in the record that nothing reads.
+
+`NpcSchemaTest.thePackedRingThisFixWritesIsTheOneMemoriesReads` did exactly what session 09 built it
+to do — it went red on the width change, and was answered with **this session's own fixer** rather
+than by editing session 09's frozen constant, which is the instruction in its own javadoc.
+
+#### What the exit criteria actually showed — and which clause is whose
+
+The brief asked for this table specifically, the way session 09's log did for step 3.
+
+| step | clause | machine-checked? | whose |
+|---|---|---|---|
+| **1** | every villager speaks a stranger line | **yes** — 1,920 rendered sentences since 09, and 16 of 16 villagers in a two-village save this session | ruled by the owner at 09 |
+| | prices 1.00 | **yes, new this session** — `BAND STEP 1`: a villager who has never met you charges `[20]` against a base of `[20]`, in a real trade window | — |
+| **2** | +3 subject, +1 each witness | **yes** — since 05, still asserted on every run | ruled at 05 |
+| **3** | stranger lines in B | **yes** — since 09 | ruled at 09 |
+| | board shows "No history." | **yes** — since 11, in those words | **ruled by the owner at 11: *"Noticeboard worked!"*** |
+| **4** | wait ~2 in-game days | **yes** — the drain and the cross-settlement delay are day-derived, and the harness advances real ticks rather than setting the clock | — |
+| **5** | someone says they've heard your name, referencing A | **yes** — since 10: 6 of 6 far-village residents, all still able to name you | **ruled by the owner at 10: *"Yes, landed. It worked."*** |
+| | hearsay row at reduced confidence | **yes** — since 11, on a real screen, photographed | **not the owner's yet** — see the playtest |
+| | ~~prices 0.95~~ → **1.00** | **yes**, and the number *changed this session*, measured | the ruling is recorded above; whether the absence of a price change reads flat is the owner's |
+| **6** | trust drops unclipped | **yes** — since 05, and this session measured what a blow costs at every severity the game can produce | — |
+| | prices rise *for you* | **yes, new and end to end** — `BAND STEP 6`: a real punch, through vanilla's damage path, through the loader's damage hook, through `DeedBus`, into a bond, out through the band, onto a real offer: `[23]` against a base of `[20]` | **the owner has never struck a villager and then opened its trade screen** |
+| **7** | a second player who has done nothing gets stranger lines and 1.00 prices everywhere | **yes, and against a real second connection on Fabric** | the simultaneous case is the owner's |
+
+**Step 7 is the exit criterion, it is met, and the one clause it cannot cover is named.**
+
+`runClient` on Fabric mints a fresh `PlayerNNN` — and therefore a fresh offline UUID — on **every**
+launch. Session 11 recorded that as a nuisance; it is exactly what §10 step 7 asks for. The player
+who runs `verify` is **genuinely somebody else**: a different profile, a different login, a different
+connection, reading a world another player played. The setup phase now writes its actor's UUID into
+the subjects file so the verify phase can tell which case it is in, and says which out loud:
+
+```
+Fabric    this launch's player is Player167 and the save was played by 79588fdd-… — a genuinely
+          different player, so step 7 is checked against a real second connection on this loader
+          there are 16 generated villager(s) to ask
+          every one of them speaks a stranger line to somebody who has done nothing (16 of 16)
+          and every one of them charges them the standing price (16 of 16 at x1.00)
+          and no settlement in the world has taken them in (2 of 2), which is what 'everywhere' means
+          and the player who earned something still has it (4 villager(s) above the standing price)
+
+NeoForge  this launch's player is Dev … — the same player, so step 7 is checked against a second
+          persona-less viewer instead, and this loader cannot do better in one client
+```
+
+The last row of the Fabric block is there because **every assertion above it would pass in a mod that
+had stopped working.** A world where nobody is above `NEUTRAL` gives a second player stranger lines
+and 1.00 prices too.
+
+**What is not covered, plainly, because the brief asked for it plainly: two players connected at the
+same time.** `runServer` needs Mojang's EULA, which is not ours to accept, and a scripted run has one
+client, so a simultaneous second login is **not reachable** and is not claimed. Two things were done
+instead of one. The sequential case above, which is a real second connection. And the server-side
+half of the simultaneous case, in `setup`: a **real second `ServerPlayer`** on the live integrated
+server — its own UUID, its own recipe book — opens a counter the first player has just discounted to
+fifteen, and is charged twenty. That player has no network connection, so it proves the *server*
+answers a second person correctly and not that a second person's screen draws it. Opening to LAN was
+considered and rejected: it needs a second client process, and coordinating two harnesses across two
+JVMs would be measuring the harness.
+
+**Both loaders, every leg green**, in four launches each plus two cross-build load tests:
+
+| phase | legs | run against |
+|---|---|---|
+| `setup` | **137** (120 before this session) | a fresh world on the session 12 build |
+| `verify` | **35** (29 before) | that world, saved and reloaded |
+| `verify` | **38** | the archived **schema-7** world, migrating 7 → 8 |
+| `verify` | **34** | the same world again — `no migration expected: world is already at schema 8` |
+
+The 34 is one fewer than 35 and it is a property of the save rather than a lost leg: an archive
+written before this session carries no `actor` row, so the step-7 leg that asks whether the player
+who *earned* something still has it has nobody to ask about. Stated because a bare count that shrinks
+reads exactly like a regression — session 07's lesson, in a new place.
+
+**437 unit tests**, up from 415, real JUnit XML, `failures=0 errors=0 skipped=0`.
+
+#### What the run found that nobody asked it
+
+**1. A band boundary's words were decided by a pixel budget.** `RESENTED`'s first phrase was
+*"has not forgiven you"*, and `CommandLayoutTest` turned red at **287 pixels against the 272** the
+smallest GUI Minecraft will ever present. It reads *"will not forget"* — fifteen characters, the
+width of session 11's longest ruled phrase, and not a coincidence. The budget picked the words, which
+is what it is for.
+
+**2. Vanilla agrees with us about violence, and the harness found out by going red.** The step 6 leg
+first asserted that the final price equals the base plus *our* adjustment — and it failed at exactly
+**two emeralds over on every reading**, including on three ladder rows that had passed a run earlier.
+The cause is the ruling working: a punch also gives the villager a vanilla `MINOR_NEGATIVE` gossip,
+so `updateSpecialPrices` adds a markup of its own on top of ours and **a strike moves the price
+twice.** The assertion was wrong, not the code. It now checks our contribution separately — read off
+`Trading.Applied` rather than off the screen — and asserts the screen shows at least that much, with
+vanilla's surplus printed rather than absorbed, because it is the number a player actually sees.
+
+**It cost two other legs before it was understood, and that is the lesson worth keeping.** The first
+version stood the counter up beside the bell, so one real punch emitted a deed that three village
+residents witnessed — which moved bonds the snapshot at case 24 had already recorded and turned four
+unrelated `verify` legs red. **A witness scan is a two-hundred-block problem when the thing you are
+testing is violence.** The counter now stands on empty ground two hundred blocks from anything, and
+the blow lands on a second villager so the ladder is measured on one nobody has touched.
+
+**3. A village that already trusts you does not gouge you over one shove, and that is correct.** One
+blow into a village at 30–100 trust moves the struck villager by two points and changes nobody's
+band. Step 6 works in the acceptance script because B *has not* taken you in yet — which is the
+script being right about where to run it rather than the mechanism being weak. It is worth knowing
+before a playtest: **punch somebody you have been kind to for a month and nothing will happen to the
+price.**
+
+**4. `Standing.of` tests hostility before warmth, and it is session 09's ordering rather than a new
+one.** A villager you have been kind to and then struck is wary of you, not warm to you: warmth
+decays a point a day toward four tenths of its peak, so a player who was generous last week is still
+warm today whatever they did this morning. Trust going negative is what says *and then you did this*.
+
+**5. A one-item trade cannot move, at any band.** A quarter of one rounds to nothing, and vanilla's
+own `clamp(…, 1, maxStackSize)` would refuse it anyway. So the cheapest trades in the game are the
+same price to everybody. That is a real property of a band expressed as a fraction of a price, and it
+is in a test with its own name rather than left to be found.
+
+#### Rule 3: fourteen deliberate breakages, each watched to fail and then removed
+
+Sessions 09's, 10's and 11's discipline kept: the failing test's **name** captured rather than the
+build's exit status, and a row whose edit matched nothing refused rather than reported as green.
+
+| Breakage | Result |
+|---|---|
+| `RESENTED` compared with `<` instead of `<=` | **4 red**, including *"the bottom band includes its own threshold, and one blow never reaches it"* |
+| The band reads `fear` as a discount | **Red.** *"being feared buys nothing at the counter"* |
+| Warmth tested before hostility | **2 red**, including *"a blow outranks a kindness"* |
+| The standing price stops being 1.00 | **3 red**, including §10 step 1's own row |
+| The neutral band teaches a recipe | **2 red.** *"a recipe is taught by the two discount bands and by nothing below them"* |
+| `TRUSTED_TRUST` given its own literal while §5's threshold moves | **Red.** *"a village that has taken you in is a village whose residents give you the trusted price"* — the two constants stop being one |
+| A trusted villager put in the warm pool | **Red.** *"every band maps to the pool session 09's four comparisons would have chosen"* |
+| A nitwit taught a recipe | **2 red.** *"a villager with no trade has nothing to show you"* |
+| Two professions given the same recipe | **Red** |
+| Two bands given the same words | **Red.** The board stops distinguishing what the price distinguishes |
+| A standing phrase widened past the pixel budget | **Red.** `every row of the Notice Board fits the lectern's budget` — and this one is not hypothetical: it is the defect that named `will not forget` |
+| The 7 → 8 fixer leaves the packed rings alone | **2 red**, including session 09's frozen-width pin doing exactly what it was built for |
+| The schema bumped to 8 with no matching fix | **15 red.** The fix ladder has a hole and every migration test says so |
+| **An exemption left expiring at 12, at the new status board** | **Red.** *"WORKPLAN.md says session 13 is next, so these exemptions have expired"* — the forcing function, live against the board this session just moved |
+
+**Fourteen rows, fourteen red, no `NOTHING FAILED` and no refusals, and the tree clean at the end.**
+Three claims are deliberately **not** in this table because a unit test cannot reach them and a
+scripted breakage of a harness leg costs six minutes a row: that our contribution is reset before it
+is added, that a counter with somebody else's screen open is not repriced, and that the multiplier
+comes off the base cost rather than the demand-adjusted one. All three are held by harness legs that
+name them, and the second of the three is `BAND STEP 7`.
+
+#### Carried into session 13
+
+- `$env:JAVA_HOME` still must be pinned to JDK 21. Kill the dev client between runs, and delete
+  `<loader>/run/saves/namesake_attachbet` before a `setup`. A watchdog exit still makes Gradle report
+  a failure over a PASS verdict — **read the verdict file**, which happened once this session.
+- **The schema-7 archives are at `C:\MCA Reborn Rework\.archives\schema7-1770423`**, with their
+  subjects files, for both loaders — and they were used: the load test above is them. Session 13
+  should take a **schema-8** pair the same way before it starts, whether or not it expects to bump.
+- **Session 13 changes no schema if it can help it.** The day plan is a slot LUT and a steering
+  policy; nothing in `DESIGN.md` §7 needs a persisted field, and a plan stores *what*, never *when*.
+- **`DESIGN.md` §7's 1.73 m `WorkAtPoi` reach is still unverified in-engine**, and session 13's whole
+  industry mechanic rests on the gap between it and the confirmed `closeEnough = 9`. Verify it first.
+- **`Bond.AXIS_COUNT` is 3 now**, and everything indexing axes by position was rewritten this session.
+  A four-wide delta is refused rather than truncated, with a test naming both widths.
+- **Session 16 owes an axis back.** §6's force-resolution wants *deference up* and the field it would
+  have read is gone. That is a schema bump with a fixer, budgeted now rather than found later.
+- `DeedBus.witnessScan`, `DeedBus.emit` and `Gossip.drain` **still have meters pointed at nothing**,
+  unchanged and for the unchanged reasons. `Trading` has none either, deliberately: it runs once per
+  interaction, which is a click rather than a tick, and its cost is one bond read and one pass over a
+  villager's offers.
+- **`DESIGN.md` §5's second route being much the cheaper of the two** — residency by `FED_HUNGRY` ×3
+  at day 6 against the trust band at day 28 — is still open and still not this session's. The
+  instrument run says one new thing about it: **the trust threshold is now read twice.** It grants
+  residency *and* it is the price band, so raising or lowering §5's number now moves what every
+  villager in the world charges. That makes it a more expensive number to retune than it was, and it
+  is the owner's to rule either way.
+
+#### The playtest
+
+**One, and it is the first outstanding playtest since session 10.** Everything above is machine-
+checked and none of it is a person opening a trade screen.
+
+The script: **find a librarian and open their trades — write the price down.** Then give that villager
+things until the Notice Board says *warm to you*, and open their trades again: it should cost less,
+with vanilla's struck-through price showing the difference, and a recipe should unlock. Then **punch
+them once** and open the trades a third time: higher than the stranger price you wrote down first.
+(Punch a villager in a village that has *not* taken you in — see finding 2 above.)
+
+**And two things to look at while you are there**, both carried rather than new:
+
+- **the hearsay row in your own world.** It has been checked by machine on both loaders and read off a
+  screenshot, and you have never met it by accident. This session walks between two villages for step
+  7 anyway — open a board in the far one.
+- **whether the six standing phrases read right.** *has not met you · knows you · trusts you · warm to
+  you · wary of you · will not forget.* The first, second, fourth and fifth are the ones you ruled at
+  the close of 11 and they are unchanged. The other two are new, and *will not forget* was chosen by
+  the pixel budget as much as by me.
+
+**Ledger change.** Session 12 → done, session 13 → NEXT. **Risk 5 shrank for the second time and for
+the opposite reason:** at 09 it shrank because two fields were paid; here because three were deleted,
+which is the first time the mechanism has taken anything. Two exemptions remain — `fear` and `debt`,
+both at 16, both untouched — and **no new one was opened**, making this the first session since 03 to
+add a persisted field to nothing and remove three. Seven decisions added to `DESIGN.md` §2 and four
+rewritten — including the **standing split**, ruled to land at 15 — taking the
+count 71 → 78, plus §3's `Persona`, `Bond` and `Deed` rewritten, §5's *trusted price band* made
+literal, and **§10 step 5's price clause changed from 0.95 to 1.00** with the measurement that
+decided it. No changes to the 16-session shape.

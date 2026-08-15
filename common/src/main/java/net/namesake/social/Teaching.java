@@ -146,8 +146,20 @@ public final class Teaching {
                 : Optional.of(ResourceLocation.withDefaultNamespace(recipe));
     }
 
-    /** The professions this table covers, for the test that walks the vanilla registry. */
+    /**
+     * The professions this table covers, by registry path.
+     *
+     * <p>Exposed as strings rather than as {@link VillagerProfession}s so a unit test can walk the
+     * whole table <b>with no registries bootstrapped at all</b> — which is the property session 07's
+     * headless simulation depends on and the reason {@code Deed} carried a registry id as a string
+     * rather than as an {@code Item} while it existed.
+     */
     public static java.util.Set<String> professionsWithARecipe() {
         return WORKSTATION_RECIPES.keySet();
+    }
+
+    /** What one profession teaches, by path, or null. The registry-free half of {@link #recipeFor}. */
+    public static String recipeNameFor(String profession) {
+        return WORKSTATION_RECIPES.get(profession);
     }
 }
