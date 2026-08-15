@@ -40,7 +40,7 @@ Where any other document disagrees on sequence, this wins.
   boundary. **7.20 → 4.78 µs**, and what is left is ≈34 ns a loaded villager — half a microsecond in
   the world a player actually has, four fifths of the budget at the population the architecture is
   sized against, and **four times it at four hundred.** Which of those the number should be ruled
-  against is the owner's. **460 unit tests, up from 437**, and the attach-bet harness grew a day-plan
+  against is the owner's. **464 unit tests, up from 437**, and the attach-bet harness grew a day-plan
   leg in each phase — **39 in `verify`**, and both loaders green on both phases.
   Before that: session 12, **and what a village thinks of you is what it charges you.** Walk
   up to a librarian who is warm to you and a book costs fifteen emeralds where a stranger pays
@@ -5534,7 +5534,8 @@ reported as `COMPILE` and not counted, because a compile error is not evidence a
 | a day-plan record given a codec, so the plan starts persisting | **Red.** *the day plan persists nothing, so there is no schema to move* |
 
 **Twelve red, two `NOTHING FAILED`, no refusals, and the tree clean at the end. The two are the
-point of the exercise and both were fixed.**
+point of the exercise and both were fixed** — and a second pass at the close, over the guards added
+while closing the session, ran **nine rows red with no `NOTHING FAILED`**.
 
 1. **Arm's reach passed with 2.0 in place of 1.73.** The test asked about one block in, one diagonal,
    and two blocks out — and two blocks out is 2.06 from the block's centre, so it is outside *both*
