@@ -937,9 +937,16 @@ public final class AttachBetHarness {
                 atWork++;
             }
         }
-        record(atWork > 0, "PLAN " + atWork + " of " + diligent.size() + " industrious villager(s) "
-                + "are inside WorkAtPoi's 1.73 m right now — a snapshot rather than the criterion, "
-                + "because they stroll between spells of work");
+        // REPORTED, NOT ASSERTED — and the first version of this line asserted it while its own
+        // message explained why it must not. WorkAtPoi runs on a 300-tick cooldown and then a coin,
+        // so a diligent villager is at their bench for a fraction of any given second and strolls
+        // in between; how many are there *right now* is a sample of that coin. It passed here every
+        // time and failed on the runner, where all three happened to be strolling. The claim the
+        // criterion is actually about — that they reached WorkAtPoi.start at all — is asserted
+        // above, off the memory the engine stamps.
+        Namesake.LOGGER.info("[harness] PLAN {} of {} industrious villager(s) are inside WorkAtPoi's "
+                        + "1.73 m at this instant — reported, because that is a coin rather than "
+                        + "the criterion", atWork, diligent.size());
 
         int standingOff = 0;
         int wrongPlace = 0;
@@ -958,6 +965,10 @@ public final class AttachBetHarness {
         record(wrongPlace == 0,
                 "STANDOFF no lazy villager is within arm's reach of their workstation, which is the "
                         + "position WorkAtPoi's own gate reads (" + wrongPlace + " were)");
+        // This one IS asserted, and the difference from the line above is worth stating. "How many
+        // are at their bench right now" samples WorkAtPoi's coin; "how many are standing in the
+        // annulus" samples nothing — a vetoed villager is not going anywhere, so a run where none
+        // of them is in the band is a run where the standoff is not holding.
         record(standingOff > 0,
                 "STANDOFF " + standingOff + " of " + lazy.size() + " lazy villager(s) are parked "
                         + "inside vanilla's Manhattan-9 tolerance and outside 1.73 — the annulus "

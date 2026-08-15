@@ -5773,6 +5773,42 @@ as a villager who got lost.**
   village into `HIDE`, where the plan deliberately does nothing. If you do ring it, a villager may
   read `BELL_LOCKED` — **that is the inherited bug, and seeing one is worth telling me about**, even
   though the plan now opens it after a minute.
+#### And on the way out, CI found a ten-session-old defect that only a slow machine can see
+
+The close-out push turned `main` red on NeoForge, on **`GENERATE 0/3 wilderness villagers were
+generated with a culture and no settlement`** — session 03's leg, green for ten sessions, and nothing
+this session touched goes near it.
+
+**Two experiments settled it before a line was changed**, which is the part worth keeping. Running
+the same commit locally on NeoForge: **`GENERATE 3/3`, pass**. Re-running CI on the *previous* commit,
+the last green one: **red as well.** So it was neither the change nor a one-off — the leg has been a
+coin toss on the runner for some time and this session's push happened to be the first to lose twice.
+
+**The defect is real and it is in the mod rather than the test.**
+`SettlementRegistrar.settled` called `Personas.generateLoadedNear` **once**, and once is a sample of
+`getEntitiesOfClass` at a single instant. **Session 03's own log says what is wrong with that** —
+*"building a large structure stalls the server, and the catch-up ticks that follow briefly unload
+entities in neighbouring chunks... then come back"*, and its conclusion, *"any assertion that reads
+loaded entities must poll for them with a deadline, never sample once"* — and then this line sampled
+once anyway. The rule was written down and applied to the harness, not to the code the harness was
+watching.
+
+**What it costs a real save**, which is why this is not a test fix: a villager who is not in the
+loaded list on that one tick is **never generated at all**. No culture, no name, no traits, for the
+life of the world — because `Personas.onPersonaLoaded` runs only on entity load and the survey never
+comes back. The only cure was a chunk cycle nobody arranges.
+
+A settled cell now keeps offering for a hundred ticks: five seconds, bounded, once per place ever,
+one entity query a tick, and an **INFO** line when it finds somebody — because how often it finds
+somebody is the only evidence it earns its place.
+
+**The transferable part is the instrument, not the bug.** Session 08 measured the runner at three to
+four times slower and ruled that no CI assertion may compare against a wall clock. This is the other
+half of that ruling arriving: **the runner is not only a worse place to measure, it is a better place
+to find a race.** A leg that is green on this machine and a coin toss on CI is not a flaky leg — it is
+a defect that needs a slower machine to reach, and the correct response is to find it rather than to
+widen the deadline.
+
 #### Carried into session 14
 
 - `$env:JAVA_HOME` still must be pinned to JDK 21. Kill the dev client between runs, and delete
