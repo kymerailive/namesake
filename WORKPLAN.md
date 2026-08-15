@@ -28,7 +28,7 @@ Where any other document disagrees on sequence, this wins.
   this one could claim: `runClient` on Fabric mints a fresh player every launch, so the person
   running `verify` is genuinely somebody else — sixteen villagers across two settlements, all
   speaking a stranger line and all charging ×1.00, while the player who earned something still has
-  it. **437 unit tests, 138 harness legs in `setup` and 35 in `verify`** (38 on a migrating run).
+  it. **437 unit tests, 140 harness legs in `setup` and 35 in `verify`** (38 on a migrating run).
   Two ruled numbers did not compose and the session opened on both, as 08, 10 and 11 did: the price
   band's axis, and §10 step 5's **0.95**, which is not on the ruled ladder and — measured — is not
   what one gift two villages away produces either. The number gave way, to **1.00**, and the finding
@@ -4518,8 +4518,13 @@ shape.
 
 ### Session 12 — 2026-08-15 — standing bands
 
-**Shipped.** `3a22d0c..1fa6578` plus this ledger commit, pushed to `origin/main`. CI green on all three
-jobs — build and test, and the attach-bet harness on each loader.
+**Shipped.** `3a22d0c..RANGE2` plus this ledger commit, pushed to `origin/main`. CI green on all
+three jobs — build and test, and the attach-bet harness on each loader.
+
+**It was red twice on the way there and both defects were real**, in the leg that opens a trade
+window. Neither was reproducible on this machine and both are written up in finding 3, because the
+second one is the more useful: **it reported itself as a wrong price rather than as a failure.**
+`main` was red for about forty minutes across the two.
 
 **What a village thinks of you is now what it charges you.** A librarian who is warm to you sells a
 book for **fifteen emeralds** where a stranger pays twenty and somebody they have not forgiven pays
@@ -4814,7 +4819,7 @@ JVMs would be measuring the harness.
 
 | phase | legs | run against |
 |---|---|---|
-| `setup` | **138** (120 before this session) | a fresh world on the session 12 build |
+| `setup` | **140** (120 before this session) | a fresh world on the session 12 build |
 | `verify` | **35** (29 before) | that world, saved and reloaded |
 | `verify` | **38** | the archived **schema-7** world, migrating 7 → 8 |
 | `verify` | **34** | the same world again — `no migration expected: world is already at schema 8` |
@@ -4850,15 +4855,33 @@ unrelated `verify` legs red. **A witness scan is a two-hundred-block problem whe
 testing is violence.** The counter now stands on empty ground two hundred blocks from anything, and
 the blow lands on a second villager so the ladder is measured on one nobody has touched.
 
-**3. CI found the one defect four green local runs could not, and it is session 01's rule for the
-sixth time.** The band leg spawned its two villagers and read their personas **in the same tick**,
-which passed on this machine every time and turned `main` red on both loaders at
-`BAND and a persona of their own, minted on sight`. A persona is minted by the entity-load hook, and
-a chunk that is *block*-loaded is not necessarily *entity*-ticking yet on a runner three to four
-times slower — so the spawn had happened and the mint had not. The fix is the rule session 01 wrote
-after the same class of thing three times: **poll for the condition you actually care about, with a
-deadline, never for a number of ticks and never for the tick after the thing you asked for.** The
-leg now waits for both personas to exist before it reads either.
+**3. CI found two defects that eight green local runs could not, and the second one is the
+instructive one.** Both were in the new band leg, both were environmental, and both are the same
+mistake in different clothes: **the leg asked the world for something and then assumed it.**
+
+**The first was a tick.** It spawned two villagers and read their personas *in the same tick*. A
+persona is minted by the entity-load hook, and a chunk that is *block*-loaded is not necessarily
+*entity*-ticking yet on a runner three to four times slower — so the spawn had happened and the mint
+had not. Red on both loaders at `BAND and a persona of their own, minted on sight`. The fix is
+session 01's rule for the sixth time: **poll for the condition you actually care about, with a
+deadline, never for a number of ticks and never for the tick after the thing you asked for.**
+
+**The second was a place, and it reported itself as a wrong answer rather than as a failure.** With
+the personas polled for, NeoForge went red again — this time with every band on the ladder charging
+the **base price**, which reads exactly like the multiplier not working. It was not: the right-click
+never reached the villager at all. `ServerGamePacketListenerImpl.handleInteract` resolves its target
+out of the level and **returns silently when it cannot find it**, so a trader that had not survived
+two hundred blocks of unknown terrain made every reading the untouched price. The tell was in a
+message written for something else: step 6 reported `+0 from vanilla's own gossip` where this machine
+reports `+2` — vanilla's own `updateSpecialPrices` had not run either, because no window had opened.
+
+**Two things were wrong and both are now guarded rather than fixed.** The site is a proper stone
+platform with **three** blocks of clearance — this repository has already written down that *a
+villager is 1.95 blocks tall, so two blocks of air is not two blocks of clearance*, and the first
+attempt used two. And the leg now asserts what it was assuming: that both traders are **alive and
+findable by id**, which is what a click actually needs, and that the trade window **opened** — because
+a `NEUTRAL` band and an interaction that never happened produce the same number, and only one of
+those is a pass.
 
 **4. A village that already trusts you does not gouge you over one shove, and that is correct.** One
 blow into a village at 30–100 trust moves the struck villager by two points and changes nobody's

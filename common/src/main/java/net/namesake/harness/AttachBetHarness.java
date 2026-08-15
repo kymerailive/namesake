@@ -498,6 +498,9 @@ public final class AttachBetHarness {
     private static Villager trader;
     private static Villager punchbag;
 
+    /** Whether the last simulated right-click actually reached the villager. See priceAtTheCounter. */
+    private static boolean theWindowOpened;
+
     /**
      * <b>The two consumers that only a running game can show.</b>
      *
@@ -553,6 +556,7 @@ public final class AttachBetHarness {
                 }
                 counterSite = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
                         counterSite);
+                layAFloor(level);
                 teleport(player(server), level, counterSite.getX(), counterSite.getY(),
                         counterSite.getZ());
                 trader = standUpATrader(level, 2);
@@ -590,20 +594,33 @@ public final class AttachBetHarness {
      * books — a cost big enough that every band on the ladder moves it by a whole item, which is the
      * property {@code TradingTest.theCheapestTradeCannotMove} says a one-item cost does not have.
      */
-    private static Villager standUpATrader(ServerLevel level, int offset) {
-        BlockPos where = counterSite.offset(offset, 0, 0);
-        // A floor, because two hundred blocks from a village is whatever the generator felt like and
-        // CI generates a different world every run. A villager standing in an ocean drowns halfway
-        // through the leg and the failure reads as "the band is wrong". Session 03 lost a leg to a
-        // heightmap answering with the world floor; this is the same class of problem answered by
-        // not asking the question.
-        for (int dx = -1; dx <= 1; dx++) {
-            for (int dz = -1; dz <= 1; dz++) {
-                level.setBlockAndUpdate(where.offset(dx, -1, dz), Blocks.STONE.defaultBlockState());
-                level.setBlockAndUpdate(where.offset(dx, 0, dz), Blocks.AIR.defaultBlockState());
-                level.setBlockAndUpdate(where.offset(dx, 1, dz), Blocks.AIR.defaultBlockState());
+    /**
+     * A floor to stand the counter on, because two hundred blocks from a village is whatever the
+     * generator felt like and <b>CI generates a different world every run.</b>
+     *
+     * <p>Both attempts at this were wrong in the same direction and CI said so both times. A bare
+     * spawn on the heightmap put a villager in whatever was there; a one-block apron with two blocks
+     * of clearance was better and still let the surroundings back in. <b>A villager is 1.95 blocks
+     * tall, so two blocks of air is not two blocks of clearance</b> — this repository has written
+     * that down once already — and water flows back into a hole the tick after you dig it. So the
+     * floor is a proper platform: solid all the way round, three blocks of air above it, and wide
+     * enough that nothing can reach the middle before the leg is finished.
+     */
+    private static void layAFloor(ServerLevel level) {
+        for (int dx = -4; dx <= 4; dx++) {
+            for (int dz = -3; dz <= 3; dz++) {
+                level.setBlockAndUpdate(counterSite.offset(dx, -1, dz),
+                        Blocks.STONE.defaultBlockState());
+                for (int dy = 0; dy <= 2; dy++) {
+                    level.setBlockAndUpdate(counterSite.offset(dx, dy, dz),
+                            Blocks.AIR.defaultBlockState());
+                }
             }
         }
+    }
+
+    private static Villager standUpATrader(ServerLevel level, int offset) {
+        BlockPos where = counterSite.offset(offset, 0, 0);
         Villager villager = EntityType.VILLAGER.spawn(level, where, MobSpawnType.COMMAND);
         if (villager == null) {
             return null;
@@ -626,6 +643,15 @@ public final class AttachBetHarness {
             base.add(offer.getBaseCostA().getCount());
         }
         record(!base.isEmpty(), "BAND the villager has " + base.size() + " offer(s) to price");
+        // Alive AND findable by id, because the second is what a right-click actually needs and it
+        // is not the same claim. ServerGamePacketListenerImpl.handleInteract resolves the target out
+        // of the level and returns silently when it cannot — so a trader that drowned during the
+        // wait would make every band on the ladder read the base price and the failure would say
+        // "the band is wrong". CI reported exactly that, twice, before this leg existed.
+        record(trader.isAlive() && punchbag.isAlive()
+                        && level.getEntity(trader.getId()) == trader
+                        && level.getEntity(punchbag.getId()) == punchbag,
+                "BAND and both are still alive and findable by id, which is what a right-click needs");
         UUID persona = PersonaService.personaOf(trader).map(Persona::id).orElse(null);
         UUID bruised = PersonaService.personaOf(punchbag).map(Persona::id).orElse(null);
         record(persona != null && bruised != null,
@@ -641,6 +667,13 @@ public final class AttachBetHarness {
         // which is the acceptance script's step 1 as a fixture rather than as a fresh world:
         // "arrive at A, prices 1.00".
         List<Integer> neutral = priceAtTheCounter(server, level, trader);
+        // The window opening is what says the right-click arrived — and it has to be asserted
+        // separately from the price, because a NEUTRAL band and an interaction that never happened
+        // produce the same number. That is how a real defect reported itself as "the band is wrong"
+        // on one loader in CI while every band on the ladder read the base price.
+        record(theWindowOpened,
+                "BAND the right-click reached the villager and vanilla opened a trade window, which "
+                        + "is the only reason a NEUTRAL reading of the base price means anything");
         record(neutral.equals(base),
                 "BAND STEP 1 a villager who has never met you charges exactly the standing price "
                         + neutral + " against a base of " + base);
@@ -822,6 +855,7 @@ public final class AttachBetHarness {
         player.setShiftKeyDown(false);
         player.connection.handleInteract(ServerboundInteractPacket.createInteractionPacket(
                 villager, false, InteractionHand.MAIN_HAND));
+        theWindowOpened = villager.getTradingPlayer() == player;
         List<Integer> charged = new ArrayList<>();
         for (MerchantOffer offer : villager.getOffers()) {
             charged.add(offer.getCostA().getCount());
