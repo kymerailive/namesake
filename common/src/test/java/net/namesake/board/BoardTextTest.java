@@ -2,10 +2,12 @@ package net.namesake.board;
 
 import net.namesake.dialogue.Pool;
 import net.namesake.social.DeedType;
+import net.namesake.social.Standing;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -126,20 +128,44 @@ class BoardTextTest {
      * player reading four category names has to be told what a category is.
      */
     @Test
-    @DisplayName("every pool has its own words, and none of them is a number")
+    @DisplayName("every band has its own words, and none of them is a number")
     void everyStandingIsSaidDifferently() {
         Set<String> said = new LinkedHashSet<>();
-        for (Pool pool : Pool.values()) {
-            String standing = BoardText.standing(pool);
-            assertFalse(standing.isBlank(), () -> pool + " says nothing");
-            // DESIGN.md §2: bands, never raw integers. The board names a standing and prints no
-            // number for it, which is what lets session 12 replace Dialogue.poolFor and move the
-            // board with it.
-            assertTrue(standing.chars().noneMatch(Character::isDigit),
-                    () -> pool + " prints a number: " + standing);
-            said.add(standing);
+        for (Standing band : Standing.values()) {
+            // NEUTRAL is the one band that says two things, because it is the only band a player can
+            // be in having never been seen at all. Every other band needs a bond somebody earned.
+            for (Pool pool : band == Standing.NEUTRAL
+                    ? List.of(Pool.STRANGER, Pool.KNOWN)
+                    : List.of(Pool.KNOWN)) {
+                String standing = BoardText.standing(band, pool);
+                assertFalse(standing.isBlank(), () -> band + " says nothing");
+                // DESIGN.md §2: bands, never raw integers. The board names a standing and prints no
+                // number for it, which is what let session 12 replace Dialogue.poolFor and move the
+                // board with it.
+                assertTrue(standing.chars().noneMatch(Character::isDigit),
+                        () -> band + " prints a number: " + standing);
+                said.add(standing);
+            }
         }
-        assertEquals(Pool.values().length, said.size(), () -> "two pools read the same: " + said);
+        assertEquals(Standing.values().length + 1, said.size(),
+                () -> "two bands read the same: " + said);
+    }
+
+    /**
+     * <b>The four phrases the owner ruled at the close of session 11 are kept word for word.</b>
+     *
+     * <p>They were read against the names in the owner's own village and ruled to read correctly,
+     * and the ledger's note is explicit that five band names are <i>an improvement rather than a
+     * fix, and the four phrases are the fallback if the five read worse</i>. So the two new ones are
+     * additions beside them rather than a rewrite of them, and this is what says so.
+     */
+    @Test
+    @DisplayName("session 11's four ruled phrases survive session 12 unchanged")
+    void theRuledPhrasesAreUntouched() {
+        assertEquals("has not met you", BoardText.standing(Standing.NEUTRAL, Pool.STRANGER));
+        assertEquals("knows you", BoardText.standing(Standing.NEUTRAL, Pool.KNOWN));
+        assertEquals("warm to you", BoardText.standing(Standing.WARM, Pool.WARM));
+        assertEquals("wary of you", BoardText.standing(Standing.WARY, Pool.HOSTILE));
     }
 
     /**
@@ -160,16 +186,6 @@ class BoardTextTest {
             said.add(described);
         }
         assertEquals(DeedType.values().length, said.size(), () -> "two deeds read the same: " + said);
-    }
-
-    @Test
-    @DisplayName("an item reads as a thing rather than as a registry id")
-    void anItemIsReadable() {
-        assertEquals("enchanted golden apple", BoardText.item("minecraft:enchanted_golden_apple"));
-        assertEquals("bread", BoardText.item("minecraft:bread"));
-        // A modded id keeps its path and loses its namespace, exactly as the deed row does.
-        assertEquals("stuffed cabbage", BoardText.item("farmersdelight:stuffed_cabbage"));
-        assertEquals("bread", BoardText.item("bread"));
     }
 
     /**
@@ -206,8 +222,6 @@ class BoardTextTest {
     @DisplayName("no clip can turn one direction into a different direction")
     void aClipNeverRewritesAPlace() {
         Board.Origin far = new Board.Origin(false, "w".repeat(12), "north-east");
-        Board.Memory memory = new Board.Memory(9999, DeedType.GIFT_WANTED,
-                "minecraft:enchanted_golden_apple", 255, 999, (byte) 100, far);
 
         // The place is emitted whole or not at all, and never through clip().
         assertEquals("from wwwwwwwwwwww, north-east", BoardText.source(far));
@@ -216,15 +230,6 @@ class BoardTextTest {
             assertTrue(source.endsWith(direction),
                     () -> "'" + source + "' no longer ends in the bearing it was given");
         }
-        // And the object, which is the one thing that is clipped, is a prefix of itself or absent.
-        String object = BoardText.object(memory, "999 of 999 remember");
-        assertTrue(object.isEmpty() || "enchanted golden apple".startsWith(object), () -> object);
-        assertTrue(object.isEmpty() || object.length() >= BoardText.MIN_OBJECT,
-                () -> "'" + object + "' is a fragment rather than a name");
-
-        // Squeezed to nothing useful, it is dropped rather than shown: "ench" is not a shorter
-        // fact about what changed hands, it is a different one.
-        assertEquals("", BoardText.object(memory, "w".repeat(38)));
     }
 
     private static void assertNotEqualsIgnoringCase(String unwanted, String actual) {

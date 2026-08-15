@@ -13,18 +13,25 @@ import java.util.UUID;
  *
  * <p>A deed is emitted, witnessed, and turned into bond movement inside the same tick. It is the
  * unit the whole social system is built out of, and the thesis rests on it staying a struct:
- * because a deed is eight fields rather than a sentence, {@link Memories} can dedupe a ring on
+ * because a deed is seven fields rather than a sentence, {@link Memories} can dedupe a ring on
  * {@code (npc, deedId)} exactly, and session 08 can degrade a rumour's {@link #confidence} without
  * ever inventing a fact.
  *
- * <p><b>Eight from session 09, and the count is stated because it has been seven since session 05
- * and two sessions declined to move it.</b> Session 06 declined an eighth for "the subject records
- * it weighted higher" — the struct already answered it — and session 08 declined one for "someone
- * from the north", which is a function of two fields that were already there. {@link #item} is
- * neither of those: <i>which</i> object changed hands is not derivable from anything else, and the
- * owner ruled it in at the close of session 08 as the largest felt gain per byte available. What it
- * costs is a byte in the packed ring and the honest rule on {@link Memories#remember} that a slot
- * which collects two objects names neither.
+ * <p><b>Seven again at session 12, and the eighth is worth an epitaph because the owner asked for it
+ * three times.</b> Session 09 added {@code String item} — <i>which</i> object changed hands — as the
+ * first of the three memory-depth routes, and it arrived with an exemption rather than a consumer:
+ * three non-display readers were built for it and all three were rejected in the session 09 log. The
+ * exemption fell due at the close of session 12 and no fourth reader appeared. Session 11's Notice
+ * Board prints the object and explicitly does not pay for it — {@code net.namesake.board} was added
+ * to the rule 5 ledger's display packages <i>before</i> a line of the board was written, precisely so
+ * that could not be mistaken for payment.
+ *
+ * <p>So it is gone, and what the mod loses is stated plainly: a board row reads <i>gave them
+ * something</i> where it read <i>gave them bread</i>. What survives of the owner's three routes is
+ * the two that found real mechanics — {@code Memories.Slot.repeats}, consumed by the eviction policy
+ * on the day it landed, and the ring at a hundred and twenty-eight slots. {@link #id()} never
+ * included the object, so <b>no deed id in any save moves</b>: the rings re-partition into exactly
+ * the sets they were already in.
  *
  * <p><b>Persisted from session 06</b>, inside the 32-entry ring {@link Memories} keeps per NPC.
  * Session 05 shipped this record without a codec on purpose: its store did not exist yet, and the
@@ -46,21 +53,10 @@ public record Deed(
         int settlementId,
         int gameDay,
         byte severity,
-        byte confidence,
-        String item) {
+        byte confidence) {
 
     /** Witnessed first-hand. Session 08 is what makes this less than a hundred. */
     public static final byte FIRST_HAND = 100;
-
-    /**
-     * A deed that was not about an object. {@code STRUCK_RESIDENT} and the rest carry this.
-     *
-     * <p>Also what a memory degrades to when it can no longer support the detail — see
-     * {@link Memories#remember}. That is the same rule {@link Gossip} runs on and is stated the same
-     * way: <b>nothing is invented, detail is lost.</b> A slot that has collected two different
-     * objects cannot honestly name either, so it names neither.
-     */
-    public static final String NO_ITEM = "";
 
     /** The severity of a deed with nothing to scale it — a gift is a gift. */
     public static final byte NOMINAL = 100;
@@ -109,9 +105,9 @@ public record Deed(
      * story you cannot pass on, so this is also the floor on retelling — which is what makes
      * {@link #MAX_HOPS} fall out of {@link #RETOLD} rather than needing a counter of its own. That
      * matters beyond tidiness: a hop count would be another field on this record, persisted in every
-     * ring in every save, and derivable from a field already there. Session 09 added {@link #item}
-     * and that argument is untouched by it — the test is whether the field can be derived, not how
-     * many there are.
+     * ring in every save, and derivable from a field already there. Session 09 added an eighth field
+     * and session 12 removed it again; the argument is untouched by either — the test is whether the
+     * field can be derived, not how many there are.
      */
     public static final byte ATTRIBUTED = 50;
 
@@ -143,9 +139,10 @@ public record Deed(
      * <p><b>The direction needs no field.</b> "From the north" is a function of where the deed
      * happened, which {@link #settlementId()} already carries, and where the holder lives, which
      * their persona already carries. Sessions 06 and 08 each declined a field here for that reason:
-     * the struct already contained the answer. Session 09 added {@link #item}, and the difference is
-     * the test rather than the appetite — a direction and a weighting are derivable from fields
-     * already on the record, and which object changed hands is not.
+     * the struct already contained the answer. Session 09 added a field that was <i>not</i> derivable
+     * — which object changed hands — and session 12 removed it for the other half of the rule:
+     * derivability is what decides whether a field is <i>needed</i>, and a named non-display consumer
+     * is what decides whether it is <i>kept</i>. It failed the second.
      */
     public static final UUID UNKNOWN_ACTOR = new UUID(0L, 0L);
 
@@ -161,11 +158,10 @@ public record Deed(
      * smaller than the ring table and is the thing somebody debugging a stuck rumour actually opens
      * a save file to read.
      *
-     * <p><b>{@code item} is optional and defaults to {@link #NO_ITEM}, and that is what makes the
-     * schema 6 → 7 migration free for the one table it does not rewrite.</b> A schema-6 gossip entry
-     * simply has no {@code item} key, which reads as "nobody recorded what it was" — exactly what was
-     * true. The rings are the other half and they are a real rewrite rather than an assumption; see
-     * {@code NpcSchema}.
+     * <p><b>Session 12 removed the {@code item} key rather than leaving it optional, and that is a
+     * migration rather than an assumption.</b> An optional field left in the codec would go on
+     * silently reading a value nothing consumes; the schema 7 → 8 fix drops it from every queued
+     * rumour on disk and from every packed ring slot beside it. See {@code NpcSchema}.
      */
     public static final Codec<Deed> CODEC = RecordCodecBuilder.create(instance -> instance.group(
             Codec.SHORT.fieldOf("type").forGetter(Deed::typeId),
@@ -174,41 +170,23 @@ public record Deed(
             Codec.INT.fieldOf("settlement").forGetter(Deed::settlementId),
             Codec.INT.fieldOf("day").forGetter(Deed::gameDay),
             Codec.BYTE.fieldOf("severity").forGetter(Deed::severity),
-            Codec.BYTE.fieldOf("confidence").forGetter(Deed::confidence),
-            Codec.STRING.optionalFieldOf("item", NO_ITEM).forGetter(Deed::item)
+            Codec.BYTE.fieldOf("confidence").forGetter(Deed::confidence)
     ).apply(instance, Deed::new));
 
     public Deed {
         Objects.requireNonNull(actor, "deed actor");
         Objects.requireNonNull(subject, "deed subject");
-        // Normalised rather than rejected: a null here would come from a caller that had nothing to
-        // say about the object, which is a real state and is what NO_ITEM means.
-        item = item == null ? NO_ITEM : item;
     }
 
     /**
-     * A first-hand deed at nominal severity, about no particular object.
+     * A first-hand deed at nominal severity.
      *
      * @param subject who it was done to. For a deed with no single victim — defending a raid — this
      *                is the actor themself, which reads as "nobody in particular gets the subject's
      *                share" rather than needing a null nobody remembers to check.
      */
     public static Deed of(DeedType type, UUID actor, UUID subject, int settlementId, int gameDay) {
-        return of(type, actor, subject, settlementId, gameDay, NO_ITEM);
-    }
-
-    /**
-     * A first-hand deed at nominal severity, about a particular object.
-     *
-     * @param item the item's registry id — {@code minecraft:bread} — or {@link #NO_ITEM}. A string
-     *             rather than an {@code Item}, because a deed has to survive the item being removed
-     *             from the game by a modpack change, and because the record layer that
-     *             {@code DESIGN.md} §8 rules the authority runs with no registries at all: session
-     *             07's headless simulation constructs deeds without a {@code MinecraftServer}.
-     */
-    public static Deed of(DeedType type, UUID actor, UUID subject, int settlementId, int gameDay,
-                          String item) {
-        return new Deed(type.id(), actor, subject, settlementId, gameDay, NOMINAL, FIRST_HAND, item);
+        return new Deed(type.id(), actor, subject, settlementId, gameDay, NOMINAL, FIRST_HAND);
     }
 
     public DeedType type() {
@@ -261,14 +239,13 @@ public record Deed(
      *       duplicates become distinct. {@code MemoriesTest.theDerivationIsPinned} holds the id of a
      *       fixed deed to a literal computed outside this codebase, so that becomes a decision
      *       somebody makes rather than a side effect of tidying.</li>
-     *   <li><b>{@link #item} is deliberately outside it too, and session 09 nearly put it in.</b> The
-     *       obvious reading of "richer per memory" is that a loaf and an apple are two different
-     *       things to remember — and adding {@code item} to the mix says exactly that, in a way that
-     *       would pass every check in {@code SocialValueLedgerTest} while quietly handing the ring
-     *       back its grindability. An afternoon of one gift is one entry; an afternoon of eight
-     *       different junk items would be eight, and the daily cap does not watch that door. So the
-     *       object is carried, not identified by, and the cost is the honest one recorded on
-     *       {@link Memories#remember}: a slot that collects two objects can name neither.</li>
+     *   <li><b>The object was deliberately outside it while it existed, and that is why removing it
+     *       at session 12 moved nothing.</b> Session 09 nearly folded {@code item} into this mix —
+     *       the obvious reading of "richer per memory" is that a loaf and an apple are two different
+     *       things to remember — and declined, because an afternoon of one gift is one entry where an
+     *       afternoon of eight different junk items would have been eight, and the daily cap does not
+     *       watch that door. The dividend arrived three sessions later: the field's deletion
+     *       re-partitions no ring in any save, because no id ever depended on it.</li>
      * </ol>
      */
     public long id() {
@@ -301,21 +278,7 @@ public record Deed(
     }
 
     public Deed withSeverity(byte newSeverity) {
-        return new Deed(typeId, actor, subject, settlementId, gameDay, newSeverity, confidence, item);
-    }
-
-    /**
-     * The same event with the object forgotten. <b>Not a blur of the {@link Gossip} kind.</b>
-     *
-     * <p>{@link Memories#remember} uses it when one ring slot collects two different objects: the
-     * slot is one memory by {@link #id()}, so it cannot honestly name either of them and names
-     * neither. Nothing is invented and nothing is substituted — a detail is dropped, which is the
-     * same rule step 7 runs on, applied to a different field for a different reason.
-     */
-    public Deed withoutItem() {
-        return item.isEmpty()
-                ? this
-                : new Deed(typeId, actor, subject, settlementId, gameDay, severity, confidence, NO_ITEM);
+        return new Deed(typeId, actor, subject, settlementId, gameDay, newSeverity, confidence);
     }
 
     // --- session 08: what happens to a story when it is passed on --------------------------------
@@ -355,8 +318,7 @@ public record Deed(
 
     /** The same event, with the actor's name gone. Never called on its own — see {@link #retold()}. */
     Deed blurred() {
-        return new Deed(typeId, UNKNOWN_ACTOR, subject, settlementId, gameDay, severity, confidence,
-                item);
+        return new Deed(typeId, UNKNOWN_ACTOR, subject, settlementId, gameDay, severity, confidence);
     }
 
     /**
@@ -372,7 +334,7 @@ public record Deed(
     }
 
     Deed withConfidence(byte newConfidence) {
-        return new Deed(typeId, actor, subject, settlementId, gameDay, severity, newConfidence, item);
+        return new Deed(typeId, actor, subject, settlementId, gameDay, severity, newConfidence);
     }
 
     /**
@@ -395,6 +357,6 @@ public record Deed(
                 + " day=" + gameDay
                 + " severity=" + severity
                 + " confidence=" + confidence
-                + (item.isEmpty() ? "" : " item=" + item) + ']';
+                + "]";
     }
 }

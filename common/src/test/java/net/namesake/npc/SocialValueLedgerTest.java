@@ -172,11 +172,18 @@ class SocialValueLedgerTest {
                             + "Tal-Qir household produces people who resemble each other; a "
                             + "Meridian one does not."),
 
-            Entry.exemptUntilAfter(Persona.class, "professionId", List.of("professionId"), 12,
-                    "Session 12: whether one recipe is taught. The longest exemption here, and the "
-                            + "weakest — this field duplicates what vanilla already stores on the "
-                            + "villager. If session 12 does not read it, delete it rather than "
-                            + "moving this number."),
+            // Session 12: DELETED rather than paid, and its own entry called it three sessions
+            // early. "This field duplicates what vanilla already stores on the villager. If session
+            // 12 does not read it, delete it rather than moving this number." Session 12's second
+            // consumer is whether one recipe is taught, and Teaching reads
+            // villager.getVillagerData().getProfession() — vanilla's own answer, on the entity
+            // standing in front of the player at the only moment a recipe can be taught.
+            //
+            // The stronger fact, found while looking for a reader: NOTHING EVER WROTE IT. Persona
+            // .create set it to zero and no wither changed it, so every persona in every save on
+            // disk held the same constant for eleven sessions. Paying it would have meant first
+            // building a write path, and a write path for it is a cache of vanilla state that can
+            // drift — which is what session 03 deleted Settlement.culture for.
 
             Entry.consumedBy(Persona.class, "birthTick", List.of("birthTick"),
                     PersonaService.class, "reapStrayMint",
@@ -335,13 +342,21 @@ class SocialValueLedgerTest {
             // So it is an exemption with a date, which is what exemptions are for. Session 12 either
             // reads it or the field is deleted; moving this number is the thing this file exists to
             // stop.
-            Entry.exemptUntilAfter(Deed.class, "item", List.of("item"), 12,
-                    "Session 12, the trade band: a villager given the thing they actually wanted is "
-                            + "DESIGN.md §12's 'whether one recipe is taught'. Every non-display "
-                            + "reader available at session 09 was either the deed id — which would "
-                            + "make the ring grindable — or a gate rule with a one-item bypass, so "
-                            + "this is an exemption rather than a technicality. If session 12 does "
-                            + "not read it, delete it rather than moving this number."),
+            // Session 12: DELETED. The exemption fell due and no fourth reader appeared.
+            //
+            // Session 09 built three and rejected all three, for reasons that had not changed by
+            // session 12: the deed id hands the ring back its grindability, the gift-acceptance rule
+            // is bypassed by alternating two objects, and "session 12's trade band" turned out to be
+            // a band over a bond rather than over an object — a price is what one person thinks of
+            // you, and what you last gave them is not that. Session 11 then made the temptation
+            // concrete by printing the object on the Notice Board, which is exactly why
+            // net.namesake.board went into DISPLAY_PACKAGES BEFORE a line of the board was written.
+            //
+            // What it cost is written where a person will meet it rather than only here: a board row
+            // reads "gave them something" where it read "gave them bread", and
+            // CommandLayoutTest.aRicherRowSaysHowOften says so. Two of the owner's three
+            // memory-depth routes survive — the repeat count, consumed by eviction on the day it
+            // landed, and the ring at a hundred and twenty-eight slots.
 
             // --- Bond, new in session 05 -------------------------------------------------------
             //
@@ -399,10 +414,32 @@ class SocialValueLedgerTest {
                             + "the acceptance script's step 2 are untouched and there is no "
                             + "deadlock — the two ungated routes are the two that raise warmth."),
 
-            Entry.exemptUntilAfter(Bond.class, "respect", List.of("respect", "axis"), 12,
-                    "Session 12, the standing bands: the trade price multiplier and whether one "
-                            + "recipe is taught. Both are mechanics rather than lines, and the "
-                            + "ledger names session 12 as having exactly three consumers."),
+            // Session 12: DELETED, and this is the third time the mechanism has caught a consumer
+            // that was named in good faith and was not one — after cultureId at 03 and warmth at 08.
+            //
+            // The exemption said "the trade price multiplier and whether one recipe is taught", and
+            // the instrument session 07 exists to prevent exactly this refused it. Observed maximum
+            // respect over a hundred in-game days: ZERO for four of the five player models and FOUR
+            // for the fifth, on one villager of nine, unmoved by a witness sweep from nobody
+            // watching to everybody. DialogueStats.LADDER's lowest mark is twenty. LNK set gates at
+            // 35-205 against an observed 32; this would have been worse, in the session whose own
+            // instrument was built to stop it.
+            //
+            // And structurally it could never have been decisive. DEFENDED_RAID wrote +12 respect
+            // and +8 trust against one shared per-axis daily allowance, so no raid raised respect
+            // without raising trust beside it; STRUCK_RESIDENT wrote +1, which a personality weight
+            // below neutral rounds to nothing. There was no state of the world where a threshold on
+            // respect said something a threshold on trust did not.
+            //
+            // Raising the column was available and is refused on design grounds rather than on
+            // measurement: it could have moved without perturbing a single number sessions 07, 08
+            // and 09 measured, because Deeds.deltaFor computes the axes independently — but no deed
+            // in the table honestly earns deference except the raid defence that already did.
+            //
+            // THE COST IS REAL. DESIGN.md §6's force-resolution wants "deference up", so session 16
+            // will add an axis back and pay hard rule 1 for it. That is the price of the rule, and
+            // the rule is what both reference codebases died without. fear and debt carry the same
+            // mechanic's exemption to 16 and are untouched, because their dates have not come.
 
             Entry.exemptUntilAfter(Bond.class, "fear", List.of("fear", "axis"), 16,
                     "Sessions 16-20, the grievance ladder: DESIGN.md §3 says fear earns its slot "

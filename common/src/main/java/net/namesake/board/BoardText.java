@@ -4,6 +4,7 @@ import net.namesake.dialogue.Pool;
 import net.namesake.social.Deed;
 import net.namesake.social.DeedType;
 import net.namesake.social.Residency;
+import net.namesake.social.Standing;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -216,7 +217,8 @@ public final class BoardText {
             lines.add(Line.quiet(1, "Do something where they can see it."));
         } else {
             for (Board.Neighbour neighbour : board.opinions()) {
-                lines.add(Line.body(1, neighbour.name(), standing(neighbour.pool())));
+                lines.add(Line.body(1, neighbour.name(),
+                        standing(neighbour.standing(), neighbour.pool())));
             }
         }
         if (board.strangers() > 0) {
@@ -247,8 +249,7 @@ public final class BoardText {
             if (!memory.origin().here()) {
                 lines.add(Line.quiet(2, source(memory.origin())));
             }
-            String right = memory.holders() + " of " + board.residents() + " remember";
-            lines.add(Line.quiet(2, object(memory, right), right));
+            lines.add(Line.quiet(2, "", memory.holders() + " of " + board.residents() + " remember"));
         }
         older(lines, board.witnessed().size() - shown.size());
     }
@@ -281,22 +282,41 @@ public final class BoardText {
     // --- the words -------------------------------------------------------------------------------
 
     /**
-     * <b>What a standing is called, and it is {@link Pool}'s answer rather than a fifth scheme.</b>
+     * <b>What a standing is called, and it is {@link Standing}'s answer rather than a scheme of this
+     * board's own.</b>
      *
-     * <p>See {@link Board.Neighbour} for why, and for what session 12 has to replace. The switch is
-     * exhaustive with no default on purpose: a fifth pool is a compile error here rather than a band
+     * <p>See {@link Board.Neighbour} for why, and for what session 12 changed. Both switches are
+     * exhaustive with no default on purpose: a sixth band is a compile error here rather than a row
      * that silently renders as nothing.
      *
      * <p>Phrases rather than labels, because this board is the onboarding surface. A player reading
-     * four different sentences beside four names infers <i>this mod tracks how each person feels
-     * about me</i>; a player reading four category names has to be told what a category is.
+     * different sentences beside the names infers <i>this mod tracks how each person feels about
+     * me</i>; a player reading category names has to be told what a category is.
+     *
+     * <p><b>The four the owner ruled at the close of session 11 are kept word for word</b> — <i>has
+     * not met you · knows you · warm to you · wary of you</i> — because they were read against the
+     * names in the owner's own village and ruled to read correctly. The two new ones are the two
+     * distinctions the bands added and the pools could not express: a villager who would rely on you
+     * and one who has watched you do something they are not going to get over.
+     *
+     * <p>{@link Standing#NEUTRAL} is the one band that takes the pool, because it is the only band a
+     * player can be in having never been seen at all. Every other band requires a bond that somebody
+     * had to earn.
      */
-    static String standing(Pool pool) {
-        return switch (pool) {
-            case STRANGER -> "has not met you";
-            case KNOWN -> "knows you";
+    static String standing(Standing band, Pool pool) {
+        if (band == Standing.NEUTRAL) {
+            return pool == Pool.STRANGER ? "has not met you" : "knows you";
+        }
+        return switch (band) {
+            // Fifteen characters, which is the width of session 11's longest ruled phrase and not a
+            // coincidence: the first draft read "has not forgiven you" and CommandLayoutTest turned
+            // red at 287 pixels against the 272 the smallest GUI Minecraft will ever present. The
+            // budget picked the words, which is what it is for.
+            case RESENTED -> "will not forget";
+            case WARY -> "wary of you";
+            case TRUSTED -> "trusts you";
             case WARM -> "warm to you";
-            case HOSTILE -> "wary of you";
+            case NEUTRAL -> throw new IllegalStateException("handled above");
         };
     }
 
@@ -325,31 +345,6 @@ public final class BoardText {
     }
 
     /**
-     * <b>The object, and it is the only thing on this board that is ever clipped.</b>
-     *
-     * <p>Everything else is bounded by construction — the longest phrase is a constant, the counts
-     * are bounded by a save, a place name is a one-syllable stem plus a place word, a bearing is one
-     * of eight strings. A registry id is the one part a modpack can make arbitrarily long, which is
-     * exactly the argument session 09 made for {@code NamesakeCommands.deedCell}, in pixels instead
-     * of characters.
-     *
-     * <p><b>And a clip that leaves too little is dropped rather than shown.</b>
-     * {@code "enchanted golden apple"} cut to {@code "ench"} is not a shorter fact, it is a different
-     * one — the same objection that took the origin off this line.
-     */
-    static String object(Board.Memory memory, String right) {
-        if (memory.item().equals(Deed.NO_ITEM)) {
-            return "";
-        }
-        int room = TEXT_WIDTH - 2 * INDENT - (right.isEmpty() ? 0 : GAP + width(right));
-        String clipped = clip(item(memory.item()), room);
-        return clipped.length() >= MIN_OBJECT ? clipped : "";
-    }
-
-    /** Fewer characters than this is a fragment rather than a name. */
-    static final int MIN_OBJECT = 5;
-
-    /**
      * Where a story came from, as a person standing here would say it.
      *
      * <p>The name and the bearing together rather than one or the other, and that is not belt and
@@ -370,18 +365,6 @@ public final class BoardText {
         return origin.bearing().isEmpty()
                 ? "from somewhere else"
                 : "from the " + origin.bearing();
-    }
-
-    /**
-     * An item's registry id as a person would read it.
-     *
-     * <p>The namespace goes because {@code minecraft:} is ten characters of nothing on every row —
-     * session 06's ruling — and the underscores go because nobody outside this repository writes
-     * {@code enchanted_golden_apple}.
-     */
-    static String item(String registryId) {
-        String path = registryId.substring(registryId.indexOf(':') + 1);
-        return path.replace('_', ' ');
     }
 
     /** Whole clauses rather than a noun and a verb glued together: "0 people live here" is not one. */

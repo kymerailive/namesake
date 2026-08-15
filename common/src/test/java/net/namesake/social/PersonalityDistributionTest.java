@@ -216,7 +216,7 @@ class PersonalityDistributionTest {
         Bond bond = Bond.fresh(0);
         for (int day = 0; day < 7; day++) {
             for (int gift = 0; gift < giftsPerDay; gift++) {
-                bond = bond.apply(new int[]{0, warmth, 0, 0}, day, who.allowance());
+                bond = bond.apply(new int[]{0, warmth, 0}, day, who.allowance());
             }
         }
         return bond.warmth();

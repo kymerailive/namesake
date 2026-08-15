@@ -31,7 +31,7 @@ import java.util.function.ToIntFunction;
 public final class NpcSchema {
 
     /** Bump this and add a {@link Fix} in the same commit. Never one without the other. */
-    public static final int CURRENT = 7;
+    public static final int CURRENT = 8;
 
     /**
      * A registry written before {@link #KEY_VERSION} existed cannot occur — the key has been
@@ -64,7 +64,11 @@ public final class NpcSchema {
             new Fix(5, "settlement gossip deques added; nothing to rewrite, an absent table means "
                     + "no rumour was in flight", NpcSchema::fixGossipTableAdded),
             new Fix(6, "deed rings repacked to fixed-width records behind an actor and an item "
-                    + "palette; every ring on disk is rewritten", NpcSchema::fixPackedDeedRings)
+                    + "palette; every ring on disk is rewritten", NpcSchema::fixPackedDeedRings),
+            new Fix(7, "three fields with no consumer deleted: Persona.profession, Bond.respect and "
+                    + "Deed.item. Every persona, every bond, every packed ring slot and every queued "
+                    + "rumour on disk is rewritten, and the item palette is dropped",
+                    NpcSchema::fixDeleteUnreadFields)
     );
 
     private NpcSchema() {
@@ -358,10 +362,127 @@ public final class NpcSchema {
     }
 
     /**
+     * <b>Schema 8 deletes three persisted fields that nothing reads, and it is the widest rewrite
+     * this ladder has ever done.</b>
+     *
+     * <p>All three carried a rule 5 exemption expiring at the close of session 12. None of them was
+     * paid, and {@code DESIGN.md} §1 says what happens then: <i>if you cannot name the {@code if}
+     * statement it feeds, delete the field.</i> The reasoning for each is on the record it came
+     * from — {@code Persona}, {@code Bond} and {@code Deed} — and the measurements that decided
+     * {@code Bond.respect} are in the session 12 log.
+     *
+     * <ul>
+     *   <li><b>{@code Persona.profession}</b>, an {@code int} key on every persona. Nothing ever
+     *       wrote it, so every one of them holds zero.</li>
+     *   <li><b>{@code Bond.respect}</b>, a byte inside every bond compound. Written by two deeds and
+     *       read by nothing.</li>
+     *   <li><b>{@code Deed.item}</b>, in two places: four bytes of palette index in every packed
+     *       ring slot, and an optional string key on every queued rumour. The {@code memoryItems}
+     *       palette goes with them.</li>
+     * </ul>
+     *
+     * <p><b>Two of the three are deletions a reader would survive without, and one is not.</b> A
+     * stale {@code profession} key and a stale {@code respect} key would simply be ignored by a
+     * codec that no longer asks for them — that is what a {@code RecordCodecBuilder} does with an
+     * unknown field. The ring is the one that must be rewritten: it is fixed-width, so a schema-7
+     * slot read as a schema-8 one is <b>every field after the first two shifted by four bytes</b>,
+     * and it would load. A ring of twenty-five byte slots does not divide by twenty-one, so
+     * {@code Memories.readFrom} would refuse most of them as damage — but 105 bytes is five slots or
+     * three, and a ring of that length would come back as three deeds made of the wrong bytes. All
+     * three keys are dropped anyway: a field left on disk that nothing reads is the same shape as a
+     * field in the record that nothing reads.
+     *
+     * <p><b>Written out longhand rather than calling {@code Memories}, for the reason session 09
+     * gave and this fix inherits.</b> A datafixer describes a shape frozen in the past. The two
+     * width constants below are schema 7's and schema 8's for ever, and
+     * {@code NpcSchemaTest.thePackedRingThisFixWritesIsTheOneMemoriesReads} pins the second to what
+     * {@code Memories} reads <i>today</i> — so a session 13 that changes the record is meant to turn
+     * it red, and the fix is to write session 13's own fixer rather than to edit this one.
+     *
+     * @return how many records were rewritten across all four tables
+     */
+    private static int fixDeleteUnreadFields(CompoundTag root) {
+        int rewritten = 0;
+
+        ListTag npcs = root.getList(KEY_NPCS, Tag.TAG_COMPOUND);
+        for (int i = 0; i < npcs.size(); i++) {
+            CompoundTag npc = npcs.getCompound(i);
+            if (npc.contains(KEY_PROFESSION)) {
+                npc.remove(KEY_PROFESSION);
+                rewritten++;
+            }
+        }
+
+        ListTag bonds = root.getList(KEY_BONDS, Tag.TAG_COMPOUND);
+        for (int i = 0; i < bonds.size(); i++) {
+            CompoundTag bond = bonds.getCompound(i).getCompound(KEY_BOND);
+            if (bond.contains(KEY_RESPECT)) {
+                bond.remove(KEY_RESPECT);
+                rewritten++;
+            }
+        }
+
+        ListTag rings = root.getList(KEY_MEMORIES, Tag.TAG_COMPOUND);
+        for (int i = 0; i < rings.size(); i++) {
+            CompoundTag entry = rings.getCompound(i);
+            byte[] old = entry.getByteArray(KEY_RING);
+            if (old.length == 0 || old.length % PACKED_RECORD_BYTES != 0) {
+                // Not a schema-7 ring. Left exactly as it is rather than guessed at: Memories.readFrom
+                // counts a ring it cannot divide as damage and the registry goes read-only, which is
+                // a world that says something is wrong rather than one that quietly loses deeds.
+                continue;
+            }
+            int slots = old.length / PACKED_RECORD_BYTES;
+            byte[] packed = new byte[slots * PACKED_RECORD_BYTES_8];
+            for (int slot = 0; slot < slots; slot++) {
+                int from = slot * PACKED_RECORD_BYTES;
+                int to = slot * PACKED_RECORD_BYTES_8;
+                // Everything up to and including confidence is byte-identical and in the same place.
+                System.arraycopy(old, from, packed, to, ITEM_INDEX_OFFSET);
+                // Then four bytes of item palette index are dropped, and the repeat count that
+                // followed them moves up into their place.
+                packed[to + ITEM_INDEX_OFFSET] = old[from + ITEM_INDEX_OFFSET + Integer.BYTES];
+                rewritten++;
+            }
+            entry.remove(KEY_RING);
+            entry.putByteArray(KEY_RING, packed);
+        }
+        root.remove(KEY_MEMORY_ITEMS);
+
+        ListTag gossip = root.getList(KEY_GOSSIP, Tag.TAG_COMPOUND);
+        for (int i = 0; i < gossip.size(); i++) {
+            ListTag queue = gossip.getCompound(i).getList(KEY_QUEUE, Tag.TAG_COMPOUND);
+            for (int entry = 0; entry < queue.size(); entry++) {
+                CompoundTag rumour = queue.getCompound(entry);
+                if (rumour.contains(KEY_ITEM)) {
+                    rumour.remove(KEY_ITEM);
+                    rewritten++;
+                }
+            }
+        }
+
+        return rewritten;
+    }
+
+    /**
      * Schema 7's packed slot width. <b>Frozen — see {@link #fixPackedDeedRings}.</b> If a later
      * schema changes the record, this constant does not move with it.
      */
     private static final int PACKED_RECORD_BYTES = 25;
+
+    /** Schema 8's. Frozen the same way, and for the same reason — see {@link #fixDeleteUnreadFields}. */
+    private static final int PACKED_RECORD_BYTES_8 = 21;
+
+    /** Where the schema-7 record kept its item palette index: after severity and confidence. */
+    private static final int ITEM_INDEX_OFFSET = 20;
+
+    private static final String KEY_PROFESSION = "profession";
+    private static final String KEY_BONDS = "bonds";
+    private static final String KEY_BOND = "bond";
+    private static final String KEY_RESPECT = "respect";
+    private static final String KEY_GOSSIP = "gossip";
+    private static final String KEY_QUEUE = "queue";
+    private static final String KEY_ITEM = "item";
 
     private static final String KEY_MEMORIES = "memories";
     private static final String KEY_RING = "ring";

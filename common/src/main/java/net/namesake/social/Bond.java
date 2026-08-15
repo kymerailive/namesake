@@ -24,18 +24,50 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
  *       weight table has a column for the harmful deeds at all.</li>
  *   <li><b>The floors are asymmetric, and deliberately.</b> Warmth and fear bottom out at zero:
  *       there is no such thing as negative warmth, only its absence, and "unafraid" is not a
- *       feeling. Trust and respect run to −64, because active distrust and contempt are real states
- *       that a villager can be in and can act on.</li>
+ *       feeling. Trust runs to −64, because active distrust is a real state that a villager can be
+ *       in and can act on — and {@code Standing.RESENTED} is the {@code if} statement that reads
+ *       it there.</li>
  *   <li><b>Decay is lazy and has a floor of its own.</b> Nothing ticks a bond. Warmth is brought up
  *       to the current day by {@link #decayedTo} the moment anyone looks at it, and it falls only
  *       as far as {@link #DECAY_TARGET} of the warmest it has ever been. Someone who mattered to you
  *       and then went away for a year is not a stranger when they come back.</li>
  * </ol>
+ *
+ * <h2>{@code respect} was a fourth axis and is gone at schema 8</h2>
+ *
+ * <p>{@code DESIGN.md} §3 gave it a line — <i>do they defer to you</i> — and the rule 5 ledger gave
+ * it an exemption expiring at the close of session 12, to be paid by the trade price band. Session
+ * 12 ran the instrument session 07 exists for and the band could not honestly read it:
+ *
+ * <ul>
+ *   <li><b>Measured, it is not a quantity anybody has.</b> Across a hundred in-game days and five
+ *       player models the observed maximum is <b>zero, zero, zero, zero and four</b> — the four on
+ *       one villager of nine — and a witness sweep from nobody watching to everybody watching does
+ *       not move it by a point. {@code DialogueStats.LADDER}'s lowest mark is twenty. That is LNK's
+ *       failure with worse numbers, in the session whose own instrument was built to prevent it.</li>
+ *   <li><b>Structurally, it could never be decisive.</b> {@code DEFENDED_RAID} wrote {@code +12}
+ *       respect and {@code +8} trust and both were held to the same per-axis daily allowance, so no
+ *       raid raised respect without raising trust beside it; {@code STRUCK_RESIDENT} wrote
+ *       {@code +1}, which a personality weight below neutral rounds to nothing. There was no state
+ *       of the world in which a threshold on respect said something a threshold on trust did
+ *       not.</li>
+ *   <li><b>Making more deeds write it was refused on design grounds.</b> The respect column could
+ *       have moved without perturbing a single number sessions 07, 08 and 09 measured, because
+ *       {@link Deeds#deltaFor} computes the axes independently — but no deed in the table honestly
+ *       earns deference except the raid defence that already did. Deference is not bought with
+ *       bread.</li>
+ * </ul>
+ *
+ * <p><b>The cost is real and is recorded rather than argued away.</b> {@code DESIGN.md} §6's
+ * force-resolution wants <i>deference up</i>, and session 16 will have to add an axis back and pay
+ * hard rule 1 for it. That is the price of the rule in {@code DESIGN.md} §1, and the rule is what
+ * both reference codebases died without: <i>moving the number is the one thing the mechanism exists
+ * to stop.</i> {@link #fear} and {@link #debt} carry the same mechanic's exemption to session 16 and
+ * are untouched, because their dates have not come.
  */
 public record Bond(
         byte trust,
         byte warmth,
-        byte respect,
         byte fear,
         short debt,
         int lastSeenDay,
@@ -44,21 +76,20 @@ public record Bond(
 
     public static final int TRUST = 0;
     public static final int WARMTH = 1;
-    public static final int RESPECT = 2;
-    public static final int FEAR = 3;
+    public static final int FEAR = 2;
 
-    public static final int AXIS_COUNT = 4;
+    public static final int AXIS_COUNT = 3;
 
     /** Index-aligned with the axis constants. Used by {@code /namesake debug bond}. */
-    public static final String[] AXIS_NAMES = {"trust", "warmth", "respect", "fear"};
+    public static final String[] AXIS_NAMES = {"trust", "warmth", "fear"};
 
     /**
      * The bottom of each axis, in axis order.
      *
-     * <p>Warmth and fear floor at zero and trust and respect at −64 — see rule 2 above. The ceiling
-     * is 100 everywhere, which is why there is no matching array for it.
+     * <p>Warmth and fear floor at zero and trust at −64 — see rule 2 above. The ceiling is 100
+     * everywhere, which is why there is no matching array for it.
      */
-    private static final int[] FLOOR = {-64, 0, -64, 0};
+    private static final int[] FLOOR = {-64, 0, 0};
 
     private static final int CEILING = 100;
 
@@ -103,14 +134,13 @@ public record Bond(
     /** How many days of absence it takes to lose one point of warmth. */
     private static final int WARMTH_LOST_PER_DAY = 1;
 
-    /** Four counters of 0..{@link #DAILY_CAP}, one per axis, packed four bits each. */
+    /** One counter of 0..{@link #DAILY_CAP} per axis, packed four bits each. */
     private static final int NIBBLE_BITS = 4;
     private static final int NIBBLE_MASK = 0xF;
 
     public static final Codec<Bond> CODEC = RecordCodecBuilder.create(instance -> instance.group(
             Codec.BYTE.fieldOf("trust").forGetter(Bond::trust),
             Codec.BYTE.fieldOf("warmth").forGetter(Bond::warmth),
-            Codec.BYTE.fieldOf("respect").forGetter(Bond::respect),
             Codec.BYTE.fieldOf("fear").forGetter(Bond::fear),
             Codec.SHORT.fieldOf("debt").forGetter(Bond::debt),
             Codec.INT.fieldOf("lastSeenDay").forGetter(Bond::lastSeenDay),
@@ -120,14 +150,13 @@ public record Bond(
 
     /** A bond that has never been anything, as of {@code day}. */
     public static Bond fresh(int day) {
-        return new Bond((byte) 0, (byte) 0, (byte) 0, (byte) 0, (short) 0, day, (short) 0, (byte) 0);
+        return new Bond((byte) 0, (byte) 0, (byte) 0, (short) 0, day, (short) 0, (byte) 0);
     }
 
     public byte axis(int axis) {
         return switch (axis) {
             case TRUST -> trust;
             case WARMTH -> warmth;
-            case RESPECT -> respect;
             case FEAR -> fear;
             default -> throw new IllegalArgumentException("No bond axis " + axis);
         };
@@ -140,7 +169,7 @@ public record Bond(
 
     /** True while nothing has ever happened between these two — the state that is not worth storing. */
     public boolean isNothing() {
-        return trust == 0 && warmth == 0 && respect == 0 && fear == 0 && debt == 0;
+        return trust == 0 && warmth == 0 && fear == 0 && debt == 0;
     }
 
     /**
@@ -172,7 +201,7 @@ public record Bond(
         int decayed = warmth > floor
                 ? Math.max(floor, warmth - days * WARMTH_LOST_PER_DAY)
                 : warmth;
-        return new Bond(trust, (byte) decayed, respect, fear, debt, day, (short) 0, peakWarmth());
+        return new Bond(trust, (byte) decayed, fear, debt, day, (short) 0, peakWarmth());
     }
 
     /**
@@ -196,7 +225,7 @@ public record Bond(
         int capped = Math.max(0, Math.min(NIBBLE_MASK, allowance));
         Bond base = decayedTo(day);
 
-        int[] axes = {base.trust, base.warmth, base.respect, base.fear};
+        int[] axes = {base.trust, base.warmth, base.fear};
         // The accessor, for the reason given in decayedTo: this is where gainedToday is consumed
         // and a getfield would be invisible to the check that proves it.
         short gained = base.gainedToday();
@@ -226,7 +255,7 @@ public record Bond(
         byte newWarmth = (byte) axes[WARMTH];
         byte newPeak = (byte) Math.max(base.peakWarmth, newWarmth);
 
-        return new Bond((byte) axes[TRUST], newWarmth, (byte) axes[RESPECT], (byte) axes[FEAR],
+        return new Bond((byte) axes[TRUST], newWarmth, (byte) axes[FEAR],
                 base.debt, day, gained, newPeak);
     }
 
@@ -245,10 +274,10 @@ public record Bond(
 
     @Override
     public String toString() {
-        return "Bond[trust=" + trust + " warmth=" + warmth + " respect=" + respect + " fear=" + fear
+        return "Bond[trust=" + trust + " warmth=" + warmth + " fear=" + fear
                 + " debt=" + debt + " lastSeenDay=" + lastSeenDay
                 + " gainedToday=" + gainedToday(TRUST) + "/" + gainedToday(WARMTH)
-                + "/" + gainedToday(RESPECT) + "/" + gainedToday(FEAR)
+                + "/" + gainedToday(FEAR)
                 + " peakWarmth=" + peakWarmth + ']';
     }
 }

@@ -15,6 +15,7 @@ import net.namesake.settlement.SettlementRegistrar;
 import net.namesake.road.RoadNetwork;
 import net.namesake.social.Gossip;
 import net.namesake.social.SocialEvents;
+import net.namesake.social.Trading;
 import net.namesake.verb.Interactions;
 import net.namesake.verb.VerbNetwork;
 import net.neoforged.bus.api.IEventBus;
@@ -117,6 +118,15 @@ public final class NamesakeNeoForge {
         }
         // The same gesture with the hand full — session 05's give. Same client/server split.
         if (!SocialEvents.isGiveGesture(event.getEntity(), event.getHand(), event.getTarget())) {
+            // Session 12's standing bands, on the plain right-click — the one both gestures above
+            // have declined, and therefore the one on its way to Villager#mobInteract and the trade
+            // screen. Deliberately not cancelled: vanilla proceeds, and its own updateSpecialPrices
+            // adds the gossip reputation on top of the multiplier we just set. See Trading.
+            if (!event.getLevel().isClientSide()
+                    && event.getEntity() instanceof ServerPlayer player
+                    && event.getTarget() instanceof Villager villager) {
+                Trading.onVillagerInteract(player, villager);
+            }
             return;
         }
         if (event.getLevel().isClientSide()) {

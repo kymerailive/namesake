@@ -107,15 +107,11 @@ class GossipTest {
     @DisplayName("a retelling degrades and never invents")
     void nothingIsEverInvented() {
         Deed firstHand = new Deed(DeedType.STRUCK_RESIDENT.id(), PLAYER, new UUID(7, 7),
-                VILLAGE, 12, (byte) 60, Deed.FIRST_HAND, "minecraft:stick");
+                VILLAGE, 12, (byte) 60, Deed.FIRST_HAND);
         Deed heard = firstHand.retold();
 
         assertEquals(firstHand.typeId(), heard.typeId());
         assertEquals(firstHand.subject(), heard.subject());
-        // Session 09's field, carried through untouched like every other one. A rumour cannot
-        // acquire a detail and must not lose one it has: "they hit him with a stick" survives the
-        // telling exactly as the day and the settlement do.
-        assertEquals(firstHand.item(), heard.item());
         assertEquals(firstHand.settlementId(), heard.settlementId());
         assertEquals(firstHand.gameDay(), heard.gameDay());
         assertEquals(firstHand.severity(), heard.severity(), "a story cannot grow in the telling");
@@ -551,7 +547,7 @@ class GossipTest {
         NpcRegistry registry = village(4);
         Persona hearer = residentsOf(registry).get(0);
         registry.putBond(hearer.id(), PLAYER,
-                Bond.fresh(5).apply(new int[]{0, 10, 0, 0}, 5, Bond.DAILY_CAP));
+                Bond.fresh(5).apply(new int[]{0, 10, 0}, 5, Bond.DAILY_CAP));
         assertEquals(5, registry.bonds().stored(hearer.id(), PLAYER).orElseThrow().lastSeenDay());
 
         // A deed from day 0, told on day 5 — the shape a deque that survives a night produces.
@@ -576,7 +572,7 @@ class GossipTest {
         Persona holder = residentsOf(registry).get(0);
 
         registry.putBond(holder.id(), Deed.UNKNOWN_ACTOR,
-                Bond.fresh(0).apply(new int[]{5, 5, 0, 0}, 0, Bond.DAILY_CAP));
+                Bond.fresh(0).apply(new int[]{5, 5, 0}, 0, Bond.DAILY_CAP));
 
         assertTrue(registry.bonds().stored(holder.id(), Deed.UNKNOWN_ACTOR).isEmpty(),
                 "an unattributed rumour moves nobody's opinion of anybody, because nobody knows "

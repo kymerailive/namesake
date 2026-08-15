@@ -21,6 +21,15 @@ import java.util.UUID;
  * settlement is known — see {@link #isGenerated()}. Until then it has no culture, no household and
  * no traits, which is a real state a save file can hold rather than a transient one.
  *
+ * <p><b>{@code professionId} was here from session 01 and is gone at schema 8.</b> Nothing ever
+ * wrote it: {@link #create} set it to zero and no wither changed it, so every persona in every save
+ * on disk held the same constant for eleven sessions. Its rule 5 exemption fell due at the close of
+ * session 12 — <i>whether one recipe is taught</i> — and that mechanic reads
+ * {@code villager.getVillagerData().getProfession()}, vanilla's own answer, on the entity standing
+ * in front of the player at the only moment a recipe can be taught. Its own ledger entry had said
+ * since session 02 that <i>this field duplicates what vanilla already stores on the villager; if
+ * session 12 does not read it, delete it rather than moving this number.</i> See {@code Teaching}.
+ *
  * <p><b>On {@code byte[] traits} inside a record:</b> arrays have identity equality, so the
  * generated {@code equals}/{@code hashCode} would compare two personas with identical traits as
  * different. Since "same field values after a reload" is an exit criterion this session, both are
@@ -32,7 +41,6 @@ public record Persona(
         int householdId,
         byte[] traits,
         byte cultureId,
-        int professionId,
         long birthTick,
         int appearanceSeed,
         byte eraOfMajority) {
@@ -121,7 +129,6 @@ public record Persona(
             // Reads the field directly rather than through the accessor, which copies.
             TRAITS_CODEC.fieldOf("traits").forGetter(persona -> persona.traits),
             Codec.BYTE.fieldOf("culture").forGetter(Persona::cultureId),
-            Codec.INT.fieldOf("profession").forGetter(Persona::professionId),
             Codec.LONG.fieldOf("birthTick").forGetter(Persona::birthTick),
             Codec.INT.fieldOf("appearanceSeed").forGetter(Persona::appearanceSeed),
             Codec.BYTE.fieldOf("era").forGetter(Persona::eraOfMajority)
@@ -151,7 +158,6 @@ public record Persona(
                 UNASSIGNED,
                 new byte[TRAIT_COUNT],
                 UNASSIGNED_CULTURE,
-                0,
                 birthTick,
                 deriveAppearanceSeed(id),
                 (byte) 0);
@@ -181,12 +187,12 @@ public record Persona(
         byte[] updated = traits.clone();
         updated[axis] = value;
         return new Persona(id, settlementId, householdId, updated,
-                cultureId, professionId, birthTick, appearanceSeed, eraOfMajority);
+                cultureId, birthTick, appearanceSeed, eraOfMajority);
     }
 
     public Persona withSettlement(int newSettlementId) {
         return new Persona(id, newSettlementId, householdId, traits,
-                cultureId, professionId, birthTick, appearanceSeed, eraOfMajority);
+                cultureId, birthTick, appearanceSeed, eraOfMajority);
     }
 
     /** True once this persona has a culture, a household and rolled traits. */
@@ -204,12 +210,12 @@ public record Persona(
      */
     public Persona placed(int newSettlementId, int newHouseholdId, byte newCultureId) {
         return new Persona(id, newSettlementId, newHouseholdId, traits,
-                newCultureId, professionId, birthTick, appearanceSeed, eraOfMajority);
+                newCultureId, birthTick, appearanceSeed, eraOfMajority);
     }
 
     public Persona withTraits(byte[] rolled) {
         return new Persona(id, settlementId, householdId, rolled,
-                cultureId, professionId, birthTick, appearanceSeed, eraOfMajority);
+                cultureId, birthTick, appearanceSeed, eraOfMajority);
     }
 
     @Override
@@ -220,7 +226,6 @@ public record Persona(
                 && householdId == persona.householdId
                 && Arrays.equals(traits, persona.traits)
                 && cultureId == persona.cultureId
-                && professionId == persona.professionId
                 && birthTick == persona.birthTick
                 && appearanceSeed == persona.appearanceSeed
                 && eraOfMajority == persona.eraOfMajority;
@@ -229,7 +234,7 @@ public record Persona(
     @Override
     public int hashCode() {
         int result = Objects.hash(id, settlementId, householdId,
-                cultureId, professionId, birthTick, appearanceSeed, eraOfMajority);
+                cultureId, birthTick, appearanceSeed, eraOfMajority);
         return 31 * result + Arrays.hashCode(traits);
     }
 
@@ -240,7 +245,6 @@ public record Persona(
                 + " household=" + householdId
                 + " traits=" + Arrays.toString(traits)
                 + " culture=" + cultureId
-                + " profession=" + professionId
                 + " birthTick=" + birthTick
                 + " appearanceSeed=" + appearanceSeed
                 + " era=" + eraOfMajority + ']';

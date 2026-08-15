@@ -3,7 +3,6 @@ package net.namesake.social;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
-import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
 import net.namesake.Namesake;
 
@@ -20,9 +19,11 @@ import java.util.UUID;
  *
  * <p>{@code WORKPLAN.md} session 06 asks for exact dedupe on {@code (npcUuid, deedId)} — <i>possible
  * only because deeds are structs, not sentences</i>. That is still the property this class is built
- * on. What changed at session 09 is everything the owner ruled at the close of 08: a memory now says
- * <i>which</i> object, it says <i>how many times</i>, there are four times as many of them, and the
- * format they are stored in had to change to make that fit.
+ * on. Session 09 built the owner's three memory-depth routes and session 12 took one of them back
+ * out: a memory says <i>how many times</i>, there are four times as many of them, and the format
+ * they are stored in had to change to make that fit. What it no longer says is <i>which</i> object —
+ * {@code Deed.item}'s rule 5 exemption fell due at the close of session 12 with no non-display
+ * consumer to name, and the field is gone at schema 8.
  *
  * <h2>Decision 1: where a ring lives — a side table, not a field on {@code Persona}</h2>
  *
@@ -61,7 +62,7 @@ import java.util.UUID;
  * measured the readable-codec form at 122 B a deed, which put that worst case at 6.26 MB of NBT
  * against a 2 MB ceiling — <i>both</i> of {@code MemoriesTest}'s ceilings red, and the note on that
  * test already said the answer to a red ceiling is a decision rather than a bigger number. This is
- * the decision: a fixed-width packed ring behind two palettes. See {@link #save}.
+ * the decision: a fixed-width packed ring behind an actor palette. See {@link #save}.
  */
 public final class Memories {
 
@@ -121,7 +122,6 @@ public final class Memories {
     private static final String KEY_HOLDER = "holder";
     private static final String KEY_RING = "ring";
     private static final String KEY_ACTORS = "memoryActors";
-    private static final String KEY_ITEMS = "memoryItems";
 
     /**
      * One packed slot, in bytes. <b>Fixed width, which is the whole point of it.</b>
@@ -134,9 +134,14 @@ public final class Memories {
      *  14  int    game day
      *  18  byte   severity
      *  19  byte   confidence
-     *  20  int    item,    as an index into the item palette (0 = no item)
-     *  24  byte   repeats, unsigned, 1..255
+     *  20  byte   repeats, unsigned, 1..255
      * </pre>
+     *
+     * <p><b>Twenty-one bytes at session 12, down from twenty-five, and the item palette is gone with
+     * them.</b> {@code Deed.item}'s rule 5 exemption fell due and no non-display consumer appeared;
+     * see {@link Deed} for the epitaph. The saving is incidental — the reason is the rule — but it is
+     * measured beside the old number in the session 12 log, because a format change that nobody
+     * measured is how the tag-tree ceiling gets found by a player instead.
      *
      * <p><b>Palette indices rather than the values, and that is where the saving actually is.</b> A
      * raw pair of UUIDs is thirty-two of a forty-seven byte record — two thirds of the table — and a
@@ -145,9 +150,7 @@ public final class Memories {
      * limit nobody would ever meet and a corruption nobody would ever diagnose, and the difference at
      * the measured worst case is under a tenth of the ceiling.
      */
-    static final int RECORD_BYTES = 25;
-
-    private static final int NO_ITEM_INDEX = 0;
+    static final int RECORD_BYTES = 21;
 
     /**
      * One slot of a ring: a deed, the id it is addressed by, and how many times it happened.
@@ -191,17 +194,15 @@ public final class Memories {
         /**
          * The same memory, one occurrence heavier.
          *
-         * <p><b>The object is dropped when two occurrences disagree about it, and that is the honest
-         * answer rather than a convenient one.</b> A slot is one memory by {@link Deed#id()}, which
-         * deliberately excludes {@link Deed#item()} — so a day of handing over a loaf and then an
-         * apple is one memory that cannot name either. {@code DESIGN.md} §2 already rules the shape
-         * of this for gossip: <i>distorts, never lies.</i> Naming the first object would be the
-         * memory inventing a detail it does not have, which is the one thing nothing in this mod is
-         * allowed to do.
+         * <p><b>Session 09 to 12 this method also dropped the object when two occurrences disagreed
+         * about it</b>, on the rule {@code DESIGN.md} §2 states for gossip — <i>distorts, never
+         * lies</i> — because a slot is one memory by {@link Deed#id()} and a day of handing over a
+         * loaf and then an apple could name neither. That rule survives the field it was written
+         * for: it is the same rule the blur runs on, and it is stated on {@link Deed#UNKNOWN_ACTOR}.
+         * With no object to disagree about, a repeat is now nothing but a count.
          */
         Slot again(Deed repeat) {
-            Deed merged = deed.item().equals(repeat.item()) ? deed : deed.withoutItem();
-            return new Slot(id, merged, Math.min(MAX_REPEATS, repeats + 1));
+            return new Slot(id, deed, Math.min(MAX_REPEATS, repeats + 1));
         }
 
         /** The same memory, better attested. Session 08's rule; the count is not an account. */
@@ -478,15 +479,18 @@ public final class Memories {
      * own note already said what to do about a red ceiling: <i>the fix is a decision — shorter keys,
      * a packed ring, or a smaller capacity — not a bigger number here.</i>
      *
-     * <p>Three things are stored rather than one, and the two extra ones are why it fits:
+     * <p>Two things are stored rather than one, and the extra one is why it fits:
      *
      * <ul>
      *   <li>the <b>actor palette</b>, every distinct participant in every ring, once. Two UUIDs is
      *       thirty-two bytes of a deed and a village's rings are full of the same few people;</li>
-     *   <li>the <b>item palette</b>, every distinct object, once, with index 0 reserved for
-     *       {@link Deed#NO_ITEM} so a deed that was not about a thing costs nothing to say so;</li>
      *   <li>one <b>byte array per holder</b>, {@link #RECORD_BYTES} to a slot, in ring order.</li>
      * </ul>
+     *
+     * <p><b>There were three until session 12.</b> An item palette held every distinct object once,
+     * with index 0 reserved for "no object" — and the field it existed for lost its rule 5 exemption
+     * at the close of session 12 with no non-display consumer to name. Both the palette and the four
+     * bytes of index per slot are gone at schema 8.
      *
      * <p><b>What is given up, said plainly.</b> A save file stops being readable with an NBT viewer,
      * which is a real loss — session 06 chose the long key names deliberately and the reasoning was
@@ -497,10 +501,6 @@ public final class Memories {
     public void save(CompoundTag root) {
         List<UUID> actors = new ArrayList<>();
         Map<UUID, Integer> actorIndex = new LinkedHashMap<>();
-        List<String> items = new ArrayList<>();
-        Map<String, Integer> itemIndex = new LinkedHashMap<>();
-        items.add(Deed.NO_ITEM);
-        itemIndex.put(Deed.NO_ITEM, NO_ITEM_INDEX);
 
         ListTag list = new ListTag();
         for (Map.Entry<UUID, List<Slot>> holder : byHolder.entrySet()) {
@@ -518,7 +518,6 @@ public final class Memories {
                 buffer.putInt(deed.gameDay());
                 buffer.put(deed.severity());
                 buffer.put(deed.confidence());
-                buffer.putInt(intern(deed.item(), items, itemIndex));
                 buffer.put((byte) slot.repeats());
             }
             CompoundTag entry = new CompoundTag();
@@ -533,12 +532,6 @@ public final class Memories {
             System.arraycopy(UUIDUtil.uuidToIntArray(actors.get(i)), 0, flattened, i * 4, 4);
         }
         root.putIntArray(KEY_ACTORS, flattened);
-
-        ListTag itemTags = new ListTag();
-        for (String item : items) {
-            itemTags.add(StringTag.valueOf(item));
-        }
-        root.put(KEY_ITEMS, itemTags);
     }
 
     private static <T> int intern(T value, List<T> palette, Map<T, Integer> index) {
@@ -581,7 +574,7 @@ public final class Memories {
         int unreadable = 0;
 
         List<UUID> actors = readActors(root);
-        List<String> items = readItems(root);
+
 
         for (int i = 0; i < list.size(); i++) {
             CompoundTag entry = list.getCompound(i);
@@ -619,25 +612,22 @@ public final class Memories {
                 int gameDay = buffer.getInt();
                 byte severity = buffer.get();
                 byte confidence = buffer.get();
-                int itemIndex = buffer.getInt();
+
                 int repeats = buffer.get() & 0xFF;
 
                 if (actorIndex < 0 || actorIndex >= actors.size()
-                        || subjectIndex < 0 || subjectIndex >= actors.size()
-                        || itemIndex < 0 || itemIndex >= items.size()) {
+                        || subjectIndex < 0 || subjectIndex >= actors.size()) {
                     Namesake.LOGGER.error(
                             "Unreadable deed in {}'s ring at slot {}: palette index out of range "
-                                    + "(actor {}, subject {}, item {} against {} actor(s) and {} "
-                                    + "item(s))",
-                            holder, slot, actorIndex, subjectIndex, itemIndex, actors.size(),
-                            items.size());
+                                    + "(actor {}, subject {} against {} actor(s))",
+                            holder, slot, actorIndex, subjectIndex, actors.size());
                     unreadable++;
                     continue;
                 }
                 Deed deed;
                 try {
                     deed = new Deed(typeId, actors.get(actorIndex), actors.get(subjectIndex),
-                            settlementId, gameDay, severity, confidence, items.get(itemIndex));
+                            settlementId, gameDay, severity, confidence);
                     // Resolves the type id, which is the one field that can be a value no build
                     // understands — a deed type from an addon that is no longer installed.
                     deed.type();
@@ -668,16 +658,4 @@ public final class Memories {
         return actors;
     }
 
-    private static List<String> readItems(CompoundTag root) {
-        ListTag tags = root.getList(KEY_ITEMS, Tag.TAG_STRING);
-        List<String> items = new ArrayList<>(tags.size());
-        for (int i = 0; i < tags.size(); i++) {
-            items.add(tags.getString(i));
-        }
-        if (items.isEmpty()) {
-            // A table written with no item ever recorded still needs index 0 to resolve.
-            items.add(Deed.NO_ITEM);
-        }
-        return items;
-    }
 }

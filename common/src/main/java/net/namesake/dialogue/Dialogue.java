@@ -7,6 +7,7 @@ import net.namesake.npc.Persona;
 import net.namesake.social.Bond;
 import net.namesake.social.Deed;
 import net.namesake.social.Residency;
+import net.namesake.social.Standing;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -46,21 +47,6 @@ import java.util.UUID;
  * you. That is the thesis in miniature: what one villager did changed what a different one calls you.
  */
 public final class Dialogue {
-
-    /**
-     * How much warmth puts a villager in the {@link Pool#WARM} pool.
-     *
-     * <p>Twenty, the first mark on {@code DialogueStats.LADDER}, so it is a number every report
-     * sessions 07 and 08 produced has already been read against rather than one invented here.
-     * Measured, it is rare and it should be: warmth's median across a village is 0–1 and only the
-     * residents a player actually gives things to ever hold much of it. A warm villager is somebody
-     * you have been kind to <i>lately</i>, because warmth is the only axis that decays.
-     *
-     * <p><b>Session 12 owns the bands and will move this.</b> Pool selection is one of its three
-     * ruled consumers; until then this and the trust test below are the interim, and they are two
-     * lines rather than a system so that replacing them is cheap.
-     */
-    public static final int WARM_WARMTH = 20;
 
     private Dialogue() {
     }
@@ -118,26 +104,38 @@ public final class Dialogue {
     }
 
     /**
-     * Which pool a bond puts somebody in.
+     * Which pool a bond puts somebody in. <b>Session 12's third ruled consumer of the standing
+     * bands</b>, and the method session 11 promised would be the only one this session replaced.
      *
-     * <p>Deliberately four comparisons rather than a system. Session 12 owns the five standing bands
-     * and their thresholds, set from session 07's earn-rate data; this is the interim and it is
-     * written so that replacing it is one method.
+     * <p>Session 09 wrote this as four comparisons rather than a system precisely so that replacing
+     * it would be cheap. What replaced it is {@link Standing}, and the arithmetic is deliberately
+     * <b>behaviourally identical</b>: {@code RESENTED} and {@code WARY} are the two halves of the
+     * old {@code trust < 0} test, {@code WARM} keeps session 09's threshold at its own value, and
+     * {@code TRUSTED} sits inside what used to be one undifferentiated {@code KNOWN}. So every
+     * dialogue line, every board phrase and every test written against the old boundaries still
+     * says the same thing — the bands add distinctions the price and the board can see and the
+     * pools cannot, rather than moving anything a player was already hearing.
      *
-     * <p><b>{@code KNOWN} is reachable two ways and both are needed.</b> A bond that is not nothing
-     * means they have an opinion; a ring holding one of your deeds means they know of you even if
-     * every axis rounded to zero. Session 06 proved those diverge — <i>the gift moved 0 bonds and was
-     * remembered by 4 people regardless</i> — so a villager whose allowance was spent when you fed
-     * them would otherwise still be greeting you as a stranger.
+     * <p><b>{@code KNOWN} is still reachable two ways and both are still needed.</b> A bond that is
+     * not nothing means they have an opinion; a ring holding one of your deeds means they know of
+     * you even if every axis rounded to zero. Session 06 proved those diverge — <i>the gift moved 0
+     * bonds and was remembered by 4 people regardless</i> — so a villager whose allowance was spent
+     * when you fed them would otherwise still be greeting you as a stranger. That is why
+     * {@link Standing#NEUTRAL} is the one band whose pool takes a second argument: it is the only
+     * band a player can be in having never been seen at all.
      */
     public static Pool poolFor(Bond bond, boolean remembersYou) {
-        if (bond.trust() < 0) {
-            return Pool.HOSTILE;
-        }
-        if (bond.warmth() >= WARM_WARMTH) {
-            return Pool.WARM;
-        }
-        return !bond.isNothing() || remembersYou ? Pool.KNOWN : Pool.STRANGER;
+        return poolFor(Standing.of(bond), bond, remembersYou);
+    }
+
+    /** The same answer from a band already computed, so a caller never reads one bond twice. */
+    public static Pool poolFor(Standing standing, Bond bond, boolean remembersYou) {
+        return switch (standing) {
+            case RESENTED, WARY -> Pool.HOSTILE;
+            case WARM -> Pool.WARM;
+            case TRUSTED -> Pool.KNOWN;
+            case NEUTRAL -> !bond.isNothing() || remembersYou ? Pool.KNOWN : Pool.STRANGER;
+        };
     }
 
     /**

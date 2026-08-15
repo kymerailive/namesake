@@ -50,7 +50,7 @@ class ResidencyTest {
      * rather than simulating the days.
      */
     private static void trusts(NpcRegistry registry, int index, int trust) {
-        registry.putBond(new UUID(77, index), PLAYER, new Bond((byte) trust, (byte) 0, (byte) 0,
+        registry.putBond(new UUID(77, index), PLAYER, new Bond((byte) trust, (byte) 0,
                 (byte) 0, (short) 0, 0, (short) 0, (byte) 0));
     }
 

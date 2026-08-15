@@ -226,7 +226,7 @@ public final class NamesakeCommands {
                 + " (" + EntityType.getKey(target.getType()) + ")"
                 + "\n  bound to   " + boundEntity + (target.getUUID().equals(boundEntity) ? " (match)" : " (MISMATCH)")
                 + "\n  settlement " + persona.settlementId() + "  household " + persona.householdId()
-                + "\n  culture    " + culture + "  profession " + persona.professionId()
+                + "\n  culture    " + culture
                 + "\n  birthTick  " + persona.birthTick() + "  appearanceSeed " + persona.appearanceSeed()
                 + "\n  era        " + persona.eraOfMajority()
                 + "\n  traits     " + traits;
@@ -538,16 +538,16 @@ public final class NamesakeCommands {
             out.append("\n  (no viewer — run this as a player to see what they feel about you)");
         } else {
             int nameColumn = nameColumnFor(nearest);
-            out.append("\n  ").append(pad("who", nameColumn)).append("trust warmth respect fear   cap")
+            out.append("\n  ").append(pad("who", nameColumn)).append("trust warmth  fear   cap")
                     .append("   gift×  mem");
             for (Persona persona : nearest) {
                 Bond bond = registry.bonds().at(persona.id(), viewer, day);
                 out.append("\n  ").append(pad(nameOf(persona), nameColumn))
-                        .append(String.format(Locale.ROOT, "%+5d %+6d %+7d %+4d", bond.trust(),
-                                bond.warmth(), bond.respect(), bond.fear()))
-                        .append(String.format(Locale.ROOT, "   %d/%d/%d/%d",
+                        .append(String.format(Locale.ROOT, "%+5d %+6d %+5d", bond.trust(),
+                                bond.warmth(), bond.fear()))
+                        .append(String.format(Locale.ROOT, "   %d/%d/%d",
                                 bond.gainedToday(Bond.TRUST), bond.gainedToday(Bond.WARMTH),
-                                bond.gainedToday(Bond.RESPECT), bond.gainedToday(Bond.FEAR)))
+                                bond.gainedToday(Bond.FEAR)))
                         .append(String.format(Locale.ROOT, "  %.2f",
                                 Personality.scale(persona, DeedType.GIFT_WANTED)))
                         // How many of the ring's slots they have filled. The column that makes a
@@ -747,14 +747,6 @@ public final class NamesakeCommands {
         StringBuilder cell = new StringBuilder(slot.deed().type().name());
         if (!slot.happenedOnce()) {
             cell.append(" x").append(slot.repeats());
-        }
-        String item = slot.deed().item();
-        if (!item.isEmpty()) {
-            String path = item.substring(item.indexOf(':') + 1);
-            int room = DEED_COLUMN - 1 - cell.length();
-            if (room >= 3) {
-                cell.append(' ').append(path.length() <= room ? path : path.substring(0, room));
-            }
         }
         return cell.length() <= DEED_COLUMN ? cell.toString() : cell.substring(0, DEED_COLUMN);
     }

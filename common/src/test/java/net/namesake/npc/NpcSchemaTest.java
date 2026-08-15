@@ -350,8 +350,11 @@ class NpcSchemaTest {
 
         assertEquals(6, result.foundVersion());
         assertEquals(NpcSchema.CURRENT, result.resultVersion());
-        assertEquals(5, result.recordsRewritten(),
-                "this fix genuinely rewrites, unlike the three additive ones before it");
+        // Five through the 6 -> 7 repack and five again through the 7 -> 8 deletion, because a
+        // schema-6 save now walks two rewriting fixes rather than one. Stated as the sum rather than
+        // as a constant, so the day a third rewriting fix lands this line says which one moved.
+        assertEquals(5 + 5, result.recordsRewritten(),
+                "both rewriting fixes ran: the repack at 7 and the field deletion at 8");
 
         // The whole hazard: read by this build, the converted ring has to come back as five deeds
         // rather than as nothing.
@@ -367,9 +370,8 @@ class NpcSchemaTest {
         assertEquals(3, loaded.get(1).settlementId());
         assertEquals(Deed.FIRST_HAND, loaded.get(1).confidence());
 
-        // The two fields schema 6 could not know about take the only values that are true of every
-        // deed it could write: no particular object, and it happened once.
-        assertEquals(Deed.NO_ITEM, loaded.get(1).item());
+        // The one field schema 6 could not know about takes the only value that is true of every
+        // deed it could write: it happened once.
         assertEquals(1, reloaded.slotsOf(holder).get(1).repeats());
     }
 

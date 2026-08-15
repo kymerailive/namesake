@@ -19,8 +19,8 @@ class BondsTest {
     private static final UUID BRAM = new UUID(2, 2);
     private static final UUID PLAYER = new UUID(0x5EAF_0000_0000_0001L, 9);
 
-    private static Bond bond(int trust, int warmth, int respect, int fear, int day, int peak) {
-        return new Bond((byte) trust, (byte) warmth, (byte) respect, (byte) fear,
+    private static Bond bond(int trust, int warmth, int fear, int day, int peak) {
+        return new Bond((byte) trust, (byte) warmth, (byte) fear,
                 (short) 7, day, (short) 0, (byte) peak);
     }
 
@@ -40,9 +40,9 @@ class BondsTest {
     @DisplayName("every field survives a save and a load")
     void everyFieldSurvivesARoundTrip() {
         Bonds written = new Bonds();
-        Bond anna = bond(-30, 61, 12, 4, 88, 74).apply(new int[]{2, 0, 0, 0}, 88, Bond.DAILY_CAP);
+        Bond anna = bond(-30, 61, 4, 88, 74).apply(new int[]{2, 0, 0}, 88, Bond.DAILY_CAP);
         written.put(ANNA, PLAYER, anna);
-        written.put(BRAM, PLAYER, bond(5, 0, -64, 100, 3, 0));
+        written.put(BRAM, PLAYER, bond(5, 0, 100, 3, 0));
 
         CompoundTag tag = new CompoundTag();
         written.save(tag);
@@ -53,7 +53,7 @@ class BondsTest {
         assertEquals(2, read.holders());
         assertEquals(anna, read.stored(ANNA, PLAYER).orElseThrow(),
                 "including gainedToday and the high-water mark, not just the four axes");
-        assertEquals(bond(5, 0, -64, 100, 3, 0), read.stored(BRAM, PLAYER).orElseThrow());
+        assertEquals(bond(5, 0, 100, 3, 0), read.stored(BRAM, PLAYER).orElseThrow());
     }
 
     /**
@@ -80,7 +80,7 @@ class BondsTest {
     @DisplayName("a bond record that cannot be read is counted rather than skipped")
     void damageIsCounted() {
         Bonds written = new Bonds();
-        written.put(ANNA, PLAYER, bond(1, 2, 3, 4, 5, 6));
+        written.put(ANNA, PLAYER, bond(1, 2, 4, 5, 6));
         CompoundTag tag = new CompoundTag();
         written.save(tag);
 
@@ -102,8 +102,8 @@ class BondsTest {
     @DisplayName("removing a persona takes its bonds with it")
     void forgettingAHolderDropsTheirBonds() {
         Bonds bonds = new Bonds();
-        bonds.put(ANNA, PLAYER, bond(1, 1, 0, 0, 1, 1));
-        bonds.put(BRAM, PLAYER, bond(1, 1, 0, 0, 1, 1));
+        bonds.put(ANNA, PLAYER, bond(1, 1, 0, 1, 1));
+        bonds.put(BRAM, PLAYER, bond(1, 1, 0, 1, 1));
 
         assertTrue(bonds.forget(ANNA));
         assertFalse(bonds.forget(ANNA), "and says so if there was nothing to forget");
@@ -115,7 +115,7 @@ class BondsTest {
     @DisplayName("the last bond of a holder takes the holder with it")
     void removingTheLastBondDropsTheHolder() {
         Bonds bonds = new Bonds();
-        bonds.put(ANNA, PLAYER, bond(1, 1, 0, 0, 1, 1));
+        bonds.put(ANNA, PLAYER, bond(1, 1, 0, 1, 1));
 
         assertTrue(bonds.remove(ANNA, PLAYER));
         assertEquals(0, bonds.holders(), "an empty map per holder is a row that means nothing");

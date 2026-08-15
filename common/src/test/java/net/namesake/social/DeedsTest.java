@@ -62,10 +62,10 @@ class DeedsTest {
         Persona fedVillager = person(1, 4);
         Persona bystander = person(2, 4);
 
-        assertArrayEquals(new int[]{3, 3, 0, 0},
+        assertArrayEquals(new int[]{3, 3, 0},
                 Deeds.deltaFor(doneTo(DeedType.FED_HUNGRY, 4, fedVillager), fedVillager),
                 "the subject takes the whole share");
-        assertArrayEquals(new int[]{1, 1, 0, 0},
+        assertArrayEquals(new int[]{1, 1, 0},
                 Deeds.deltaFor(doneTo(DeedType.FED_HUNGRY, 4, fedVillager), bystander),
                 "a witness takes a third of it");
     }
@@ -77,8 +77,8 @@ class DeedsTest {
         Deed theirs = doneTo(DeedType.FED_HUNGRY, 4, villager);
         Deed somebodyElses = watched(DeedType.FED_HUNGRY, 4);
 
-        assertArrayEquals(new int[]{3, 3, 0, 0}, Deeds.deltaFor(theirs, villager));
-        assertArrayEquals(new int[]{1, 1, 0, 0}, Deeds.deltaFor(somebodyElses, villager));
+        assertArrayEquals(new int[]{3, 3, 0}, Deeds.deltaFor(theirs, villager));
+        assertArrayEquals(new int[]{1, 1, 0}, Deeds.deltaFor(somebodyElses, villager));
     }
 
     @Test
@@ -149,12 +149,12 @@ class DeedsTest {
     @DisplayName("a witness who does not live where it happened records less of it")
     void outsidersRecordLess() {
         Deed defended = watched(DeedType.DEFENDED_RAID, 4);
-        int resident = Deeds.deltaFor(defended, person(30, 4))[Bond.RESPECT];
-        int passerby = Deeds.deltaFor(defended, person(31, 7))[Bond.RESPECT];
-        int unsettled = Deeds.deltaFor(defended, person(32, Persona.UNASSIGNED))[Bond.RESPECT];
+        int resident = Deeds.deltaFor(defended, person(30, 4))[Bond.TRUST];
+        int passerby = Deeds.deltaFor(defended, person(31, 7))[Bond.TRUST];
+        int unsettled = Deeds.deltaFor(defended, person(32, Persona.UNASSIGNED))[Bond.TRUST];
 
-        assertEquals(12, resident, "a resident of the raided village takes it whole");
-        assertEquals(9, passerby, "a traveller takes three quarters — it is not their village");
+        assertEquals(8, resident, "a resident of the raided village takes it whole");
+        assertEquals(6, passerby, "a traveller takes three quarters — it is not their village");
         assertEquals(passerby, unsettled, "and neither is nowhere");
     }
 
@@ -188,11 +188,10 @@ class DeedsTest {
         Persona holder = person(60, 4);
         Deed firstHand = doneTo(DeedType.DEFENDED_RAID, 4, holder);
         Deed secondHand = new Deed(firstHand.typeId(), firstHand.actor(), firstHand.subject(),
-                firstHand.settlementId(), firstHand.gameDay(), firstHand.severity(), (byte) 50,
-                Deed.NO_ITEM);
+                firstHand.settlementId(), firstHand.gameDay(), firstHand.severity(), (byte) 50);
 
-        assertTrue(Deeds.deltaFor(secondHand, holder)[Bond.RESPECT]
-                < Deeds.deltaFor(firstHand, holder)[Bond.RESPECT]);
+        assertTrue(Deeds.deltaFor(secondHand, holder)[Bond.TRUST]
+                < Deeds.deltaFor(firstHand, holder)[Bond.TRUST]);
     }
 
     // --- the ruling the owner has to make ---------------------------------------------------------
@@ -213,8 +212,8 @@ class DeedsTest {
         // 1.0 to 1.6 to close the week-apart gap the owner ruled at that session's close, and this
         // is the same two fixtures re-measured through it. The loaf is now worth four times as much
         // to the innkeeper as to the smith rather than twice.
-        assertArrayEquals(new int[]{1, 1, 0, 0}, toSmith);
-        assertArrayEquals(new int[]{4, 5, 0, 0}, toInnkeeper);
+        assertArrayEquals(new int[]{1, 1, 0}, toSmith);
+        assertArrayEquals(new int[]{4, 5, 0}, toInnkeeper);
         assertTrue(toInnkeeper[Bond.WARMTH] - toSmith[Bond.WARMTH] >= 2,
                 "the difference has to be big enough for a person to notice, not just for a test");
         // And the fixtures are extremes I chose. PersonalityDistributionTest is what says whether

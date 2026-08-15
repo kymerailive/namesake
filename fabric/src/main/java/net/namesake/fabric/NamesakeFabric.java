@@ -22,6 +22,7 @@ import net.namesake.settlement.SettlementRegistrar;
 import net.namesake.road.RoadNetwork;
 import net.namesake.social.Gossip;
 import net.namesake.social.SocialEvents;
+import net.namesake.social.Trading;
 import net.namesake.verb.Interactions;
 import net.namesake.verb.VerbNetwork;
 
@@ -70,6 +71,14 @@ public final class NamesakeFabric implements ModInitializer {
                     SocialEvents.onGive(serverPlayer, hand, villager);
                 }
                 return InteractionResult.CONSUME;
+            }
+            // Session 12's standing bands, on the plain right-click — the one both gestures above
+            // have declined, and therefore the one on its way to Villager#mobInteract and the trade
+            // screen. PASS, not CONSUME: vanilla proceeds, and its own updateSpecialPrices adds the
+            // gossip reputation on top of the multiplier we just set. See Trading.
+            if (!level.isClientSide() && player instanceof ServerPlayer serverPlayer
+                    && entity instanceof Villager villager) {
+                Trading.onVillagerInteract(serverPlayer, villager);
             }
             return InteractionResult.PASS;
         });

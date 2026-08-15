@@ -545,9 +545,9 @@ public final class Reports {
         lines.add(String.format(Locale.ROOT, "  warmth  max %d  p50 %d  p05 %d  (of 100)",
                 stats.observedMaximum(Bond.WARMTH), stats.percentile(Bond.WARMTH, 50),
                 stats.percentile(Bond.WARMTH, 5)));
-        lines.add(String.format(Locale.ROOT, "  trust   max %d  p50 %d  respect max %d",
+        lines.add(String.format(Locale.ROOT, "  trust   max %d  p50 %d  fear max %d",
                 stats.observedMaximum(Bond.TRUST), stats.percentile(Bond.TRUST, 50),
-                stats.observedMaximum(Bond.RESPECT)));
+                stats.observedMaximum(Bond.FEAR)));
         float[] rates = stats.ratesPerContactDay();
         float best = rates.length == 0 ? 0F : rates[rates.length - 1];
         lines.add(String.format(Locale.ROOT, "  earn    %.2f warmth/contact day at best, %.2f median",
@@ -757,17 +757,17 @@ public final class Reports {
         }
 
         lines.add("");
-        lines.add(String.format(Locale.ROOT, "  %-18s %8s %8s %8s %8s",
-                "", "warmth", "trust", "respect", "fear"));
-        lines.add(String.format(Locale.ROOT, "  %-18s %8d %8d %8d %8d", "observed maximum",
+        lines.add(String.format(Locale.ROOT, "  %-18s %8s %8s %8s",
+                "", "warmth", "trust", "fear"));
+        lines.add(String.format(Locale.ROOT, "  %-18s %8d %8d %8d", "observed maximum",
                 stats.observedMaximum(Bond.WARMTH), stats.observedMaximum(Bond.TRUST),
-                stats.observedMaximum(Bond.RESPECT), stats.observedMaximum(Bond.FEAR)));
-        lines.add(String.format(Locale.ROOT, "  %-18s %8d %8d %8d %8d", "observed median",
+                stats.observedMaximum(Bond.FEAR)));
+        lines.add(String.format(Locale.ROOT, "  %-18s %8d %8d %8d", "observed median",
                 stats.percentile(Bond.WARMTH, 50), stats.percentile(Bond.TRUST, 50),
-                stats.percentile(Bond.RESPECT, 50), stats.percentile(Bond.FEAR, 50)));
-        lines.add(String.format(Locale.ROOT, "  %-18s %8d %8d %8d %8d", "observed minimum",
+                stats.percentile(Bond.FEAR, 50)));
+        lines.add(String.format(Locale.ROOT, "  %-18s %8d %8d %8d", "observed minimum",
                 stats.observedMinimum(Bond.WARMTH), stats.observedMinimum(Bond.TRUST),
-                stats.observedMinimum(Bond.RESPECT), stats.observedMinimum(Bond.FEAR)));
+                stats.observedMinimum(Bond.FEAR)));
         lines.add("  a threshold above the maximum is a band nobody is ever in. LNK shipped five.");
 
         lines.addAll(whereTheWarmthGoes(outcome, stats));

@@ -13,6 +13,7 @@ import net.namesake.social.Deed;
 import net.namesake.social.DeedType;
 import net.namesake.social.Memories;
 import net.namesake.social.Residency;
+import net.namesake.social.Standing;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -94,16 +95,27 @@ public record Board(
      * villager therefore agree by construction rather than by two implementations that happen to
      * match, which is the strongest available answer to the objection.
      *
-     * <p><b>What session 12 has to replace is one method.</b> Its third ruled consumer is <i>which
-     * dialogue pool is selected</i>, which is {@code Dialogue.poolFor} itself; when that becomes a
-     * band lookup the board moves with it and needs no edit, because nothing here names a threshold
-     * or a number. What session 12 may <i>additionally</i> want is to print five band names where
-     * this prints four pool phrases — and that is a second change, to one table, rather than a
-     * mechanism change. The cost of not making it is stated rather than buried: <b>two bands that
-     * share a pool look identical on this board</b>, so a player whose price moved may see the board
-     * stand still. That is strictly better than the board and the villager disagreeing.
+     * <p><b>Session 12 replaced that one method and the prediction held.</b> Its third ruled
+     * consumer is <i>which dialogue pool is selected</i>, {@code Dialogue.poolFor} became a switch
+     * over {@link Standing}, and this class needed no change to keep agreeing with the villager —
+     * because nothing here names a threshold or prints a number.
+     *
+     * <p><b>What session 12 did additionally take was the second change session 11 offered</b>, to
+     * one table: the row now carries the band as well as the pool, and {@code BoardText} prints five
+     * phrases where it printed four. The cost of <i>not</i> making it was stated in advance and was
+     * real — {@code RESENTED} and {@code WARY} share the hostile pool, and {@code TRUSTED} and
+     * {@code NEUTRAL} share {@code KNOWN}, so half the ladder was invisible here and a player whose
+     * price had moved would have seen the board stand still. The four phrases the owner ruled read
+     * correctly at the close of session 11 are kept <b>verbatim</b>; the two that are new are the
+     * two distinctions the bands added.
+     *
+     * <p>The pool is still carried beside the band rather than derived from it, because one band
+     * genuinely maps to two phrases: {@link Standing#NEUTRAL} is <i>has not met you</i> for somebody
+     * who has never seen you and <i>knows you</i> for somebody whose allowance was spent when you
+     * fed them. That is session 06's finding — a bond and a memory diverge — and it is the reason
+     * {@code Dialogue.poolFor} takes a second argument at all.
      */
-    public record Neighbour(String name, Pool pool) {
+    public record Neighbour(String name, Standing standing, Pool pool) {
     }
 
     /**
@@ -113,10 +125,8 @@ public record Board(
      * @param repeats  the most any one of them remembers it happening — a per-slot number, because
      *                 two villagers who watched the same afternoon can have seen different amounts
      *                 of it
-     * @param item     what it was about, or {@link Deed#NO_ITEM}. Emptied when two holders disagree:
-     *                 a village that cannot say which object it was does not pick one.
      */
-    public record Memory(int day, DeedType type, String item, int repeats, int holders,
+    public record Memory(int day, DeedType type, int repeats, int holders,
                          byte confidence, Origin origin) {
 
         public boolean firstHand() {
@@ -213,12 +223,14 @@ public record Board(
             }
 
             Bond bond = registry.bonds().at(resident.id(), viewer, day);
-            // The same call Dialogue.speak makes, so the board cannot disagree with the villager.
-            Pool pool = Dialogue.poolFor(bond, Dialogue.remembersThem(deeds, viewer));
+            // The same two calls Dialogue.speak makes, in the same order, so the board cannot
+            // disagree with the villager about either the band or the pool.
+            Standing standing = Standing.of(bond);
+            Pool pool = Dialogue.poolFor(standing, bond, Dialogue.remembersThem(deeds, viewer));
             if (pool == Pool.STRANGER) {
                 strangers++;
             } else {
-                opinions.add(new Neighbour(nameOf(resident), pool));
+                opinions.add(new Neighbour(nameOf(resident), standing, pool));
             }
 
             for (Memories.Slot slot : ring) {
@@ -232,7 +244,7 @@ public record Board(
             }
         }
 
-        opinions.sort(Comparator.comparingInt((Neighbour n) -> order(n.pool()))
+        opinions.sort(Comparator.comparingInt((Neighbour n) -> order(n.standing()))
                 .thenComparing(Neighbour::name));
 
         List<Memory> witnessed = new ArrayList<>();
@@ -259,16 +271,19 @@ public record Board(
     /**
      * Which order the opinions read in: the ones with something to say first.
      *
-     * <p>Not the pool's own ordinal. {@code Pool} is declared in the order a relationship develops,
-     * and a board sorted that way buries the one villager who is hostile under everybody who merely
-     * knows your face.
+     * <p><b>Not the band's own ordinal.</b> {@link Standing} is declared worst to best, because it
+     * is a ladder and a price multiplier reads it as one; a board sorted that way buries the villager
+     * who is warm to you under everybody who merely knows your face. Strength of feeling is what
+     * belongs at the top of a board, and it runs outward from the middle rather than along the
+     * ladder — which is the same reason session 11 declined to sort on {@code Pool}'s ordinal.
      */
-    private static int order(Pool pool) {
-        return switch (pool) {
-            case HOSTILE -> 0;
-            case WARM -> 1;
-            case KNOWN -> 2;
-            case STRANGER -> 3;
+    private static int order(Standing standing) {
+        return switch (standing) {
+            case RESENTED -> 0;
+            case WARY -> 1;
+            case WARM -> 2;
+            case TRUSTED -> 3;
+            case NEUTRAL -> 4;
         };
     }
 
@@ -303,32 +318,25 @@ public record Board(
         private int holders;
         private int repeats;
         private byte confidence;
-        private String item;
-        private boolean itemDisputed;
 
         private Tally(Deed deed) {
             this.deed = deed;
-            this.item = deed.item();
         }
 
         private void add(Memories.Slot slot) {
             holders++;
             repeats = Math.max(repeats, slot.repeats());
+            // Every field of a deed but confidence is inside Deed.id(), so two copies of one event
+            // can only ever disagree about that one. It takes the best account anybody has.
+            //
+            // Until session 12 the object could disagree too, and this method named neither when it
+            // did — DESIGN.md §2's rule that a village which cannot say which object it was does not
+            // get to pick one. The rule outlives the field; it is the same rule the blur runs on.
             confidence = (byte) Math.max(confidence, slot.deed().confidence());
-            // Every field of a deed but confidence and the object is inside Deed.id(), so two copies
-            // of one event can only ever disagree about those two. Confidence takes the best account
-            // anybody has; the object takes DESIGN.md §2's other rule and names neither when two
-            // holders remember different things, because a village that cannot say which object it
-            // was does not get to pick one.
-            if (!itemDisputed && !item.equals(slot.deed().item())) {
-                itemDisputed = true;
-                item = Deed.NO_ITEM;
-            }
         }
 
         private Memory toMemory(Origin origin) {
-            return new Memory(deed.gameDay(), deed.type(), item, repeats, holders, confidence,
-                    origin);
+            return new Memory(deed.gameDay(), deed.type(), repeats, holders, confidence, origin);
         }
     }
 

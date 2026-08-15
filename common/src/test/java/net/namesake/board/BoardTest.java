@@ -11,6 +11,7 @@ import net.namesake.npc.Persona;
 import net.namesake.settlement.Need;
 import net.namesake.settlement.Settlement;
 import net.namesake.settlement.Specialty;
+import net.namesake.social.Standing;
 import net.namesake.social.Bond;
 import net.namesake.social.Deed;
 import net.namesake.social.DeedType;
@@ -191,21 +192,30 @@ class BoardTest {
      * The rule {@code Memories.remember} already carries, applied one level up: a village that cannot
      * say which object it was does not get to pick one.
      */
+    /**
+     * <b>Two holders of one event still collapse to one row, and that is what survived session 12's
+     * deletion of the object.</b>
+     *
+     * <p>Until session 12 this test read <i>two people remembering different objects for one event
+     * names neither</i> — the rule {@code DESIGN.md} §2 states for gossip, applied to a ring slot.
+     * {@code Deed.item} lost its rule 5 exemption with no consumer to name, so there is no longer an
+     * object for two villagers to disagree about. What the test is <i>for</i> is unchanged and is the
+     * half that was always load-bearing: <b>the crowd is not the history.</b> One gift that four
+     * people watched is one row saying four remember it, not four rows.
+     */
     @Test
-    @DisplayName("two people remembering different objects for one event names neither")
-    void aVillageThatDisagreesAboutTheObjectNamesNeither() {
+    @DisplayName("one event held by two people is one row, whoever is holding it")
+    void aVillageDoesNotPostOneEventTwice() {
         NpcRegistry registry = village(9);
-        Deed bread = Deed.of(DeedType.GIFT_WANTED, PLAYER, residentId(HERE, 0), HERE, 12,
-                "minecraft:bread");
-        Deed apple = Deed.of(DeedType.GIFT_WANTED, PLAYER, residentId(HERE, 0), HERE, 12,
-                "minecraft:apple");
-        assertEquals(bread.id(), apple.id(), "the object is deliberately outside Deed.id()");
-        registry.remember(residentId(HERE, 0), bread);
-        registry.remember(residentId(HERE, 1), apple);
+        Deed given = Deed.of(DeedType.GIFT_WANTED, PLAYER, residentId(HERE, 0), HERE, 12);
+        Deed sameDay = Deed.of(DeedType.GIFT_WANTED, PLAYER, residentId(HERE, 0), HERE, 12);
+        assertEquals(given.id(), sameDay.id(), "one event is one id, whoever is holding it");
+        registry.remember(residentId(HERE, 0), given);
+        registry.remember(residentId(HERE, 1), sameDay);
 
         Board board = boardOf(registry, PLAYER);
         assertEquals(1, board.witnessed().size());
-        assertEquals(Deed.NO_ITEM, board.witnessed().get(0).item());
+        assertEquals(2, board.witnessed().get(0).holders());
     }
 
     @Test
@@ -412,7 +422,7 @@ class BoardTest {
      * the same call {@code Dialogue.speak} makes — so the board and the villager cannot disagree.
      *
      * <p>This is the assertion that makes that real rather than incidental. The boundary is expressed
-     * as {@code Dialogue.WARM_WARMTH} rather than as the number twenty, so <b>session 12 moving the
+     * as {@code Standing.WARM_WARMTH} rather than as the number twenty, so <b>session 12 moving the
      * threshold moves this test with it</b>; and a board that grew a threshold of its own would go red
      * here the first time the two differed.
      */
@@ -420,9 +430,9 @@ class BoardTest {
     @DisplayName("the board's boundary between warm and known is the villager's boundary")
     void theBoardAndTheVillagerShareOneAnswer() {
         NpcRegistry justUnder = village(9);
-        justUnder.putBond(residentId(HERE, 0), PLAYER, warmth(Dialogue.WARM_WARMTH - 1));
+        justUnder.putBond(residentId(HERE, 0), PLAYER, warmth(Standing.WARM_WARMTH - 1));
         NpcRegistry exactly = village(9);
-        exactly.putBond(residentId(HERE, 0), PLAYER, warmth(Dialogue.WARM_WARMTH));
+        exactly.putBond(residentId(HERE, 0), PLAYER, warmth(Standing.WARM_WARMTH));
 
         assertEquals(Pool.KNOWN, boardOf(justUnder, PLAYER).opinions().get(0).pool());
         assertEquals(Pool.WARM, boardOf(exactly, PLAYER).opinions().get(0).pool());
@@ -461,9 +471,9 @@ class BoardTest {
     void opinionsAreSortedByHowMuchTheyMatter() {
         NpcRegistry registry = village(9);
         registry.putBond(residentId(HERE, 0), PLAYER, warmth(5));
-        registry.putBond(residentId(HERE, 1), PLAYER, warmth(Dialogue.WARM_WARMTH));
+        registry.putBond(residentId(HERE, 1), PLAYER, warmth(Standing.WARM_WARMTH));
         registry.putBond(residentId(HERE, 2), PLAYER,
-                new Bond((byte) -20, (byte) 0, (byte) 0, (byte) 0, (short) 0, TODAY, (short) 0,
+                new Bond((byte) -20, (byte) 0, (byte) 0, (short) 0, TODAY, (short) 0,
                         (byte) 0));
 
         List<Pool> pools = new ArrayList<>();
@@ -482,7 +492,7 @@ class BoardTest {
      * threshold been lower they would have been green and hollow.</b>
      */
     private static Bond warmth(int warmth) {
-        return new Bond((byte) 0, (byte) warmth, (byte) 0, (byte) 0, (short) 0, TODAY, (short) 0,
+        return new Bond((byte) 0, (byte) warmth, (byte) 0, (short) 0, TODAY, (short) 0,
                 (byte) warmth);
     }
 }

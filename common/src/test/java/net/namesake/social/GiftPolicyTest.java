@@ -31,7 +31,7 @@ class GiftPolicyTest {
             // call quietly gets fifteen, and would be testing a threshold it never reaches. The peak
             // is set to the same value, which is what a bond that actually earned it would hold and
             // is what the decay in theGateReopens measures against.
-            registry.putBond(ANNA, PLAYER, new Bond((byte) 0, (byte) warmth, (byte) 0, (byte) 0,
+            registry.putBond(ANNA, PLAYER, new Bond((byte) 0, (byte) warmth, (byte) 0,
                     (short) 0, 0, (short) 0, (byte) warmth));
         }
         return registry;

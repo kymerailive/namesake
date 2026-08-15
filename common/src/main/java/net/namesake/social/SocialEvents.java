@@ -123,24 +123,12 @@ public final class SocialEvents {
             held.shrink(1);
         }
 
-        DeedBus.Result result = DeedBus.emit(level, type, player, villager, idOf(one));
+        DeedBus.Result result = DeedBus.emit(level, type, player, villager);
         player.displayClientMessage(Component.literal(switch (type) {
             case FED_HUNGRY -> "They were hungry.";
             case GIFT_WANTED -> "They wanted that.";
             default -> "They take it, politely.";
         } + (result.witnesses() > 0 ? "  (" + result.witnesses() + " watching)" : "")), true);
-    }
-
-    /**
-     * The registry id of what changed hands — session 09's "richer per memory".
-     *
-     * <p>A string rather than an {@code Item}, because a ring outlives a modpack: an item removed
-     * between two sessions must leave the memory of it readable rather than turning a villager's
-     * whole ring into a load error. It is also what lets the record layer run with no registries at
-     * all, which is what session 07's headless simulation depends on.
-     */
-    private static String idOf(ItemStack stack) {
-        return BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
     }
 
     // --- violence ------------------------------------------------------------------------------

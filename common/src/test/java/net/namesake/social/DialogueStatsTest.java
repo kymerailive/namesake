@@ -90,7 +90,7 @@ class DialogueStatsTest {
             DeedType type = DeedType.values()[i];
             registry.remember(only.id(), Deed.of(type, PLAYER, only.id(), 0, 5));
         }
-        registry.putBond(only.id(), PLAYER, Bond.fresh(5).apply(new int[]{0, 6, 0, 0}, 5, 8));
+        registry.putBond(only.id(), PLAYER, Bond.fresh(5).apply(new int[]{0, 6, 0}, 5, 8));
 
         DialogueStats.Standing standing = DialogueStats.of(registry, PLAYER, 5).standings().get(0);
         assertEquals(1, standing.contactDays(), "one day, whatever happened on it");
@@ -112,7 +112,7 @@ class DialogueStatsTest {
         NpcRegistry registry = village(1);
         Persona only = registry.all().iterator().next();
         registry.remember(only.id(), gift(only.id(), 30));
-        registry.putBond(only.id(), PLAYER, Bond.fresh(30).apply(new int[]{0, 10, 0, 0}, 30, 8));
+        registry.putBond(only.id(), PLAYER, Bond.fresh(30).apply(new int[]{0, 10, 0}, 30, 8));
 
         DialogueStats.Standing standing = DialogueStats.of(registry, PLAYER, 39).standings().get(0);
         assertEquals(10, standing.spanDays(), "day 30 to day 39 inclusive, not day 0 to day 39");
@@ -159,7 +159,7 @@ class DialogueStatsTest {
             // Three, six, nine, twelve. All inside the fifteen a four-bit counter can hold, because
             // Bond.apply clamps the allowance to that whatever a caller asks for.
             registry.putBond(persona.id(), PLAYER,
-                    Bond.fresh(1).apply(new int[]{0, index * 3, 0, 0}, 1, 15));
+                    Bond.fresh(1).apply(new int[]{0, index * 3, 0}, 1, 15));
         }
 
         DialogueStats stats = DialogueStats.of(registry, PLAYER, 1);
@@ -177,7 +177,7 @@ class DialogueStatsTest {
         for (Persona persona : registry.all()) {
             registry.remember(persona.id(), gift(persona.id(), 0));
             registry.putBond(persona.id(), PLAYER,
-                    Bond.fresh(0).apply(new int[]{0, warmth, 0, 0}, 0, 15));
+                    Bond.fresh(0).apply(new int[]{0, warmth, 0}, 0, 15));
             warmth += 4;
         }
         DialogueStats stats = DialogueStats.of(registry, PLAYER, 0);
@@ -292,7 +292,7 @@ class DialogueStatsTest {
             // arc, and the reason the median rate in a real village is routinely zero.
             registry.remember(persona.id(), gift(persona.id(), 1));
             registry.putBond(persona.id(), PLAYER,
-                    Bond.fresh(1).apply(new int[]{0, 1, 0, 0}, 1, 8));
+                    Bond.fresh(1).apply(new int[]{0, 1, 0}, 1, 8));
         }
 
         DialogueStats stats = DialogueStats.of(registry, PLAYER, 40);
@@ -312,8 +312,8 @@ class DialogueStatsTest {
             registry.remember(persona.id(), gift(persona.id(), 0));
             registry.remember(persona.id(), gift(persona.id(), 1));
             registry.putBond(persona.id(), PLAYER,
-                    Bond.fresh(0).apply(new int[]{0, 3, 0, 0}, 0, 8)
-                            .apply(new int[]{0, 3, 0, 0}, 1, 8));
+                    Bond.fresh(0).apply(new int[]{0, 3, 0}, 0, 8)
+                            .apply(new int[]{0, 3, 0}, 1, 8));
         }
 
         DialogueStats stats = DialogueStats.of(registry, PLAYER, 1);

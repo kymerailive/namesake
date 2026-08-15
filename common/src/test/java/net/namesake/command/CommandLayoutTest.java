@@ -88,7 +88,7 @@ class CommandLayoutTest {
      */
     private static String widestRow() throws Exception {
         Deed worst = new Deed(DeedType.STRUCK_RESIDENT.id(), ACTOR, UUID.randomUUID(), 4, 12,
-                (byte) 60, (byte) 70, "minecraft:enchanted_golden_apple");
+                (byte) 60, (byte) 70);
         return describeRow(new Memories.Slot(worst.id(), worst, Memories.MAX_REPEATS), 112);
     }
 
@@ -132,23 +132,24 @@ class CommandLayoutTest {
     }
 
     /**
-     * <b>Session 09's two new pieces of depth, on the row where a person actually reads them.</b>
+     * <b>The one piece of session 09's depth that survived, on the row where a person reads it.</b>
      *
-     * <p>The owner has asked for in-depth memories three times, and the two cheap routes are
-     * <i>which object</i> and <i>how many times</i>. A ring that holds them and a command that does
-     * not print them is the same as not holding them, from where the owner is sitting.
+     * <p>The owner asked for in-depth memories three times and session 09 built all three routes.
+     * Two of them are still here: the count, and a ring four times deeper. The third — <i>which
+     * object</i> — lost its rule 5 exemption at the close of session 12 with no non-display consumer
+     * to name, so this row no longer says what changed hands. That is a real loss and it is written
+     * down here rather than only in the ledger, because this test is where a person would notice it.
      */
     @Test
-    @DisplayName("a memory that happened nine times, with bread, says both and still fits")
-    void aRicherRowSaysWhatAndHowOften() throws Exception {
-        Deed fed = Deed.of(DeedType.FED_HUNGRY, ACTOR, HOLDER, 3, 12, "minecraft:bread");
+    @DisplayName("a memory that happened nine times says so, and still fits")
+    void aRicherRowSaysHowOften() throws Exception {
+        Deed fed = Deed.of(DeedType.FED_HUNGRY, ACTOR, HOLDER, 3, 12);
         String row = describeRow(new Memories.Slot(fed.id(), fed, 9), 12);
 
         assertTrue(row.contains("FED_HUNGRY"), () -> row);
         assertTrue(row.contains("x9"), () -> "nine times has to be on the row: " + row);
-        assertTrue(row.contains("bread"), () -> "and what it was: " + row);
         assertFalse(row.contains("minecraft:"),
-                () -> "the namespace is ten characters of nothing on every row: " + row);
+                () -> "no registry id reaches a player, on any row: " + row);
         assertTrue(row.length() <= CHAT_WIDTH,
                 () -> "a richer deed row is " + row.length() + " characters:\n" + row);
     }
@@ -385,10 +386,6 @@ class CommandLayoutTest {
                 Map.entry("deeds, an afternoon that happened nine times",
                         NamesakeCommands.deedRows(holder, List.of(new Memories.Slot(firstHand.id(),
                                 firstHand, 9)), 200)),
-                Map.entry("deeds, a gift with an object on it", NamesakeCommands.deedRows(holder,
-                        List.of(once(Deed.of(DeedType.GIFT_WANTED, viewer, holder.id(),
-                                holder.settlementId(), 198, "minecraft:enchanted_golden_apple"))),
-                        200)),
                 // Session 10's command, in the four states it has. The first two are absences and
                 // are the ones this guard exists for: session 07 shipped three over-width absence
                 // branches past a version of it that measured a populated fixture.
@@ -511,7 +508,7 @@ class CommandLayoutTest {
         NpcRegistry known = boardVillage(here, 9);
         // A village that has watched things happen, been told about others, and taken the player in.
         for (int i = 0; i < 9; i++) {
-            known.putBond(boardResident(0, i), viewer, new Bond((byte) 30, (byte) 25, (byte) 0,
+            known.putBond(boardResident(0, i), viewer, new Bond((byte) 30, (byte) 25,
                     (byte) 0, (short) 0, 40, (short) 0, (byte) 25));
         }
         Settlement neighbour = boardSettlement(1, new net.minecraft.core.BlockPos(-900, 64, -900));
@@ -519,7 +516,7 @@ class CommandLayoutTest {
         known.put(Persona.create(boardResident(1, 0), 0L).placed(1, 0, Culture.KARSK.id()));
         for (int i = 0; i < 9; i++) {
             known.remember(boardResident(0, i), Deed.of(DeedType.FED_HUNGRY, viewer,
-                    boardResident(0, 0), 0, 30 + i, "minecraft:enchanted_golden_apple"));
+                    boardResident(0, 0), 0, 30 + i));
             known.remember(boardResident(0, i), Deed.of(DeedType.KILLED_RESIDENT, viewer,
                     boardResident(1, 0), 1, 20 + i).retold());
         }
@@ -565,13 +562,20 @@ class CommandLayoutTest {
      * plus a space — and it is built out of {@code w}, which is the widest letter the grammars can
      * produce, because a fixture that rolled short names is how the earn-rate row's cap went from
      * eighteen to forty-eight without turning anything red. A place name is a one-syllable stem plus
-     * the longest place word any culture has. The counts are larger than a save can hold, the day is
-     * four digits, and the object is the longest id in vanilla.
+     * the longest place word any culture has. The counts are larger than a save can hold and the day
+     * is four digits.
+     *
+     * <p><b>Every one of session 12's six standing phrases is on this board</b>, against that widest
+     * name, which is the row the pixel budget exists for: the name is drawn from the left and the
+     * standing against the right edge, so the two longest of each are what decide whether the column
+     * collides. {@code RESENTED}'s phrase is new this session and is the longest of the six.
      */
     private static Board widestBoard(boolean takenIn) {
         List<Board.Neighbour> opinions = new ArrayList<>();
-        for (net.namesake.dialogue.Pool pool : net.namesake.dialogue.Pool.values()) {
-            opinions.add(new Board.Neighbour("w".repeat(14) + " " + "w".repeat(12), pool));
+        for (net.namesake.social.Standing band : net.namesake.social.Standing.values()) {
+            for (net.namesake.dialogue.Pool pool : net.namesake.dialogue.Pool.values()) {
+                opinions.add(new Board.Neighbour("w".repeat(14) + " " + "w".repeat(12), band, pool));
+            }
         }
         String longestPlace = "w".repeat(12);
         List<Board.Memory> witnessed = new ArrayList<>();
@@ -581,9 +585,9 @@ class CommandLayoutTest {
                     new Board.Origin(false, longestPlace, "north-east"),
                     new Board.Origin(false, "", "north-east"),
                     new Board.Origin(false, "", ""))) {
-                witnessed.add(new Board.Memory(9999, type, "minecraft:enchanted_golden_apple",
+                witnessed.add(new Board.Memory(9999, type,
                         Memories.MAX_REPEATS, 999, Deed.FIRST_HAND, origin));
-                heard.add(new Board.Memory(9999, type, "minecraft:enchanted_golden_apple",
+                heard.add(new Board.Memory(9999, type,
                         Memories.MAX_REPEATS, 999, Deed.ATTRIBUTED, origin));
             }
         }
@@ -679,7 +683,7 @@ class CommandLayoutTest {
     void theBoardSaysWhatItDidNotShow() {
         List<Board.Memory> many = new ArrayList<>();
         for (int i = 0; i < BoardText.MAX_ROWS + 7; i++) {
-            many.add(new Board.Memory(100 - i, DeedType.FED_HUNGRY, Deed.NO_ITEM, 1, 3,
+            many.add(new Board.Memory(100 - i, DeedType.FED_HUNGRY, 1, 3,
                     Deed.FIRST_HAND, Board.Origin.HERE));
         }
         Board board = new Board("Skovadn", "Karsk", 100, 9, true,
@@ -750,7 +754,7 @@ class CommandLayoutTest {
 
         DialogueStats.Standing worst = new DialogueStats.Standing(
                 UUID.randomUUID(), longest,
-                Bond.fresh(0).apply(new int[]{0, 100, 0, 0}, 0, 15),
+                Bond.fresh(0).apply(new int[]{0, 100, 0}, 0, 15),
                 9999, 99999, Memories.RING_CAPACITY, 1.8F, 14);
         int column = NamesakeCommands.earnNameColumn(List.of(worst));
         String row = NamesakeCommands.earnRateRow(worst, column);

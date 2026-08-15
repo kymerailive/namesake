@@ -62,6 +62,7 @@ import net.namesake.social.Deed;
 import net.namesake.social.DeedBus;
 import net.namesake.social.DeedType;
 import net.namesake.social.Gossip;
+import net.namesake.social.Memories;
 import net.namesake.social.Personality;
 import net.namesake.social.Residency;
 import net.namesake.verb.ClientInteractionState;
@@ -200,8 +201,7 @@ public final class AttachBetHarness {
      * not the player who runs {@code verify}. A check keyed on the live player would read every
      * bond as absent and call it a pass.
      */
-    private record BondRow(UUID personaId, UUID about, byte trust, byte warmth, byte respect,
-                           byte fear) {
+    private record BondRow(UUID personaId, UUID about, byte trust, byte warmth, byte fear) {
     }
 
     /**
@@ -913,7 +913,7 @@ public final class AttachBetHarness {
             for (Persona resident : befriended) {
                 for (int gift = 0; gift < 4; gift++) {
                     DeedBus.record(registry, Deed.of(DeedType.GIFT_WANTED, viewer, resident.id(),
-                                    settlementId, today + days, "minecraft:bread"),
+                                    settlementId, today + days),
                             List.of(resident), 0);
                 }
             }
@@ -1249,8 +1249,7 @@ public final class AttachBetHarness {
                 ServerPlayer player = player(server);
                 int fed = 0;
                 for (Villager villager : villagersNearTheBell(level)) {
-                    if (DeedBus.emit(level, DeedType.FED_HUNGRY, player, villager,
-                            "minecraft:bread").happened()) {
+                    if (DeedBus.emit(level, DeedType.FED_HUNGRY, player, villager).happened()) {
                         fed++;
                     }
                 }
@@ -1848,7 +1847,7 @@ public final class AttachBetHarness {
         for (Resident resident : RESIDENTS) {
             registry.bonds().stored(resident.personaId(), actor).ifPresent(bond ->
                     BONDS.add(new BondRow(resident.personaId(), actor, bond.trust(), bond.warmth(),
-                            bond.respect(), bond.fear())));
+                            bond.fear())));
         }
         Namesake.LOGGER.info("[harness] recorded {} bond(s) for the verify phase", BONDS.size());
     }
@@ -2480,10 +2479,10 @@ public final class AttachBetHarness {
             }
             Bond bond = stored.get();
             if (bond.trust() != row.trust() || bond.warmth() != row.warmth()
-                    || bond.respect() != row.respect() || bond.fear() != row.fear()) {
+                    || bond.fear() != row.fear()) {
                 record(false, "BOND RELOAD " + row.personaId() + " came back as " + bond
                         + ", expected trust " + row.trust() + " warmth " + row.warmth()
-                        + " respect " + row.respect() + " fear " + row.fear());
+                        + " fear " + row.fear());
                 continue;
             }
             intact++;
@@ -2709,13 +2708,13 @@ public final class AttachBetHarness {
                             + registry.memories().holders() + " ring(s) the schema-" + onDisk
                             + " build wrote came through the repack — an unconverted ring reads as "
                             + "a villager who remembers nothing, silently");
-            record(registry.memories().of(registry.all().stream()
+            record(registry.memories().slotsOf(registry.all().stream()
                             .filter(persona -> !registry.memories().of(persona.id()).isEmpty())
                             .map(Persona::id).findFirst().orElse(UUID.randomUUID()))
-                            .stream().allMatch(deed -> deed.item().isEmpty()),
-                    "DATAFIXER " + step + " and every converted deed carries the only two values a "
-                            + "schema-6 build could have meant: no particular object, and it "
-                            + "happened once");
+                            .stream().allMatch(slot -> slot.repeats() >= Memories.Slot.ONCE),
+                    "DATAFIXER " + step + " and every converted slot carries a repeat count of at "
+                            + "least one — a schema-6 build could only have meant 'it happened', and "
+                            + "a count of zero would read as a memory of nothing");
         }
         record(!registry.isReadOnly(),
                 "DATAFIXER " + step + " the registry is writable, so the repacked file will be "
@@ -2989,7 +2988,7 @@ public final class AttachBetHarness {
         }
         for (BondRow bond : BONDS) {
             lines.add("bond " + bond.personaId() + " " + bond.about() + " " + bond.trust()
-                    + " " + bond.warmth() + " " + bond.respect() + " " + bond.fear());
+                    + " " + bond.warmth() + " " + bond.fear());
         }
         for (MemoryRow memory : MEMORIES) {
             lines.add("memory " + memory.personaId() + " " + String.join(" ", memory.ring()));
@@ -3061,7 +3060,7 @@ public final class AttachBetHarness {
                                 Byte.parseByte(parts[10]), Byte.parseByte(parts[11])});
                 case "bond" -> BONDS.add(new BondRow(UUID.fromString(parts[1]),
                         UUID.fromString(parts[2]), Byte.parseByte(parts[3]),
-                        Byte.parseByte(parts[4]), Byte.parseByte(parts[5]), Byte.parseByte(parts[6])));
+                        Byte.parseByte(parts[4]), Byte.parseByte(parts[5])));
                 case "memory" -> MEMORIES.add(new MemoryRow(UUID.fromString(parts[1]),
                         List.of(java.util.Arrays.copyOfRange(parts, 2, parts.length))));
                 case "resident" -> RESIDENTS.add(new Resident(UUID.fromString(parts[1]),

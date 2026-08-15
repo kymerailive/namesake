@@ -29,37 +29,43 @@ package net.namesake.social;
 public enum DeedType {
 
     /** A gift the villager actually wanted — vanilla's own {@code wantsToPickUp} decides. */
-    GIFT_WANTED(0, 2, 3, 0, 0, 1F / 3F),
+    GIFT_WANTED(0, 2, 3, 0, 1F / 3F),
 
     /** A gift they had no use for. The thought counts a little; the object does not. */
-    GIFT_UNWANTED(1, 1, 1, 0, 0, 1F / 3F),
+    GIFT_UNWANTED(1, 1, 1, 0, 1F / 3F),
 
     /** Food, to a villager vanilla itself says wants more of it. {@code DESIGN.md} §5's threshold. */
-    FED_HUNGRY(2, 3, 3, 0, 0, 1F / 3F),
+    FED_HUNGRY(2, 3, 3, 0, 1F / 3F),
 
     /**
-     * Violence against a resident. Respect rises a little on purpose: force <i>works</i>, and the
-     * settlement remembering that it worked is what makes {@code DESIGN.md} §6's force-resolution a
-     * real option rather than a strictly dominated one.
+     * Violence against a resident.
+     *
+     * <p><b>This row carried a {@code +1} respect column until session 12</b>, on the argument that
+     * force <i>works</i> and a settlement remembering that it worked is what keeps
+     * {@code DESIGN.md} §6's force-resolution from being strictly dominated. The argument stands;
+     * the column did not. One point, times a witness's half share, times a personality weight below
+     * neutral, rounds to nothing — so across five player models and a hundred in-game days the
+     * observed maximum respect anywhere was <b>four</b>, on one villager of nine. See {@link Bond}
+     * for why the axis is gone rather than the column being raised.
      */
-    STRUCK_RESIDENT(3, -6, -8, 1, 6, 0.5F),
+    STRUCK_RESIDENT(3, -6, -8, 6, 0.5F),
 
     /** The worst thing in the mod. Witnesses take it at full weight — there is no bystanding. */
-    KILLED_RESIDENT(4, -40, -60, 0, 35, 1F),
+    KILLED_RESIDENT(4, -40, -60, 35, 1F),
 
     /**
      * A raider killed inside a settlement during an active raid. Full witness share: this is the
      * one deed whose whole point is that the village saw it.
      */
-    DEFENDED_RAID(5, 8, 6, 12, 0, 1F);
+    DEFENDED_RAID(5, 8, 6, 0, 1F);
 
     private final short id;
     private final int[] delta;
     private final float witnessShare;
 
-    DeedType(int id, int trust, int warmth, int respect, int fear, float witnessShare) {
+    DeedType(int id, int trust, int warmth, int fear, float witnessShare) {
         this.id = (short) id;
-        this.delta = new int[]{trust, warmth, respect, fear};
+        this.delta = new int[]{trust, warmth, fear};
         this.witnessShare = witnessShare;
     }
 

@@ -99,7 +99,7 @@ class NpcRegistryTest {
     @DisplayName("a persona cannot be built with the wrong number of trait axes")
     void personaRejectsWrongTraitCount() {
         assertThrows(IllegalArgumentException.class,
-                () -> new Persona(UUID.randomUUID(), 0, 0, new byte[3], (byte) 0, 0, 0L, 0, (byte) 0));
+                () -> new Persona(UUID.randomUUID(), 0, 0, new byte[3], (byte) 0, 0L, 0, (byte) 0));
     }
 
     @Test
@@ -107,7 +107,7 @@ class NpcRegistryTest {
     void personaCopiesTraitsDefensively() {
         byte[] traits = new byte[Persona.TRAIT_COUNT];
         traits[Persona.BOLDNESS] = 50;
-        Persona persona = new Persona(UUID.randomUUID(), 0, 0, traits, (byte) 0, 0, 0L, 0, (byte) 0);
+        Persona persona = new Persona(UUID.randomUUID(), 0, 0, traits, (byte) 0, 0L, 0, (byte) 0);
 
         traits[Persona.BOLDNESS] = -50;
         assertEquals(50, persona.trait(Persona.BOLDNESS));
@@ -330,7 +330,7 @@ class NpcRegistryTest {
         assertTrue(registry.isDirty());
         registry.setDirty(false);
 
-        Bond bond = Bond.fresh(40).apply(new int[]{3, 3, 0, 0}, 40, Bond.DAILY_CAP);
+        Bond bond = Bond.fresh(40).apply(new int[]{3, 3, 0}, 40, Bond.DAILY_CAP);
         registry.putBond(personaId, A_PLAYER, bond);
 
         // CLAUDE.md's note for this session: a SavedData is only written when it is dirty, so a
@@ -352,7 +352,7 @@ class NpcRegistryTest {
         registry.put(stamped(bram, 3, 1L, (byte) 0));
         registry.setDirty(false);
 
-        registry.putBond(anna, bram, Bond.fresh(1).apply(new int[]{5, 0, 0, 0}, 1, Bond.DAILY_CAP));
+        registry.putBond(anna, bram, Bond.fresh(1).apply(new int[]{5, 0, 0}, 1, Bond.DAILY_CAP));
 
         // Session 05 decision 1: the key is general so session 16 needs no migration, and the
         // population is restricted because an NPC-to-NPC bond has no consumer until then. Twelve
@@ -362,7 +362,7 @@ class NpcRegistryTest {
         assertFalse(registry.isDirty(), "and a refusal must not dirty the file either");
 
         // The same bond about somebody the registry has never heard of — a player — goes through.
-        registry.putBond(anna, A_PLAYER, Bond.fresh(1).apply(new int[]{5, 0, 0, 0}, 1, Bond.DAILY_CAP));
+        registry.putBond(anna, A_PLAYER, Bond.fresh(1).apply(new int[]{5, 0, 0}, 1, Bond.DAILY_CAP));
         assertEquals(1, registry.bonds().size());
     }
 
@@ -372,7 +372,7 @@ class NpcRegistryTest {
         NpcRegistry registry = new NpcRegistry();
         UUID personaId = UUID.randomUUID();
         registry.put(stamped(personaId, 3, 1L, (byte) 0));
-        registry.putBond(personaId, A_PLAYER, Bond.fresh(1).apply(new int[]{5, 0, 0, 0}, 1, Bond.DAILY_CAP));
+        registry.putBond(personaId, A_PLAYER, Bond.fresh(1).apply(new int[]{5, 0, 0}, 1, Bond.DAILY_CAP));
         registry.setDirty(false);
 
         assertTrue(registry.remove(personaId));
@@ -387,7 +387,7 @@ class NpcRegistryTest {
         NpcRegistry good = new NpcRegistry();
         UUID personaId = UUID.randomUUID();
         good.put(stamped(personaId, 3, 1L, (byte) 0));
-        good.putBond(personaId, A_PLAYER, Bond.fresh(1).apply(new int[]{5, 0, 0, 0}, 1, Bond.DAILY_CAP));
+        good.putBond(personaId, A_PLAYER, Bond.fresh(1).apply(new int[]{5, 0, 0}, 1, Bond.DAILY_CAP));
         CompoundTag tag = good.save(new CompoundTag(), null);
 
         tag.getList("bonds", Tag.TAG_COMPOUND).add(new CompoundTag());
@@ -545,7 +545,7 @@ class NpcRegistryTest {
         schemaFour.put(stamped(personaId, 0, 1L, (byte) 9));
         schemaFour.putSettlement(settlement(0, 100, -200));
         schemaFour.putBond(personaId, A_PLAYER,
-                Bond.fresh(2).apply(new int[]{3, 3, 0, 0}, 2, Bond.DAILY_CAP));
+                Bond.fresh(2).apply(new int[]{3, 3, 0}, 2, Bond.DAILY_CAP));
         CompoundTag tag = schemaFour.save(new CompoundTag(), null);
         tag.putInt(NpcSchema.KEY_VERSION, 4);
         tag.remove("memories");

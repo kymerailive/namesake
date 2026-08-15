@@ -3,6 +3,7 @@ package net.namesake.dialogue;
 import net.namesake.culture.Culture;
 import net.namesake.npc.NpcRegistry;
 import net.namesake.npc.Persona;
+import net.namesake.social.Standing;
 import net.namesake.social.Bond;
 import net.namesake.social.Deed;
 import net.namesake.social.DeedType;
@@ -65,7 +66,7 @@ class DialogueTest {
      * this constructs the end state rather than simulating the days.
      */
     private static Bond bond(int trust, int warmth) {
-        return new Bond((byte) trust, (byte) warmth, (byte) 0, (byte) 0, (short) 0, 0, (short) 0,
+        return new Bond((byte) trust, (byte) warmth, (byte) 0, (short) 0, 0, (short) 0,
                 (byte) warmth);
     }
 
@@ -433,8 +434,8 @@ class DialogueTest {
     void poolSelectionStartsAtStranger() {
         assertEquals(Pool.STRANGER, Dialogue.poolFor(Bond.fresh(0), false));
         assertEquals(Pool.KNOWN, Dialogue.poolFor(bond(2, 0), false));
-        assertEquals(Pool.WARM, Dialogue.poolFor(bond(0, Dialogue.WARM_WARMTH), false));
-        assertEquals(Pool.KNOWN, Dialogue.poolFor(bond(0, Dialogue.WARM_WARMTH - 1), false));
+        assertEquals(Pool.WARM, Dialogue.poolFor(bond(0, Standing.WARM_WARMTH), false));
+        assertEquals(Pool.KNOWN, Dialogue.poolFor(bond(0, Standing.WARM_WARMTH - 1), false));
         assertEquals(Pool.HOSTILE, Dialogue.poolFor(bond(-1, 0), false));
     }
 
@@ -631,7 +632,7 @@ class DialogueTest {
         Set<Pool> reached = new LinkedHashSet<>();
         reached.add(Dialogue.poolFor(Bond.fresh(0), false));
         reached.add(Dialogue.poolFor(bond(4, 2), false));
-        reached.add(Dialogue.poolFor(bond(4, Dialogue.WARM_WARMTH), false));
+        reached.add(Dialogue.poolFor(bond(4, Standing.WARM_WARMTH), false));
         reached.add(Dialogue.poolFor(bond(-8, 0), false));
         assertEquals(Pool.values().length, reached.size());
         assertNotEquals(Pool.STRANGER, Dialogue.poolFor(bond(4, 2), false));

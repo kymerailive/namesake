@@ -45,8 +45,8 @@ class MemoriesTest {
         return Deed.of(DeedType.FED_HUNGRY, A_PLAYER, ANNA, 0, day);
     }
 
-    private static Deed gift(int day, String item) {
-        return Deed.of(DeedType.GIFT_WANTED, A_PLAYER, ANNA, 0, day, item);
+    private static Deed gift(int day) {
+        return Deed.of(DeedType.GIFT_WANTED, A_PLAYER, ANNA, 0, day);
     }
 
     // --- capacity and overflow ---------------------------------------------------------------
@@ -166,32 +166,23 @@ class MemoriesTest {
     }
 
     /**
-     * The honest cost of keeping {@link Deed#item()} out of {@link Deed#id()}.
+     * <b>Two of one thing on one day are one memory that happened twice.</b>
      *
-     * <p>A loaf and an apple on the same day are one memory, because the id is what a deed <i>is</i>
-     * and putting the object into it would hand the ring back its grindability. So the slot cannot
-     * name either object, and it names neither. {@code DESIGN.md} §2's rule for gossip, applied to a
-     * ring: <b>distorts, never lies.</b>
+     * <p>Until session 12 this test was about the object as well: a loaf and an apple on one day
+     * were one memory that could name neither of them, which is {@code DESIGN.md} §2's rule for
+     * gossip applied to a ring. {@code Deed.item} lost its rule 5 exemption with no consumer to
+     * name, so there is no longer an object to disagree about — and what the slot was always
+     * <i>for</i> is here: the count, which is session 09's second memory-depth route and is
+     * consumed by the eviction policy.
      */
     @Test
-    @DisplayName("a slot that collects two different objects names neither of them")
-    void aSlotThatCollectsTwoObjectsNamesNeither() {
+    @DisplayName("two of one thing on one day are one memory that happened twice")
+    void aRepeatIsCountedRatherThanStored() {
         Memories memories = new Memories();
-        memories.remember(ANNA, gift(3, "minecraft:bread"));
-        assertEquals("minecraft:bread", memories.of(ANNA).get(0).item());
-
-        assertTrue(memories.remember(ANNA, gift(3, "minecraft:apple")));
+        memories.remember(ANNA, gift(3));
+        assertTrue(memories.remember(ANNA, gift(3)));
         assertEquals(1, memories.of(ANNA).size(), "still one memory");
         assertEquals(2, memories.slotsOf(ANNA).get(0).repeats(), "that happened twice");
-        assertEquals(Deed.NO_ITEM, memories.of(ANNA).get(0).item(),
-                "and it cannot honestly say which object, so it says neither");
-
-        // The same object twice keeps it. The rule is about disagreement, not about repetition.
-        Memories bread = new Memories();
-        bread.remember(BRAM, gift(3, "minecraft:bread"));
-        bread.remember(BRAM, gift(3, "minecraft:bread"));
-        assertEquals("minecraft:bread", bread.of(BRAM).get(0).item());
-        assertEquals(2, bread.slotsOf(BRAM).get(0).repeats());
     }
 
     /**
@@ -333,20 +324,20 @@ class MemoriesTest {
     @DisplayName("two deeds that differ in any identity field are two deeds")
     void everyIdentityFieldSeparatesTwoDeeds() {
         Deed base = new Deed(DeedType.FED_HUNGRY.id(), A_PLAYER, ANNA, 3, 7,
-                Deed.NOMINAL, Deed.FIRST_HAND, Deed.NO_ITEM);
+                Deed.NOMINAL, Deed.FIRST_HAND);
         Memories memories = new Memories();
         memories.remember(ANNA, base);
 
         assertTrue(memories.remember(ANNA, new Deed(DeedType.GIFT_WANTED.id(), A_PLAYER, ANNA, 3, 7,
-                Deed.NOMINAL, Deed.FIRST_HAND, Deed.NO_ITEM)), "a different kind of deed");
+                Deed.NOMINAL, Deed.FIRST_HAND)), "a different kind of deed");
         assertTrue(memories.remember(ANNA, new Deed(DeedType.FED_HUNGRY.id(), ANOTHER_PLAYER, ANNA,
-                3, 7, Deed.NOMINAL, Deed.FIRST_HAND, Deed.NO_ITEM)), "a different actor");
+                3, 7, Deed.NOMINAL, Deed.FIRST_HAND)), "a different actor");
         assertTrue(memories.remember(ANNA, new Deed(DeedType.FED_HUNGRY.id(), A_PLAYER, BRAM, 3, 7,
-                Deed.NOMINAL, Deed.FIRST_HAND, Deed.NO_ITEM)), "a different subject");
+                Deed.NOMINAL, Deed.FIRST_HAND)), "a different subject");
         assertTrue(memories.remember(ANNA, new Deed(DeedType.FED_HUNGRY.id(), A_PLAYER, ANNA, 4, 7,
-                Deed.NOMINAL, Deed.FIRST_HAND, Deed.NO_ITEM)), "a different settlement");
+                Deed.NOMINAL, Deed.FIRST_HAND)), "a different settlement");
         assertTrue(memories.remember(ANNA, new Deed(DeedType.FED_HUNGRY.id(), A_PLAYER, ANNA, 3, 8,
-                Deed.NOMINAL, Deed.FIRST_HAND, Deed.NO_ITEM)), "a different day");
+                Deed.NOMINAL, Deed.FIRST_HAND)), "a different day");
         assertTrue(memories.remember(ANNA, base.withSeverity((byte) 50)),
                 "a different severity — a blow for two hearts is not the blow for eight");
 
@@ -358,8 +349,7 @@ class MemoriesTest {
     void confidenceIsNotPartOfWhatADeedIs() {
         Deed firstHand = onDay(2);
         Deed retold = new Deed(firstHand.typeId(), firstHand.actor(), firstHand.subject(),
-                firstHand.settlementId(), firstHand.gameDay(), firstHand.severity(), (byte) 72,
-                firstHand.item());
+                firstHand.settlementId(), firstHand.gameDay(), firstHand.severity(), (byte) 72);
 
         assertEquals(firstHand.id(), retold.id());
 
@@ -435,9 +425,9 @@ class MemoriesTest {
             original.remember(ANNA, onDay(day));
         }
         // An afternoon with a count and an object on it, so both new fields cross the disk.
-        original.remember(ANNA, gift(200, "minecraft:bread"));
-        original.remember(ANNA, gift(200, "minecraft:bread"));
-        original.remember(ANNA, gift(200, "minecraft:bread"));
+        original.remember(ANNA, gift(200));
+        original.remember(ANNA, gift(200));
+        original.remember(ANNA, gift(200));
 
         Deed struck = Deed.of(DeedType.STRUCK_RESIDENT, ANOTHER_PLAYER, BRAM, 4, 12)
                 .withSeverity((byte) 37);
@@ -452,8 +442,6 @@ class MemoriesTest {
         assertEquals(original.slotsOf(ANNA), reloaded.slotsOf(ANNA), "including every count");
         assertEquals(List.of(struck), reloaded.of(BRAM));
         assertEquals(37, reloaded.of(BRAM).get(0).severity(), "severity is not lost in the round trip");
-        assertEquals("minecraft:bread",
-                reloaded.of(ANNA).get(reloaded.of(ANNA).size() - 1).item());
         assertEquals(3, reloaded.slotsOf(ANNA).get(reloaded.of(ANNA).size() - 1).repeats());
         assertEquals(Memories.RING_CAPACITY + 1, reloaded.size());
         assertEquals(2, reloaded.holders());
@@ -558,7 +546,7 @@ class MemoriesTest {
         // Built by hand, because a Memories at this capacity cannot produce an over-long ring to
         // read back — which is the point: the file was written by a build that could.
         int written = Memories.RING_CAPACITY + 20;
-        byte[] packed = new byte[written * 25];
+        byte[] packed = new byte[written * 21];
         java.nio.ByteBuffer buffer = java.nio.ByteBuffer.wrap(packed);
         for (int day = 0; day < written; day++) {
             // The first slot is a killing; everything after it is a gift.
@@ -569,7 +557,6 @@ class MemoriesTest {
             buffer.putInt(day);
             buffer.put(Deed.NOMINAL);
             buffer.put(Deed.FIRST_HAND);
-            buffer.putInt(0);
             buffer.put((byte) 1);
         }
         CompoundTag entry = new CompoundTag();
@@ -583,9 +570,6 @@ class MemoriesTest {
         System.arraycopy(UUIDUtil.uuidToIntArray(A_PLAYER), 0, actors, 0, 4);
         System.arraycopy(UUIDUtil.uuidToIntArray(ANNA), 0, actors, 4, 4);
         tag.putIntArray("memoryActors", actors);
-        ListTag items = new ListTag();
-        items.add(StringTag.valueOf(Deed.NO_ITEM));
-        tag.put("memoryItems", items);
 
         Memories reloaded = new Memories();
         assertEquals(0, reloaded.readFrom(tag), "a bound this build does not share is not damage");
@@ -651,8 +635,7 @@ class MemoriesTest {
             UUID persona = new UUID(0x5EED_0000_0000_0000L, holder);
             for (int day = 0; day < Memories.RING_CAPACITY; day++) {
                 memories.remember(persona, new Deed(DeedType.FED_HUNGRY.id(), A_PLAYER, persona,
-                        holder % 50, day, Deed.NOMINAL, Deed.FIRST_HAND,
-                        items[(holder + day) % items.length]));
+                        holder % 50, day, Deed.NOMINAL, Deed.FIRST_HAND));
             }
         }
         assertEquals(400 * Memories.RING_CAPACITY, memories.size());
@@ -710,23 +693,27 @@ class MemoriesTest {
     @DisplayName("the deed id of a fixed deed is pinned, so the derivation cannot drift by accident")
     void theDerivationIsPinned() {
         Deed fixed = new Deed(DeedType.FED_HUNGRY.id(), A_PLAYER, ANNA, 3, 7,
-                Deed.NOMINAL, Deed.FIRST_HAND, Deed.NO_ITEM);
+                Deed.NOMINAL, Deed.FIRST_HAND);
         assertEquals(-4535043805363013135L, fixed.id());
     }
 
     /**
-     * <b>Session 09's field is carried, not identified by, and the pin above is what says so.</b>
+     * <b>Session 09's field was carried and not identified by, and session 12 collected the
+     * dividend.</b>
      *
-     * <p>Adding {@link Deed#item()} to the derivation is the obvious reading of "richer per memory"
-     * and it would hand the ring back its grindability: an afternoon of one gift is one entry, and an
-     * afternoon of eight different junk items would be eight. The daily cap does not watch that door
-     * — content addressing is what does.
+     * <p>Folding {@code Deed.item} into the derivation was the obvious reading of "richer per
+     * memory" and would have handed the ring back its grindability: an afternoon of one gift is one
+     * entry, and an afternoon of eight different junk items would have been eight. Session 09
+     * declined, and that decision is what made the field's deletion at session 12 free —
+     * <b>the id above is the same literal it was at session 09</b>, so no ring in any save
+     * re-partitions and the migration has no id to move. The pin two tests up is what says so, and
+     * it is deliberately the assertion this note points at rather than a second one here.
      */
     @Test
-    @DisplayName("two gifts of different objects on one day are one deed, not two")
-    void theObjectIsOutsideTheDerivation() {
-        assertEquals(gift(7, "minecraft:bread").id(), gift(7, "minecraft:apple").id());
-        assertEquals(gift(7, "minecraft:bread").id(), gift(7, Deed.NO_ITEM).id());
+    @DisplayName("two gifts on one day are one deed, and the derivation never knew what they were")
+    void theObjectWasOutsideTheDerivation() {
+        assertEquals(gift(7).id(), gift(7).id());
+        assertEquals(Deed.of(DeedType.GIFT_WANTED, A_PLAYER, ANNA, 0, 7).id(), gift(7).id());
     }
 
     @Test
