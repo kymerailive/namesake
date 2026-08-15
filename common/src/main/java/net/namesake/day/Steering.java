@@ -728,16 +728,33 @@ public final class Steering {
             return;
         }
 
-        tracked.servedSlot = slot;
-        tracked.servedVigil = vigil;
         tracked.parked = false;
         tracked.standoff = null;
         tracked.gaveUp = false;
 
         if (errand != null) {
-            beginErrand(level, levelState, tracked, errand);
+            if (!beginErrand(level, levelState, tracked, errand)) {
+                // NOT MARKED SERVED, and this is session 13's own guard arriving at the next
+                // mechanic — found the same way, by a harness leg reading a number nobody could
+                // explain. An errand needs two things vanilla supplies: a JOB_SITE and the point of
+                // interest it walks to. Both are brain memories, both are written by behaviours in
+                // the CORE package, and **both can be absent for a few ticks after a chunk load**:
+                // ValidateNearbyPoi erases a point of interest whose chunk the POI manager has not
+                // caught up with, and AcquirePoi puts it back a moment later. Marking the window
+                // served on that tick would cost the villager the WHOLE window — `crossed` would be
+                // false for ever after — and the reload leg measured exactly that: one villager of
+                // six on an errand, five standing at their benches with every precondition true and
+                // nothing to say why. Left unserved, they are retried the next time their own path
+                // gate opens, bounded by the gate and the governor exactly as a crossing is.
+                return;
+            }
+            tracked.servedSlot = slot;
+            tracked.servedVigil = vigil;
             return;
         }
+
+        tracked.servedSlot = slot;
+        tracked.servedVigil = vigil;
 
         if (!slot.isLabour() || DayPlan.isDiligent(tracked.persona)) {
             // A diligent villager is left entirely alone. Vanilla walks them to their workstation,
@@ -846,14 +863,18 @@ public final class Steering {
      * is not running, so nothing writes the job site back and there is nothing to decline. Session
      * 13's standoff pays a memory read and sometimes an erase on every tick of every steered
      * villager; an errand pays nothing after the tick it begins.
+     *
+     * @return whether the errand actually began. <b>False is not "nothing to do" — it is "not
+     *         yet"</b>, and the caller must leave the window unserved so the villager is asked
+     *         again. See the comment at the call site for the run that proved it.
      */
-    private static void beginErrand(ServerLevel level, LevelState levelState, Tracked tracked,
-                                    Errand errand) {
+    private static boolean beginErrand(ServerLevel level, LevelState levelState, Tracked tracked,
+                                       Errand errand) {
         Villager villager = tracked.villager;
         if (errand.needsAJob() && jobSiteOf(villager) == null) {
             // Nothing to carry. A nitwit and an unemployed villager are left to vanilla, which is
             // the same absence branch the standoff has and the same direction of failing safe.
-            return;
+            return false;
         }
         BlockPos where = villager.getBrain().getMemory(errand.destination())
                 .filter(pos -> pos.dimension() == level.dimension())
@@ -862,7 +883,7 @@ public final class Steering {
         if (where == null) {
             // No bell in reach, or no bed claimed. AcquirePoi writes both and a villager in the
             // wilderness has neither, so the plan has nowhere to send them and says nothing.
-            return;
+            return false;
         }
 
         Brain<Villager> brain = villager.getBrain();
@@ -875,7 +896,7 @@ public final class Steering {
                     + "vanilla's schedule rather than leaving them where the attempt left them",
                     tracked.persona.id());
             brain.updateActivityFromSchedule(level.getDayTime(), level.getGameTime());
-            return;
+            return false;
         }
         tracked.errand = errand;
         tracked.errandTarget = where;
@@ -885,6 +906,7 @@ public final class Steering {
         if (Profiling.ENABLED) {
             Meters.count("Steering.beginErrand activations");
         }
+        return true;
     }
 
     /**
@@ -933,6 +955,8 @@ public final class Steering {
                 // Layer 2. Vanilla moved them on; take our walk target back before it can starve
                 // LocateHidingPlace, and stop claiming an errand we are not on.
                 forgetErrand(tracked);
+            } else {
+                nudgeTheErrand(level, tracked);
             }
             return;
         }
@@ -943,6 +967,56 @@ public final class Steering {
                     + "plan can account for. Put back on vanilla's own schedule.",
                     tracked.persona.id());
             leaveErrand(level, levelState, tracked);
+        }
+    }
+
+    /**
+     * <b>Puts a villager who was knocked off their errand back on it — and the harness found this
+     * rather than a review.</b>
+     *
+     * <p>{@link #beginErrand} issues <b>one</b> walk target, which is the whole budget argument. The
+     * first run of the errand leg showed what one walk target is worth when six villagers arrive at
+     * one place from one direction: three of six reached their own hearth, and two ended up standing
+     * on the same block three blocks short of their beds, because {@code MoveToTargetSink} erases
+     * {@code WALK_TARGET} the moment it decides it has arrived and villagers push each other. From
+     * outside, a villager stopped seven blocks from their own door for an hour is <i>"one intent,
+     * one place"</i> failing quietly.
+     *
+     * <p><b>Only when the walk target is absent</b>, which is the clause that keeps this from being
+     * the tug-of-war the activity swap exists to avoid: whatever a villager is walking to right now
+     * is theirs — a dropped loaf, a trading player — and this only speaks when nothing is. It runs
+     * behind the path gate at a seventh of the roster, so it costs one map lookup per errand
+     * villager per seven ticks.
+     *
+     * <p><b>And it gives up</b>, on vanilla's own signal and for session 13's reason: a villager who
+     * genuinely cannot reach where they were sent must be handed back rather than asked again for
+     * ever, or {@code SetWalkTargetFromBlockMemory}'s {@code tooLongUnreachableDuration} eventually
+     * releases their job site and they lose their profession because of a place we chose.
+     */
+    private static void nudgeTheErrand(ServerLevel level, Tracked tracked) {
+        BlockPos where = tracked.errandTarget;
+        if (where == null || tracked.gaveUp) {
+            return;
+        }
+        Villager villager = tracked.villager;
+        Brain<Villager> brain = villager.getBrain();
+        if (brain.hasMemoryValue(MemoryModuleType.WALK_TARGET)
+                || where.distManhattan(villager.blockPosition())
+                <= tracked.errand.closeEnough() + ARRIVED_WITHIN) {
+            return;
+        }
+        long since = brain.getMemory(MemoryModuleType.CANT_REACH_WALK_TARGET_SINCE)
+                .orElse(Long.MIN_VALUE);
+        if (since != Long.MIN_VALUE && level.getGameTime() - since >= DayPlan.STUCK_AFTER_TICKS) {
+            tracked.gaveUp = true;
+            Namesake.LOGGER.debug("Errand for persona {} is unreachable; leaving them to vanilla",
+                    tracked.persona.id());
+            return;
+        }
+        brain.setMemory(MemoryModuleType.WALK_TARGET,
+                new WalkTarget(where, tracked.errand.speed(), tracked.errand.closeEnough()));
+        if (Profiling.ENABLED) {
+            Meters.count("Steering.nudgeTheErrand re-issued walk targets");
         }
     }
 
@@ -1027,12 +1101,31 @@ public final class Steering {
                     + DayPlan.BOLDNESS_TO_WATCH + ")";
         }
         Brain<Villager> brain = villager.getBrain();
+        boolean running = brain.isActive(Errand.ACTIVITY);
+        LevelState levelState = STATE.get(level);
+        Tracked tracked = levelState == null ? null : levelState.roster.get(villager.getId());
         return errand + " in slot " + slot
-                + "; brain in " + brain.getActiveNonCoreActivity().orElse(null)
-                + ", may enter " + mayEnter(errand, villager)
+                // Named rather than printed raw. ERRAND borrows a vanilla activity key — see
+                // Errand.ACTIVITY — and a diagnostic that said "brain in lay_spawn" about a villager
+                // carrying grain across a square would be the one place the borrowing costs
+                // anything, which is exactly the place to spend a word on it.
+                + "; brain in " + (running ? "ERRAND (the borrowed key "
+                        + Errand.ACTIVITY.getName() + ")"
+                        : String.valueOf(brain.getActiveNonCoreActivity().orElse(null)))
+                // Only meaningful while they are NOT on one: the gate asks what a villager may be
+                // taken out of, and ERRAND is deliberately not on its own allowlist.
+                + (running ? ", already running" : ", may begin " + mayEnter(errand, villager))
                 + ", destination " + brain.getMemory(errand.destination()).orElse(null)
                 + ", job " + jobSiteOf(villager)
-                + ", running " + brain.isActive(Errand.ACTIVITY);
+                // The three that say whether a villager who is not where they were sent is still on
+                // their way or has been abandoned. Without them the answer to "why is that one
+                // standing there" is a guess, which is what session 12 spent three red mains on.
+                + ", walk target " + brain.getMemory(MemoryModuleType.WALK_TARGET)
+                        .map(target -> target.getTarget().currentBlockPosition().toShortString())
+                        .orElse("none")
+                + ", cannot reach since " + brain.getMemory(
+                        MemoryModuleType.CANT_REACH_WALK_TARGET_SINCE).orElse(null)
+                + (tracked != null && tracked.gaveUp ? ", GAVE UP" : "");
     }
 
     /**
@@ -1331,6 +1424,31 @@ public final class Steering {
             }
         }
         return running;
+    }
+
+    /**
+     * <b>Whether the plan has this villager on its roster at all, and what it believes about them.</b>
+     *
+     * <p>Added at session 14 because the reload leg read <i>one of six villagers was sent on an
+     * errand</i> and nothing in the mod could say why. The roster is the one piece of the day plan
+     * that is neither derived nor persisted — it is rebuilt from the entity-load hook and from
+     * nothing else — so <b>"is this villager known to the plan" is the first question to ask about
+     * any villager the plan is not steering</b>, and until now there was no way to ask it.
+     */
+    public static String trackedState(Villager villager) {
+        if (!(villager.level() instanceof ServerLevel level)) {
+            return "not on a server";
+        }
+        LevelState levelState = STATE.get(level);
+        Tracked tracked = levelState == null ? null : levelState.roster.get(villager.getId());
+        if (tracked == null) {
+            return "NOT ON THE ROSTER";
+        }
+        return "roster: served " + tracked.servedSlot + (tracked.servedVigil ? "+vigil" : "")
+                + ", errand " + tracked.errand
+                + ", generated " + tracked.persona.isGenerated()
+                + ", queued " + tracked.queued
+                + (tracked.gaveUp ? ", gave up" : "");
     }
 
     /** Which errand this villager is on, if the plan put them on one and the brain agrees. */

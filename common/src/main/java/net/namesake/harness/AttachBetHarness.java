@@ -654,7 +654,7 @@ public final class AttachBetHarness {
                                 + homes + " HOME, " + bells + " MEETING_POINT of "
                                 + WORKERS_PRESENT.size());
                 enterSlotAt(server, level, net.namesake.day.DaySlot.HAUL.startsAt() + 400);
-                beginAwait(3000);
+                beginAwait(5000);
             }
             case 43 -> checkTheHaul(server, level);
             case 44 -> checkTheHearths(server, level);
@@ -694,13 +694,29 @@ public final class AttachBetHarness {
                     net.namesake.day.Steering.explainErrand(level, villager));
         }
 
+        // THE CROWD, NOT THE RADIUS — and this assertion is the third version of itself, which is
+        // the useful part. The first was "all six inside twelve blocks of the bell": an arrival
+        // radius somebody picked, and six villagers converging on one block from fifty blocks of
+        // bench-line push each other, so one run had the sixth thirteen blocks out and still
+        // walking. The second was "nearer the bell than their own workstation": scale-free, but the
+        // fixture puts two of the six benches eleven blocks from the bell, so for those two it is a
+        // coin about which side of the crowd they ended on. **How far apart the six of them are** is
+        // neither. It is what §7's fourth legibility law means by *the crowd is the message*, it
+        // needs no radius, and it cannot be satisfied by a village standing where it started:
+        // before the slot these six spanned the whole bench line.
+        int spread = spanOf(WORKERS_PRESENT.stream().map(Villager::blockPosition).toList());
+        int spreadBefore = spanOf(WORKERS_PRESENT.stream()
+                .map(v -> WHERE_THEY_STARTED.getOrDefault(v.getUUID(), v.blockPosition())).toList());
+        record(spread <= spreadBefore / 2 && spread <= 2 * HAUL_ARRIVED,
+                "HAUL the six of them stood " + spreadBefore + " blocks apart when the slot began "
+                        + "and " + spread + " now — six workshops ten blocks apart became one place, "
+                        + "which is what 'sacks moving one direction' is when the direction is a "
+                        + "place");
         long arrived = WORKERS_PRESENT.stream()
                 .filter(v -> bellSite.distManhattan(v.blockPosition()) <= HAUL_ARRIVED).count();
-        record(arrived == WORKERS_PRESENT.size(),
-                "HAUL " + arrived + " of " + WORKERS_PRESENT.size() + " villager(s) walked from "
-                        + "their own workstation to the bell — six benches ten blocks apart, one "
-                        + "place, which is what 'sacks moving one direction' is when the direction "
-                        + "is a place");
+        Namesake.LOGGER.info("[harness] HAUL {} of {} are inside {} blocks of the bell at this "
+                        + "instant — reported, because a crowd converging on one block is a crowd "
+                        + "rather than a criterion", arrived, WORKERS_PRESENT.size(), HAUL_ARRIVED);
         long moved = WORKERS_PRESENT.stream()
                 .filter(v -> {
                     BlockPos from = WHERE_THEY_STARTED.get(v.getUUID());
@@ -741,7 +757,7 @@ public final class AttachBetHarness {
 
         photograph(server, level, "namesake-errand-haul-");
         enterSlotAt(server, level, net.namesake.day.DaySlot.NOON.startsAt() + 400);
-        beginAwait(3000);
+        beginAwait(5000);
     }
 
     /**
@@ -881,7 +897,7 @@ public final class AttachBetHarness {
             return;
         }
         enterSlotAt(server, level, net.namesake.day.DaySlot.VIGIL_BEGINS_AT + 500);
-        beginAwait(4000);
+        beginAwait(6000);
     }
 
     /**
@@ -895,9 +911,17 @@ public final class AttachBetHarness {
      * would mean nothing if the other four were out too.
      */
     private static void checkTheNightWatch(MinecraftServer server, ServerLevel level) {
+        // THE POST, NOT THE ACTIVITY, and the difference cost this leg a run. The first version
+        // polled for the watch to be *in* ERRAND and for everybody else to be asleep — and both are
+        // true within a couple of hundred ticks, because the activity switches instantly and the
+        // sleepers only walk six blocks to a bed. The watch has twenty-five to walk. So the leg
+        // asserted where they were standing before they had finished getting there, and read a
+        // mechanic that was working as one that had not moved. Session 13's own lesson: poll for the
+        // condition the thing you are about to assert actually needs.
         if (stillWaiting(server, () -> refreshWorkers(level) == WORKERS
                         && WORKERS_PRESENT.stream().filter(AttachBetHarness::isAWatchman)
-                        .allMatch(v -> v.getBrain().isActive(net.namesake.day.Errand.ACTIVITY))
+                        .allMatch(v -> v.getBrain().isActive(net.namesake.day.Errand.ACTIVITY)
+                                && bellSite.distManhattan(v.blockPosition()) <= HAUL_ARRIVED)
                         && WORKERS_PRESENT.stream().filter(v -> !isAWatchman(v))
                         .allMatch(Villager::isSleeping),
                 false, "the watch to take up its post and the rest of the village to go to bed")) {
@@ -958,6 +982,17 @@ public final class AttachBetHarness {
 
     /** Manhattan blocks from the bell that count as having arrived for the haul. */
     private static final int HAUL_ARRIVED = 12;
+
+    /** How far apart the furthest two of a group are, in Manhattan blocks. */
+    private static int spanOf(List<BlockPos> where) {
+        int span = 0;
+        for (int i = 0; i < where.size(); i++) {
+            for (int j = i + 1; j < where.size(); j++) {
+                span = Math.max(span, where.get(i).distManhattan(where.get(j)));
+            }
+        }
+        return span;
+    }
 
     /** True while this villager is at the bed vanilla gave them, whichever one that turned out to be. */
     private static boolean isAtTheirHearth(Villager villager) {
@@ -3991,10 +4026,17 @@ public final class AttachBetHarness {
                 beginAwait(2400);
             }
             case 6 -> {
-                if (stillWaiting(server, () -> level.getEntitiesOfClass(Villager.class,
-                                new AABB(workshopSite).inflate(64)).stream()
-                        .anyMatch(v -> v.getBrain().isActive(net.namesake.day.Errand.ACTIVITY)),
-                        false, "a reloaded villager to be sent on an errand")) {
+                // EVERY villager, not any. The first version polled for one and read "2 of 6", which
+                // is the governor doing its job — a crossing goes through the path gate at one tick
+                // in seven and the governor at eight a tick, so the other four were four ticks
+                // behind. A leg that stops at the first one turns a mechanism that worked into a
+                // number that reads like a partial success.
+                if (stillWaiting(server, () -> {
+                    List<Villager> back = level.getEntitiesOfClass(Villager.class,
+                            new AABB(workshopSite).inflate(64));
+                    return back.size() >= WORKERS && back.stream()
+                            .allMatch(v -> v.getBrain().isActive(net.namesake.day.Errand.ACTIVITY));
+                }, false, "every reloaded villager to be sent on an errand")) {
                     return;
                 }
                 checkTheErrandSurvivedReload(server, level);
@@ -4024,7 +4066,7 @@ public final class AttachBetHarness {
                 new AABB(workshopSite).inflate(64));
         long onErrand = back.stream()
                 .filter(v -> v.getBrain().isActive(net.namesake.day.Errand.ACTIVITY)).count();
-        record(onErrand > 0,
+        record(onErrand == back.size() && onErrand > 0,
                 "ERRAND RELOAD " + onErrand + " of " + back.size() + " villager(s) were sent on an "
                         + "errand after a save, a quit and a reload. Villager.readAdditionalSaveData "
                         + "calls refreshBrain, which replaces the whole Brain with "
@@ -4033,9 +4075,11 @@ public final class AttachBetHarness {
                         + "the world, and addActivitySafely put it back on demand rather than at "
                         + "mint. A one-shot registration would have been wrong the first time "
                         + "anybody walked away from a village and came back");
+        Namesake.LOGGER.info("[harness] errand reload: {}", net.namesake.day.Steering.describe(level));
         for (Villager villager : back) {
-            Namesake.LOGGER.info("[harness] errand reload {}: {} — {}", villager.getId(),
+            Namesake.LOGGER.info("[harness] errand reload {}: {} | {} | {}", villager.getId(),
                     net.namesake.day.Steering.postureOf(villager),
+                    net.namesake.day.Steering.trackedState(villager),
                     net.namesake.day.Steering.explainErrand(level, villager));
         }
         record(net.namesake.day.Steering.strayErrandCount(level) == 0,

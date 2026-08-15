@@ -1,7 +1,7 @@
 # DESIGN — Namesake
 
 What we are building and why. `WORKPLAN.md` owns *what happens next*; this owns *what it is*.
-78 decisions ruled, 0 open.
+85 decisions ruled, 0 open.
 
 **The thesis:** a deed witnessed by one villager changes what a different villager, in a different
 settlement, says to you later.
@@ -349,12 +349,12 @@ in one assertion so neither can drift into being the other.
 |---|---|---|---|---|---|
 | 0 | DAWN | 0–1999 | IDLE | **none — vanilla's `IDLE` package already strolls and looks** | — |
 | 1 | LABOUR_I | 2000–4999 | WORK | **the industry standoff** | 13 |
-| 2 | HAUL | 5000–5999 | WORK | custom `ERRAND` | 14 |
-| 3 | NOON | 6000–6999 | WORK | `ERRAND` | 14 |
+| 2 | HAUL | 5000–5999 | WORK | **`ERRAND` to the bell — everybody with a workstation** | 14 |
+| 3 | NOON | 6000–6999 | WORK | **`ERRAND` to their own bed — everybody** | 14 |
 | 4 | LABOUR_II | 7000–8999 | WORK | **the industry standoff** | 13 |
 | 5 | COMMONS | 9000–10999 | MEET | **none — vanilla already walks them to r≤6 of the bell** | — |
-| 6 | HEARTH | 11000–13999 | IDLE→REST | none, then `ERRAND` | 14 |
-| 7 | NIGHT | 14000–23999 | REST | **none** for sleepers | — |
+| 6 | HEARTH | 11000–13999 | IDLE→REST | **none until 12000, then `ERRAND` for the watch** | 14 |
+| 7 | NIGHT | 14000–23999 | REST | **none** for sleepers, `ERRAND` for the watch | 14 |
 
 **"Four are exact keyframes" is three, and the fourth is inside a slot.** `VILLAGER_DEFAULT` has five
 — **10, 2000, 9000, 11000, 12000** — against eight slot starts. The exact matches are **2000, 9000
@@ -456,6 +456,130 @@ still reads as a working village.
 
 A lazy villager *audibly* does not work, with no animation and no conflict with vanilla.
 
+### The errand — session 14, and it is the opposite of the standoff in every way that costs
+
+Three errands, and each one is a walk to a **memory vanilla already wrote**. `AcquirePoi` in the CORE
+package gives every villager a `HOME` and a `MEETING_POINT`; reading the settlement table instead
+would be a registry lookup per villager per errand and would leave an errand impossible for anybody
+whose settlement has not been surveyed yet, which is most villagers for the first few thousand ticks
+of their lives.
+
+| errand | when | who | where | what a player sees |
+|---|---|---|---|---|
+| `HAUL` | 11:00–12:00 | everybody **with a workstation** | `MEETING_POINT` | the workshops empty and the middle of the village fills |
+| `NOON` | 12:00–13:00 | everybody | `HOME` | the hearths fill, and nobody sleeps in one |
+| `WATCH` | 18:00–06:00 | `boldness ≥ 20` — one in four | `MEETING_POINT` | the streets empty and two people do not go in |
+
+*You carry what you made*, so `HAUL` needs a job site and the other two do not — a nitwit still eats
+at noon and can still stand watch.
+
+**The threshold is measured and its provenance differs from `industry`'s.** Industry's `12` is p25 for
+its own sake. Boldness's `20` has a ruled target to hit — §7's *two* — so it is the mark that leaves
+two people out of a village of nine: measured over 4,536 personas boldness runs −67 to 78 with p75 at
+19, and 20 selects **25.0%**, which is 2.2 of nine. Thirty gives 1.3, which is a village that mostly
+has no watch at all.
+
+**A villager on an errand is CHEAPER than one at work, and that is what pays session 13's budget.**
+
+`ERRAND` is a **custom activity**, and the reason is arithmetic rather than architecture. The standoff
+holds a villager by a *veto* — erasing the walk target vanilla offers — and that is affordable only
+because a standoff point is inside Manhattan nine of the workstation, where
+`SetWalkTargetFromBlockMemory` is silent and `StrollToPoi` fires once every eighty ticks. **An errand
+goes further than nine.** Out there that behaviour writes the job site back on every tick the walk
+target is absent, so a veto becomes a write and an erase per villager per tick — the tug-of-war this
+section rules the day plan out of, arriving as a bill. Switching the activity costs one set operation
+and silences eleven behaviours at once, and after that **nothing contests, so there is nothing to
+decline**: an errand costs the plan *nothing* per tick after the tick it begins, where a standoff pays
+a memory read on every one.
+
+The package is **vanilla's `WORK` list with the work taken out** — the minimal look behaviour,
+`ShowTradesToPlayer` and `SetLookAndInteract`, all three at vanilla's own priorities. What is missing
+is everything that measures from the workstation. `ShowTradesToPlayer` is where the sack comes from:
+vanilla already makes a villager hold their goods up when somebody is watching, so *held item is a
+noun* is paid by the engine at zero art, in the one slot this section wanted it for.
+
+**Vanilla will not let a mod make an `Activity`, and the finding is worth stating.** The constructor
+is private; it reads as public in a NeoForge decompile only because NeoForge ships an access
+transformer for it, so `:common` — which compiles against plain NeoForm — cannot construct one at
+all. Widening it would mean an access transformer, an access widener and a third module that already
+has one: three spellings of one change, and the first bytecode-level modification this project has
+made to a class it does not own. **And it would buy nothing.** Measured over all 6,316 source files
+of 1.21.1, `BuiltInRegistries.ACTIVITY` is mentioned exactly twice — its own declaration and
+`Activity.register` — and `Brain.getActiveActivities()` has **no callers at all**. No packet carries
+an activity, no save file holds one, no screen prints one. An `Activity` is a map key in
+`Brain.availableBehaviorsByPriority`; what this mod needs is *a key an adult villager's brain does not
+use*, and vanilla registers twenty-seven while `Villager.registerBrainGoals` claims ten. `ERRAND`
+borrows one of the other seventeen, chosen for being the one nothing that walks on two legs will ever
+be given, and `ErrandTest` holds that against `registerBrainGoals`' own bytecode.
+
+### `addActivitySafely`, and what it is actually for
+
+`WORKPLAN.md` has carried it on the never-cut list since session 00 without saying why. Here it is:
+**`Villager.refreshBrain` destroys it.** That method does
+`this.brain = brain.copyWithoutBehaviors()` and then re-runs vanilla's `registerBrainGoals` —
+`copyWithoutBehaviors` builds a **brand new** `Brain` and carries only the memories across, so every
+behaviour, every activity registration and every `activityRequirements` entry is gone and what comes
+back is vanilla's list. It is called from five places, and the fifth decides the design:
+
+1. `AssignProfessionFromJobSite` — a villager takes a job
+2. `ResetProfession` — a villager loses one
+3. `ZombieVillager.finishConversion` — a cure
+4. `Villager.ageBoundaryReached` — a baby grows up
+5. **`Villager.readAdditionalSaveData` — every single load from disk**
+
+So a custom activity is wiped **on every chunk load for every villager**, which is the ordinary path
+rather than an edge case, and none of the other four fires an event either loader lets us see. A
+one-shot registration at mint is not merely fragile: it is wrong the first time a player walks away
+from a village and comes back.
+
+**So it is re-established on demand, and the wipe is detected by effect rather than remembered by a
+flag.** `setActiveActivityIfPossible` consults `activityRequirements`, which is exactly the map
+`copyWithoutBehaviors` drops — *the activation failing is the wipe*. There is no per-tick check, no
+bookkeeping that can disagree with the brain, and **no cost on any tick the helper is not called**; it
+is called only at a slot crossing, which is already behind the transition governor at eight villagers
+a tick. It also covers all five callers with one mechanism, which no amount of hooking could.
+
+One vanilla behaviour makes the shape necessary rather than merely tidy: `setActiveActivityIfPossible`
+does **not** leave a brain alone when the activity is unregistered — it calls `useDefaultActivity()`,
+which is `IDLE`. A blind activation against a reloaded brain would silently take a villager out of
+`WORK` in the middle of the morning, so the helper registers and retries inside the same call, before
+the brain ticks again, and returns a boolean instead of `void`.
+
+### The deactivation watchdog — the second bell lock, and it would have been ours
+
+`ERRAND` has no `UpdateActivityFromSchedule`. It cannot: the schedule says `WORK` at eleven o'clock
+and would switch the activity off inside twenty ticks. **That is exactly the shape of the bug this
+mod inherited.** `HIDE` is the only vanilla package with no schedule exit, which is why a bedless
+villager who hears a bell is stuck in their house for the life of the world — and an `ERRAND` with no
+exit is the same deadlock with our name on it. This document did not say so before session 14. It
+does now.
+
+So the plan owns the exit, and it owns it in four layers because each catches a failure the one above
+cannot:
+
+1. **The window ends.** A slot comparison on the fast path, for every villager on every tick — the
+   same comparison the transition governor is already driven by, so it costs nothing new.
+2. **Vanilla took them** — a bell, a raid, a panic, a cure. Behind the path gate, and what matters is
+   not the activity but **our walk target**: `LocateHidingPlace` requires `WALK_TARGET` to be absent
+   and is the only writer of `HIDING_PLACE`, so one of ours left on a villager who has just heard a
+   bell *is* the inherited bug, caused by the session that was supposed to be avoiding it.
+3. **We lost track of them.** A villager whose brain is running `ERRAND` that the plan cannot account
+   for is put back on vanilla's schedule, unconditionally and without being asked how they got there.
+   Layer 1 depends on our bookkeeping being right; **this one does not**, which is what makes `ERRAND`
+   a *window* rather than a state.
+4. **And one that is free and is recorded rather than built:** all five `refreshBrain` callers end in
+   `registerBrainGoals`, which sets `IDLE` and then calls `updateActivityFromSchedule`. A save and a
+   reload, a cure, a profession change and growing up are all exits that cost this mod nothing — the
+   same reason the bell lock heals on a chunk cycle, working for us for once.
+
+The exit itself is **vanilla's own** — `brain.updateActivityFromSchedule`, the call
+`SetHiddenState`'s else-branch makes and the one session 13's bell-lock repair makes. The mod does not
+decide what a villager does next. **And the answer is read back**, because that call opens with
+`gameTime - lastScheduleUpdate > 20` and silently does nothing inside that window: an errand that
+ended within twenty ticks of beginning would leave a villager in `ERRAND` with the one thing that
+could take them out already spent. That is the second bell lock as one line of throttle rather than as
+a missing behaviour, so if the schedule declines, `setActiveActivityToFirstValid` forces it.
+
 ### Legibility, with no custom animation
 Six laws: one intent, one place · held item is a noun, never a verb · **silence is a signal** · the
 crowd is the message, facing beats posing · particles are punctuation (max 1/NPC/40 ticks, within 32
@@ -463,8 +587,27 @@ blocks of a player) · the bell is the clock.
 
 **The at-a-glance test.** 09:00 — everyone at a workstation, except those eight blocks away doing
 nothing. 11:00 — roads fill with sacks moving one direction. 12:00 — hearths fill. 15:00 — a ring at
-the bell. 17:00 — the tavern lights up. 20:00 — streets empty but for two torches on the perimeter.
+the bell. 20:00 — streets empty but for the watch.
 *Four facts and the player can predict any NPC in the world.*
+
+**Two clauses of that line moved at session 14 and both are rulings rather than edits.**
+
+- **17:00 — the tavern lights up — is struck, and it is deferred rather than deleted.** There is no
+  tavern in this mod: no building types, no interiors, no institutions. Buildings arrive with the
+  **era ladder at sessions 24–27**, which is outside the sixteen-session slice by this document's own
+  sequencing, and 17:00 is `HEARTH`'s first hour — slot 6a — whose steering is *none*, so striking it
+  costs no mechanic and changes no code. The alternative was to build something and call it a tavern,
+  which is the shape both reference codebases died of. **A criterion with an unbuildable clause in it
+  is not a criterion**, and the honest thing is to say which clause and when it comes back rather
+  than to quietly ship four facts and claim five. `WORKPLAN.md`'s "after the slice" table carries it.
+- **20:00's *two torches on the perimeter* is built as two people and not as two torches, and not on
+  the perimeter.** The torch is a block this mod does not place — session 10 put every block it lays
+  behind a switch and this one would light a village it has no business lighting. The perimeter is
+  refused for a stronger reason than that: **the edge of a village after dark is where the mobs are**,
+  and standing somebody's villagers out there to satisfy a legibility law is this mod spending a
+  player's village on a picture. The watch stands at the meeting point — inside, lit, where the golem
+  walks. What carries the line is the count and the contrast: at midnight these are the only two
+  people out, which no other hour of the day looks like.
 
 ### The transition wave
 

@@ -188,8 +188,8 @@ Where any other document disagrees on sequence, this wins.
 | 11 | Notice Board | **done** — 2026-08-15 |
 | 12 | Standing bands | **done** — 2026-08-15 |
 | 13 | Day plan I — free slots | **done** — 2026-08-15 |
-| 14 | Day plan II — ERRAND activity | **NEXT** |
-| 15 | Art, config, playtest | pending |
+| 14 | Day plan II — ERRAND activity | **done** — 2026-08-16 |
+| 15 | Art, config, playtest | **NEXT** |
 
 ---
 
@@ -408,9 +408,34 @@ away doing nothing, and *you can hear which is which*. Lazy villagers demonstrab
 **Risk.** The ERRAND escalation loop is the only identified TPS-killer. This is also **the emergency
 parachute**: merging slots 2+3 and deleting this activity removes the entire custom-activity risk
 class, at the cost of the midday economy being invisible and the village going quiet at 18:00. The
-mod still works without it.
+mod still works without it. **The parachute was not taken and the reasoning is in the session 14
+log**: the risk class turned out to be cheaper than the thing it protects, because
+`addActivitySafely` costs nothing per tick and the watchdog costs a boolean.
 
-**Exit.** The at-a-glance test passes, and a 400-record harness run shows no TPS regression.
+**Exit — rewritten at the open of session 14, before anything was built against it.** It said *"the
+at-a-glance test passes, and a **400-record** harness run shows no TPS regression"*, and the second
+clause measured the wrong thing. **Four hundred records is the sweep**, which reads 1.29 µs and is
+untouched by the day plan — a record with no entity has no walk target, so a 400-record run would
+exercise `ERRAND` **not at all** and report a pass. The cost this session adds is **per loaded
+entity**. So:
+
+> **The at-a-glance test passes — minus the tavern, ruled below — and the profiler at
+> `DESIGN.md` §8's own ninety-six loaded villagers shows the mod's per-tick cost inside the ~5.95 µs
+> budget at *every hour of the day the plan does work in*, not only at the one session 13 measured.**
+
+**Ninety-six**, because that is §8's own scenario and the population the owner ruled the budget
+against at the close of session 13. Four hundred loaded is reported beside it as the deliberately
+pessimistic figure — the day plan already costs 23.6 µs there, which was true before this session and
+is the owner's to rule on, not this clause's. **And "every hour"** is the half that had to be added:
+a per-tick budget is a claim about the most expensive *hour*, a tick happens at one time of day, and
+session 13's profiler froze the clock at 09:00 — where `ERRAND` does nothing at all and would have
+priced as free.
+
+**And one clause of §7's at-a-glance test cannot be built and is ruled rather than quietly dropped:
+*17:00 — the tavern lights up*.** There is no tavern in this mod: no building types, no interiors, no
+institutions. It is **struck from §7 and deferred to the era ladder at sessions 24–27**, where
+buildings arrive; 17:00 is `HEARTH`'s first hour, whose steering is *none*, so it costs no mechanic
+and no code. See `DESIGN.md` §7 and the "after the slice" table below.
 
 ### Session 15 — Art, config, playtest
 **Build.** ~25 greyscale textures. Renderer swap for `EntityType.VILLAGER` onto the vanilla humanoid
@@ -452,7 +477,7 @@ that turns out not to land is sixteen sessions wasted. Prove the thesis first.
 |---|---|
 | 16–20 | Grievance engine — wants, scarcity, 5-stage ladder, arbitration, character drift |
 | 21–23 | Mortality, funerals, grief, inheritance, ruins |
-| 24–27 | Era ladder 0–3, offices, charters, treasury, prosperity display |
+| 24–27 | Era ladder 0–3, offices, charters, treasury, prosperity display — **and `DESIGN.md` §7's *17:00, the tavern lights up*, struck from the at-a-glance test at session 14 and parked here because a tavern is a building type and buildings arrive with the era ladder** |
 | 28–30 | Secrets, named factions, migration, rival settlements |
 | 31+ | Era 4–5, addon API hardening, animals in the social graph |
 
@@ -5880,3 +5905,161 @@ than the criterion" into an assertion's own failure message is not the same as n
 - **The bell lock repair has no reproduction.** `SteeringTest.theBellLockRepairIsNarrow` holds the
   decision; nothing holds that the decision is ever reached in a running game. **Build the leg** —
   ring a bell beside a bedless villager, assert the deadlock, assert it opens after a minute.
+
+### Session 14 — 2026-08-16 — day plan II, the ERRAND activity
+
+**Shipped.** `0c411b6..HEAD` plus this ledger commit, pushed to `origin/main`. Both loaders run the
+attach-bet harness in CI on both phases; Fabric was also run locally, `setup` and `verify`, and both
+pass.
+
+**The session opened on a question the ledger had never answered, and the answer decided everything
+else.** `WORKPLAN.md` has carried `addActivitySafely` on the never-cut list since session 00 without
+saying what it is for. It is for one line of `Villager`:
+
+```java
+this.brain = brain.copyWithoutBehaviors();   // then registerBrainGoals(...)
+```
+
+`copyWithoutBehaviors` builds a **brand new** `Brain` and carries only the memories, so every
+behaviour, every activity registration and every `activityRequirements` entry is gone and what comes
+back is vanilla's list. Five callers, and the fifth decides the design:
+`AssignProfessionFromJobSite` · `ResetProfession` · `ZombieVillager.finishConversion` ·
+`Villager.ageBoundaryReached` · **`Villager.readAdditionalSaveData` — every load from disk.** A
+custom activity is therefore wiped on **every chunk load for every villager**, which is the ordinary
+path rather than an edge case, and none of the other four fires an event either loader lets us see.
+
+#### What re-establishes it, and what that costs per tick: nothing
+
+**It is re-established on demand, and the wipe is detected by effect rather than remembered by a
+flag.** `setActiveActivityIfPossible` consults `activityRequirements`, which is exactly the map
+`copyWithoutBehaviors` drops — so *the activation failing is the wipe*. There is no per-tick check,
+nothing that can disagree with the brain, and no cost at all on a tick the helper is not called; it
+is called only at a slot crossing, already behind the transition governor at eight villagers a tick.
+It covers all five callers with one mechanism, which no amount of hooking could.
+
+One vanilla behaviour makes that shape necessary rather than merely tidy, and it had to be read out
+of `Brain` to find: **`setActiveActivityIfPossible` does not leave a brain alone when the activity is
+unregistered — it calls `useDefaultActivity()`, which is `IDLE`.** A blind activation against a
+reloaded brain silently takes a villager out of `WORK` in the middle of the morning. So the helper
+registers and retries inside the same call, before the brain ticks again, and returns a boolean.
+`ErrandTest.aFailedActivationFallsBackToIdle` pins that vanilla behaviour so it cannot change
+underneath the helper.
+
+#### And vanilla will not let a mod make an `Activity` at all
+
+`Activity(String)` is **private**. It reads as public in a NeoForge decompile only because NeoForge
+ships an access transformer for it — a property of one loader rather than an API — and `:common`
+compiles against plain NeoForm, where `new Activity(…)` **does not compile**. Widening it ourselves
+would mean an access transformer for `:common`, an access widener for `:fabric`, and a third module
+that already has one: three spellings of one change, the first bytecode-level modification this
+project has made to a class it does not own, and a fifth way for the two loaders to disagree — in the
+session already carrying the highest risk class in the plan.
+
+**And it would buy nothing, which is the finding.** Measured over all 6,316 source files of 1.21.1:
+`BuiltInRegistries.ACTIVITY` is mentioned **twice** — its own declaration and `Activity.register` —
+and `Brain.getActiveActivities()` has **no callers at all**. No packet carries an activity, no save
+file holds one, no screen prints one. An `Activity` is a map key in
+`Brain.availableBehaviorsByPriority`, so what this session needs is *a key an adult villager's brain
+does not use*: vanilla registers twenty-seven and `Villager.registerBrainGoals` claims ten.
+**`ERRAND` borrows one of the other seventeen** — chosen for being the one nothing that walks on two
+legs will ever be given — and `ErrandTest.theBorrowedKeyIsFree` holds that against
+`registerBrainGoals`' own bytecode, finding the constant by identity so changing which key is
+borrowed cannot make the test stop testing anything. The borrowed name reaches exactly one string in
+this repository, which `Steering.explainErrand` writes itself.
+
+#### The deactivation watchdog, built before anything that could activate an errand
+
+`ERRAND` omits `UpdateActivityFromSchedule` — it must, because `Schedule.VILLAGER_DEFAULT` says
+`WORK` from 2000 to 8999 and would switch the activity off inside twenty ticks. **That is exactly the
+shape of the bug this project inherited**: `HIDE` is the only vanilla package with no schedule exit,
+which is why a bedless villager who hears a bell is stuck in their house for the life of the world.
+**An `ERRAND` with no exit is a second bell lock and it would be ours**, and `DESIGN.md` did not say
+so. It does now. Four layers, each catching what the one above cannot:
+
+| layer | what it catches | where it runs | what it costs |
+|---|---|---|---|
+| 1 | the window ended | fast path, every villager, every tick | the reference compare the governor already makes |
+| 2 | vanilla took them — a bell, a raid, a cure | behind the path gate | one set lookup per seven ticks |
+| 3 | **the plan lost track of them** | behind the path gate | the same lookup |
+| 4 | a save, a reload, a cure, growing up | **free** — all five `refreshBrain` callers end in `registerBrainGoals`, which sets `IDLE` and calls `updateActivityFromSchedule` | nothing |
+
+Layer 3 is the one that matters and it is the one nothing else could hold: **a villager running
+`ERRAND` that the plan cannot account for is put back on vanilla's schedule without being asked how
+they got there.** Layers 1 and 2 depend on our own bookkeeping being right; layer 3 does not, which
+is what makes `ERRAND` a *window* rather than a state. The harness plants a stray errand behind the
+plan's back and watches layer 3 end it — because until this session nothing held that that branch is
+ever reached, which is the criticism session 13 made of its own bell-lock repair.
+
+The exit itself is **vanilla's own** — `brain.updateActivityFromSchedule`, the call
+`SetHiddenState`'s else-branch makes and the one session 13's repair makes. **And the answer is read
+back**, because that call opens with `gameTime - lastScheduleUpdate > 20` and silently does nothing
+inside that window: an errand that ended within twenty ticks of beginning would leave a villager in
+`ERRAND` with the one thing that could take them out already spent. *That is the second bell lock as
+one line of throttle rather than as a missing behaviour*, so if the schedule declines,
+`setActiveActivityToFirstValid` forces it.
+
+#### Why `ERRAND` is a custom activity at all, and why that is what pays session 13's budget
+
+The standoff holds a villager by a **veto** — erasing the walk target vanilla offers — and that is
+affordable only because a standoff point is inside Manhattan nine of the workstation, where
+`SetWalkTargetFromBlockMemory` is silent and `StrollToPoi` fires once every eighty ticks. **An errand
+goes further than nine.** Out there that behaviour writes the job site back on *every* tick the walk
+target is absent, so a veto becomes a write and an erase per villager per tick — the tug-of-war §7
+rules the day plan out of, arriving as a bill rather than as a design. Switching the activity costs
+one set operation and silences eleven behaviours at once, and after that **nothing contests, so
+there is nothing to decline.**
+
+So the two mechanics are opposites in every respect that costs anything:
+
+| | the standoff (13) | an errand (14) |
+|---|---|---|
+| who | one villager in four, in two slots | everybody in two slots; one in four after dark |
+| held by | a veto — a memory read every tick, an erase every eighty | an activity swap — nothing contests |
+| per tick, per steered villager | `updateArrival` + `declineTheJobSite` | **nothing** |
+| brain cost | vanilla's eleven `WORK` behaviours | `Errand.behaviours()`' three |
+
+`ERRAND` is **vanilla's `WORK` package with the work taken out**: the minimal look behaviour,
+`ShowTradesToPlayer` and `SetLookAndInteract`, all three at vanilla's own priorities. What is missing
+is everything that measures from the workstation. `ShowTradesToPlayer` is where the sack comes from —
+vanilla already makes a villager hold their goods up when somebody is watching, so §7's *held item is
+a noun* is paid by the engine at zero art, in the one slot the design wanted it for.
+
+#### The three errands, and the one measured number
+
+| errand | when | who | where | what a player sees |
+|---|---|---|---|---|
+| `HAUL` | 11:00–12:00 | everybody **with a workstation** | `MEETING_POINT` | the workshops empty and the middle fills |
+| `NOON` | 12:00–13:00 | everybody | `HOME` | the hearths fill, and nobody sleeps in one |
+| `WATCH` | 18:00–06:00 | `boldness ≥ 20` | `MEETING_POINT` | the streets empty and two people do not go in |
+
+Every destination is **a memory vanilla already wrote**. `AcquirePoi` in the CORE package gives every
+villager a `HOME` and a `MEETING_POINT`; reading the settlement table instead would be a registry
+lookup per villager per errand — the shape of the cost that took session 13 over budget — and would
+leave an errand impossible for anybody whose settlement has not been surveyed yet, which is most
+villagers for the first few thousand ticks of their lives.
+
+**`BOLDNESS_TO_WATCH = 20`, and its provenance differs from `INDUSTRY_TO_WORK = 12`'s.** Industry's
+is p25 for its own sake. This one has a *ruled target*: §7's twenty-o'clock line says **two**. So it
+is the mark that leaves two people out of a village of nine, read off the real generator:
+
+| min | p25 | p50 | **p75** | p80 | p95 | max |
+|---|---|---|---|---|---|---|
+| −67 | −16 | 1 | **19** | 24 | 44 | 78 |
+
+Twenty selects **25.0%** — 2.2 of nine, against §7's two — and sits a point above p75. The neighbours
+are worse both ways: 25 gives 1.8 and 30 gives 1.3, which is a village that mostly has no watch at
+all; 10 gives 3.4, which is a third of the village standing about at midnight.
+`DayPlanDistributionTest.theBoldnessDistribution` holds both ends and prints the table, for the third
+time this project has pointed the instrument at a threshold *before* building on it rather than
+after. `boldness` gains its first non-display consumer; the axes roll independently, so about one
+villager in sixteen is both an idler by day and a watchman by night, which is a person rather than a
+category.
+
+#### The schema did not move
+
+**Schema 8, unchanged, for the fourth session running.** An activity is behaviour rather than state:
+the roster is rebuilt from the entity-load hook, the destination is a vanilla memory, and who stands
+watch is one comparison on a trait already on disk. `DayPlanTest.theDayPlanIsDerived` fails the build
+if anything in `net.namesake.day` ever declares a codec, and nothing added this session does. The
+schema-8 archives at `C:\MCA Reborn Rework\.archives\schema8-session12` were not needed and are
+untouched. **Two exemptions remain — `fear` and `debt`, both at 16 — and no new one was opened.**
