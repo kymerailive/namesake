@@ -129,9 +129,24 @@ class SteeringTest {
                         + "time out on its own three hundred ticks after the bell. This is the "
                         + "clause that keeps the repair off every villager who is simply hiding.");
         assertFalse(Steering.shouldUnstick(Activity.HIDE, true, false, patient - 1),
-                "one tick short of the patience. Vanilla's own HIDE_TIMEOUT is 300 and this waits "
-                        + "four times that, so a villager whose WALK_TARGET merely happened to be "
-                        + "occupied gets every chance to acquire a hiding place first");
+                "one tick short of the patience");
+
+        // PINNED TO VANILLA'S NUMBER, NOT TO OUR OWN. The line above reads BELL_LOCK_PATIENCE, so
+        // it moves whenever the constant does — a breakage that set the patience to zero passed it,
+        // because "one tick short of zero" is minus one and still refuses. That is the same
+        // self-referential failure as a slot table asserting each slot begins where the last one
+        // ends, and it took a breakage pass to see it both times. So the floor is a literal, and
+        // the literal is vanilla's.
+        assertTrue(Steering.BELL_LOCK_PATIENCE >= 300,
+                "SetHiddenState.HIDE_TIMEOUT is 300 — vanilla's own view of when a villager should "
+                        + "have finished hiding, and the comparison its own exit fires on. A "
+                        + "patience below that would have the mod overruling the engine rather than "
+                        + "finishing what the engine could not start.");
+        assertFalse(Steering.shouldUnstick(Activity.HIDE, true, false, 299),
+                "at 299 ticks vanilla's own SetHiddenState has not yet timed out, so a villager "
+                        + "who is simply hiding must be left entirely alone — this is a literal "
+                        + "rather than BELL_LOCK_PATIENCE - 1 so that shortening the patience turns "
+                        + "it red instead of moving it");
         assertFalse(Steering.shouldUnstick(Activity.WORK, true, false, patient),
                 "not hiding at all — a stale bell memory on a working villager is harmless, because "
                         + "ReactToBell only re-asserts HIDE, and something already took them out");
