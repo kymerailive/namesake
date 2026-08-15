@@ -34,8 +34,33 @@ public final class BoardProbe {
 
     private static volatile boolean requested;
     private static volatile Answer answer;
+    private static volatile String pendingShot;
 
     private BoardProbe() {
+    }
+
+    /**
+     * <b>Server side: ask the client to photograph whatever is on the screen, under this name.</b>
+     *
+     * <p>Session 11 added a picture of every board a run opens, on the argument that <i>the rows are
+     * not the screen</i>. Session 13's deliverable has no rows at all — it is where six villagers are
+     * standing — so the argument applies harder rather than less: a leg can assert that three
+     * villagers are between five and eight blocks from their workstation and be describing a village
+     * that looks like nothing in particular. This is the same instrument pointed at a world instead
+     * of at a GUI.
+     *
+     * <p>Best effort, exactly as the board grab is: a failed picture changes no verdict, because a
+     * screenshot is evidence for a person rather than an assertion.
+     */
+    public static void requestShot(String name) {
+        pendingShot = name;
+    }
+
+    /** Client side: the name to save under, or null. Consumed by the call. */
+    public static String takeShotRequest() {
+        String name = pendingShot;
+        pendingShot = null;
+        return name;
     }
 
     /** Server side: ask the client to look at its screen on its next tick. */

@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * <b>The industry standoff, the transition governor and the path gate.</b> Session 13, and this is
@@ -112,8 +113,9 @@ import java.util.Optional;
  * {@code SteeringTest.theVetoIsNarrow} holds every one of them:
  *
  * <ol>
- *   <li>only while the brain has {@link Activity#WORK} active — so {@code PANIC}, {@code RAID},
- *       {@code HIDE} and {@code REST} are untouched, because vanilla switches activity for all four;
+ *   <li>only while the brain's activity is one of {@link #STEERABLE} — so {@code PANIC},
+ *       {@code RAID}, {@code HIDE} and {@code REST} are untouched, and so is anything vanilla adds
+ *       later, because it is an allowlist;
  *   <li>only during a {@link DaySlot#isLabour} slot;
  *   <li>only for a villager this plan made lazy, who has actually arrived at their standoff point;
  *   <li>only when the walk target <b>is the job site</b> — within a block of it. A random stroll, a
@@ -151,6 +153,31 @@ public final class Steering {
      * sleeping or trading villager moving.
      */
     private static final int VETO_WITHIN = 1;
+
+    /**
+     * <b>The only activities the plan will write a walk target during.</b> An allowlist, and the
+     * shape is vanilla's own: {@code GoToPotentialJobSite} refuses to run unless the active non-core
+     * activity is one of {@code IDLE}, {@code WORK} or {@code PLAY}, for the same class of reason.
+     *
+     * <p>This session's first attempt was the tidier-looking {@code brain.isActive(WORK)} — one test
+     * covering panic, raids, hiding and sleeping at once. It is wrong, and the harness said so:
+     * villagers sat in {@code IDLE} through a labour slot and never received a standoff. **A
+     * villager in IDLE is exactly who the standoff is for** — they are not working, and vanilla's
+     * own strolling is what would drift them back onto their workstation.
+     *
+     * <p>The allowlist keeps what the single test was reaching for. Anything not named here is
+     * refused, so a new activity is excluded by default rather than included by default — and the
+     * four that matter are named for a reason each: {@code HIDE} because {@code LocateHidingPlace}
+     * needs {@code WALK_TARGET} absent and is the only way out of the bell lock; {@code REST}
+     * because a walk target of ours would stop somebody going to bed; {@code PANIC} and the two raid
+     * activities because a villager fleeing has somewhere better to be.
+     */
+    private static final Set<Activity> STEERABLE = Set.of(Activity.WORK, Activity.IDLE);
+
+    /** True while it is safe for the plan to write this villager a walk target at all. */
+    private static boolean isSteerable(Brain<Villager> brain) {
+        return brain.getActiveNonCoreActivity().filter(STEERABLE::contains).isPresent();
+    }
 
     /** What the plan believes a villager is doing. Reported by the debug command and the harness. */
     public enum Posture {
@@ -268,10 +295,15 @@ public final class Steering {
                 || !(entity.level() instanceof ServerLevel level)) {
             return;
         }
-        PersonaService.personaOf(villager)
-                .filter(Persona::isGenerated)
-                .ifPresent(persona -> state(level).roster
-                        .put(villager.getId(), new Tracked(villager, persona)));
+        // NOT filtered on isGenerated, and that filter was a real defect for as long as it was here.
+        // A persona is MINTED the moment a villager loads and GENERATED a little later, once its
+        // settlement is known — PersonaService says so in its own javadoc, and session 03's harness
+        // waits 2,400 ticks for it. So at the moment this hook fires almost nobody is generated yet,
+        // and a roster that refused them would refuse them FOR THE LIFE OF THE WORLD, because this
+        // hook does not fire again. The day plan would have steered nobody in a real save and the
+        // harness found it by having six villagers stand still with nothing wrong with any of them.
+        PersonaService.personaOf(villager).ifPresent(persona -> state(level).roster
+                .put(villager.getId(), new Tracked(villager, persona)));
     }
 
     /** A villager left a level — unloaded, died, or was converted. */
@@ -337,19 +369,39 @@ public final class Steering {
                 (gone == null ? gone = new ArrayList<>() : gone).add(entry.getKey());
                 continue;
             }
+            if (!tracked.persona.isGenerated()) {
+                // Minted but not yet placed: no culture, no household, no traits. There is nothing
+                // to read a diligence or an offset off, so this villager is left entirely to
+                // vanilla until the settlement survey that was asked for on their arrival finishes.
+                // Behind the path gate so the lookup is a seventh of a villager a tick, not one.
+                if (DayPlan.pathGateOpen(tracked.persona, gameTime)) {
+                    PersonaService.personaOf(tracked.villager)
+                            .ifPresent(fresh -> tracked.persona = fresh);
+                }
+                continue;
+            }
             // Their own slot, not the clock's. Two villagers standing next to each other are in
             // different slots for up to DayPlan.SPREAD ticks after every boundary, which is the
             // transition wave and the reason the whole village does not path at once.
             DaySlot slot = DayPlan.slotFor(tracked.persona, dayTime);
 
             if (tracked.standoff != null) {
-                if (slot.isLabour() && tracked.villager.getBrain().isActive(Activity.WORK)) {
+                if (slot.isLabour() && isSteerable(tracked.villager.getBrain())) {
                     updateArrival(level, tracked);
                     if (tracked.parked) {
                         declineTheJobSite(levelState, tracked, slot);
                     }
                 } else {
                     releaseStandoff(tracked);
+                    if (slot.isLabour()) {
+                        // Still a working slot, so this is vanilla having taken the villager away
+                        // — a raid, a bell, somebody hitting them — rather than the slot ending.
+                        // Forgetting the slot was served means they are re-enqueued once it is over
+                        // and go back to standing off, instead of one panicked tick costing them
+                        // the rest of the morning. The retry is bounded by the path gate and the
+                        // governor exactly as the boundary crossing is.
+                        tracked.servedSlot = null;
+                    }
                 }
             }
             if (slot != tracked.servedSlot && !tracked.queued
@@ -391,9 +443,10 @@ public final class Steering {
         if (target.isEmpty()) {
             return;
         }
-        // Vanilla switches activity for panic, raids, hiding and sleeping, so one test covers all
-        // four — and covers any future one, which a list of activity names would not.
-        if (!brain.isActive(Activity.WORK)) {
+        // Panic, raids, hiding and sleeping are all activity changes, so one test covers them —
+        // but it has to be the allowlist rather than "is WORK active", because a villager idling
+        // through a labour slot is exactly who the standoff is for. See STEERABLE.
+        if (!isSteerable(brain)) {
             return;
         }
         if (villager.getTradingPlayer() != null
@@ -431,7 +484,7 @@ public final class Steering {
                 .filter(Persona::isGenerated)
                 .ifPresent(fresh -> tracked.persona = fresh);
 
-        if (slot.isLabour() && !tracked.villager.getBrain().isActive(Activity.WORK)) {
+        if (slot.isLabour() && !isSteerable(tracked.villager.getBrain())) {
             // TWO THINGS AT ONCE, AND THE SECOND IS WHY THIS RETURNS WITHOUT MARKING THE SLOT SERVED.
             //
             // The guard itself is the inherited bug's own mechanism pointed back at us. A bell
@@ -485,6 +538,51 @@ public final class Steering {
         if (Profiling.ENABLED) {
             Meters.count("Steering.enterSlot walk targets");
         }
+    }
+
+    /**
+     * <b>Why this villager is or is not standing off, in one line.</b>
+     *
+     * <p>Not a convenience. Session 12 spent three red {@code main}s on a leg that read a plausible
+     * wrong answer, and what found it in the end was an assertion on what the leg had been assuming
+     * rather than a guess at the cause. The standoff has five ways to decline silently — not lazy,
+     * no job site, not in {@code WORK}, nowhere to stand, gave up — and from outside they all look
+     * the same: a villager at their workstation. This says which.
+     */
+    public static String explainStandoff(ServerLevel level, Villager villager) {
+        Persona persona = PersonaService.personaOf(villager).orElse(null);
+        if (persona == null || !persona.isGenerated()) {
+            return "no generated persona";
+        }
+        if (DayPlan.isDiligent(persona)) {
+            return "diligent (industry " + persona.trait(Persona.INDUSTRY) + " >= "
+                    + DayPlan.INDUSTRY_TO_WORK + ")";
+        }
+        BlockPos jobSite = jobSiteOf(villager);
+        if (jobSite == null) {
+            return "lazy (industry " + persona.trait(Persona.INDUSTRY) + ") but has no job site";
+        }
+        StringBuilder out = new StringBuilder("lazy (industry ")
+                .append(persona.trait(Persona.INDUSTRY)).append("), job at ")
+                .append(jobSite.toShortString()).append(", brain in ")
+                .append(villager.getBrain().getActiveNonCoreActivity().orElse(null))
+                .append("; candidates:");
+        int preferred = DayPlan.preferredStandoff(persona);
+        for (int i = 0; i < 4; i++) {
+            int[] offset = DayPlan.STANDOFF_OFFSETS[
+                    (preferred + i) % DayPlan.STANDOFF_OFFSETS.length];
+            BlockPos flat = jobSite.offset(offset[0], 0, offset[1]);
+            out.append(" [").append(offset[0]).append(',').append(offset[1]).append(']');
+            if (!level.getChunkSource().hasChunk(flat.getX() >> 4, flat.getZ() >> 4)) {
+                out.append("unloaded");
+                continue;
+            }
+            BlockPos ground = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, flat);
+            out.append("y=").append(ground.getY())
+                    .append(" manhattan=").append(jobSite.distManhattan(ground))
+                    .append(DayPlan.isAStandoff(jobSite, ground) ? " OK" : " rejected");
+        }
+        return out.toString();
     }
 
     /**
@@ -553,7 +651,7 @@ public final class Steering {
         DaySlot slot = tracked == null
                 ? DaySlot.at(level.getDayTime())
                 : DayPlan.slotFor(tracked.persona, level.getDayTime());
-        if (!slot.isLabour() || !brain.isActive(Activity.WORK)) {
+        if (!slot.isLabour() || !isSteerable(brain)) {
             return Posture.OFF_DUTY;
         }
         long unreachableSince = brain.getMemory(MemoryModuleType.CANT_REACH_WALK_TARGET_SINCE)
@@ -597,6 +695,24 @@ public final class Steering {
     public static BlockPos jobSiteOf(Villager villager) {
         GlobalPos job = villager.getBrain().getMemory(MemoryModuleType.JOB_SITE).orElse(null);
         return job == null || job.dimension() != villager.level().dimension() ? null : job.pos();
+    }
+
+    /**
+     * How many job-site walk targets have been declined in this level since the server started.
+     *
+     * <p>A number rather than a sentence, because the harness asserts on it and the first draft of
+     * that assertion read {@link #describe}'s prose with {@code String.contains} — which is a guard
+     * that goes quiet the day somebody rewords a log line.
+     */
+    public static int vetoCount(ServerLevel level) {
+        LevelState levelState = STATE.get(level);
+        return levelState == null ? 0 : levelState.vetoes;
+    }
+
+    /** How many villagers have been sent to a standoff in this level since the server started. */
+    public static int steeredCount(ServerLevel level) {
+        LevelState levelState = STATE.get(level);
+        return levelState == null ? 0 : levelState.steered;
     }
 
     /** Counts since the server started, for the debug command and the harness. */

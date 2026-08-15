@@ -1092,9 +1092,18 @@ public final class ProfilerHarness {
         player.setInvulnerable(true);
         // Mid-morning and frozen: LABOUR_I in DESIGN.md §7's table, which is when a villager's
         // brain has the most to do. Measuring at night would measure a village asleep.
-        level.setDayTime(2000);
+        //
+        // THREE THOUSAND RATHER THAN TWO, changed at session 13 and the reason is the thing being
+        // measured. LABOUR_I begins at 2000, and a villager reaches a boundary DayPlan.offsetOf
+        // ticks after it — so with the clock frozen *on* the boundary, every villager whose offset
+        // is not zero stays in DAWN for ever, no standoff is ever issued, and the day plan reports
+        // a cost of nothing. Three thousand is a thousand ticks past the widest spread, so the
+        // whole population has crossed and the steady state being measured is the real one: the
+        // industrious at their workstations and the lazy parked and being vetoed. Both phases share
+        // this method, so the vanilla baseline moves with it and the two still subtract.
+        level.setDayTime(3000);
         Namesake.LOGGER.info("[profile] configured: normal difficulty, no spawning, day frozen "
-                + "at 2000, one creative player");
+                + "at 3000 — inside LABOUR_I and past the transition spread, one creative player");
     }
 
     private static ServerPlayer player(MinecraftServer server) {

@@ -145,15 +145,36 @@ class DaySlotTest {
         assertFalse(DaySlot.NOON.isLabour(), "NOON is session 14's ERRAND, not session 13's");
     }
 
+    /**
+     * <b>The ruled table, pinned to its literals.</b>
+     *
+     * <p>The first version of this test asserted that each slot begins where its predecessor ends —
+     * and a breakage that moved {@code NOON} from 6000 to 6100 turned nothing red, because
+     * {@link DaySlot#endsAt} is <i>derived</i> from the next slot's start and the assertion was
+     * therefore true of any table at all. A tautological test is one of the three things hard rule 3
+     * names, and it took a deliberate breakage to see it.
+     *
+     * <p>So the eight starts are held against {@code DESIGN.md} §7's own numbers. They are ruled,
+     * and moving one is a design change rather than a refactor — session 14 hangs {@code ERRAND} off
+     * two of these rows.
+     */
     @Test
-    @DisplayName("the table covers the whole day exactly once, with no gap and no overlap")
+    @DisplayName("the eight slot starts are DESIGN.md §7's own, and the table tiles the day")
     void theTableTilesTheDay() {
-        assertEquals(0, DaySlot.values()[0].startsAt());
+        int[] ruled = {0, 2000, 5000, 6000, 7000, 9000, 11000, 14000};
+        assertEquals(ruled.length, DaySlot.values().length,
+                "DESIGN.md §7's table has eight rows");
+        for (int i = 0; i < ruled.length; i++) {
+            assertEquals(ruled[i], DaySlot.values()[i].startsAt(),
+                    "slot " + i + " (" + DaySlot.values()[i] + ") does not begin where DESIGN.md §7 "
+                            + "says it does. These are ruled numbers; four of them are vanilla "
+                            + "keyframes and two of them are session 14's ERRAND boundaries.");
+        }
         assertEquals(DaySlot.DAY_LENGTH - 1,
                 DaySlot.values()[DaySlot.values().length - 1].endsAt());
         for (int i = 1; i < DaySlot.values().length; i++) {
-            assertEquals(DaySlot.values()[i - 1].endsAt() + 1, DaySlot.values()[i].startsAt(),
-                    "slot " + i + " does not begin where its predecessor ends");
+            assertTrue(DaySlot.values()[i].startsAt() > DaySlot.values()[i - 1].startsAt(),
+                    "slot " + i + " does not begin after its predecessor");
         }
         for (int dayTime = 0; dayTime < DaySlot.DAY_LENGTH; dayTime++) {
             DaySlot slot = DaySlot.at(dayTime);

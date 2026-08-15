@@ -180,7 +180,7 @@ public final class DayPlan {
      * walks the table, so the fallback is deterministic and a villager stands in the same place
      * every day. §7's first legibility law is <i>one intent, one place</i>.
      */
-    static final int[][] STANDOFF_OFFSETS = {
+    public static final int[][] STANDOFF_OFFSETS = {
             {5, 0}, {4, 3}, {3, 4}, {0, 5},
             {-3, 4}, {-4, 3}, {-5, 0}, {-4, -3},
             {-3, -4}, {0, -5}, {3, -4}, {4, -3},

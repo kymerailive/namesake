@@ -75,6 +75,10 @@ public final class HarnessClient {
         if (BoardProbe.isRequested()) {
             answerTheBoardProbe(minecraft);
         }
+        String shot = BoardProbe.takeShotRequest();
+        if (shot != null) {
+            grab(minecraft, shot);
+        }
         if (entered) {
             return;
         }
@@ -189,16 +193,20 @@ public final class HarnessClient {
      * found a defect in the board.
      */
     private static void grabTheBoard(Minecraft minecraft) {
+        // Named by phase as well as by order: setup and verify are two launches into one run
+        // directory, and a bare counter meant the second overwrote the first — which is how a
+        // picture of a board with no history on it was read as the populated one.
+        grab(minecraft, "namesake-board-" + AttachBetHarness.phase() + "-" + ++boards);
+    }
+
+    /** One picture, under a name the server chose. Never fails a run. */
+    private static void grab(Minecraft minecraft, String name) {
         try {
-            // Named by phase as well as by order: setup and verify are two launches into one run
-            // directory, and a bare counter meant the second overwrote the first — which is how a
-            // picture of a board with no history on it was read as the populated one.
-            Screenshot.grab(minecraft.gameDirectory,
-                    "namesake-board-" + AttachBetHarness.phase() + "-" + ++boards + ".png",
+            Screenshot.grab(minecraft.gameDirectory, name + ".png",
                     minecraft.getMainRenderTarget(),
                     message -> Namesake.LOGGER.info("[harness] {}", message.getString()));
         } catch (RuntimeException e) {
-            Namesake.LOGGER.warn("[harness] could not grab a screenshot of the board", e);
+            Namesake.LOGGER.warn("[harness] could not grab the screenshot '{}'", name, e);
         }
     }
 

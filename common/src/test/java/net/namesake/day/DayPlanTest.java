@@ -280,8 +280,21 @@ class DayPlanTest {
                 "height counts toward Manhattan, so a standoff up a hill is not one");
     }
 
+    /**
+     * <b>Arm's reach is {@code WorkAtPoi}'s own 1.73, and the case that pins it is the awkward one.</b>
+     *
+     * <p>The first version of this test asserted one block in (true), one diagonal (true) and two
+     * blocks out (false) — and a deliberate breakage that replaced 1.73 with <b>2.0</b> passed all
+     * three, because two blocks out is 2.06 from the block's centre and is outside both. A test that
+     * only asks about its own extremes cannot notice a constant moving between them, which is
+     * {@code PersonalityDistributionTest}'s opening paragraph arriving somewhere new.
+     *
+     * <p>So the pin is a position that is <i>between</i> the two: one across and two up is
+     * <b>1.803</b> from the centre — outside 1.73 and inside 2.0. It is also a real position, which
+     * is why it is the one chosen: a villager standing on a block above their workstation.
+     */
     @Test
-    @DisplayName("arm's reach is WorkAtPoi's own 1.73, measured centre to feet")
+    @DisplayName("arm's reach is WorkAtPoi's own 1.73, and a round 2.0 would not do")
     void armsReachIsTheEnginesNumber() {
         BlockPos job = new BlockPos(0, 64, 0);
         assertTrue(DayPlan.isWithinArmsReach(job, job.offset(1, 0, 0)));
@@ -290,6 +303,12 @@ class DayPlanTest {
                         + "taken into account, which is inside 1.73 — and it is the reason a "
                         + "villager standing on the corner of their workstation still works");
         assertFalse(DayPlan.isWithinArmsReach(job, job.offset(2, 0, 0)));
+
+        assertFalse(DayPlan.isWithinArmsReach(job, job.offset(1, 2, 0)),
+                "one across and two up is 1.803 from the workstation's centre. It is outside "
+                        + "WorkAtPoi's 1.73 and inside a round 2.0, so it is the only kind of case "
+                        + "that can tell the engine's constant from a tidier one — and a breakage "
+                        + "pass proved it, because replacing 1.73 with 2.0 turned nothing red.");
     }
 
     @Test

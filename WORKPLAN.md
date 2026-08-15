@@ -148,8 +148,8 @@ Where any other document disagrees on sequence, this wins.
 | 10 | Roads and propagation — **SHIP-OR-KILL** | **done** — 2026-08-15 |
 | 11 | Notice Board | **done** — 2026-08-15 |
 | 12 | Standing bands | **done** — 2026-08-15 |
-| 13 | Day plan I — free slots | **NEXT** |
-| 14 | Day plan II — ERRAND activity | pending |
+| 13 | Day plan I — free slots | **done** — 2026-08-15 |
+| 14 | Day plan II — ERRAND activity | **NEXT** |
 | 15 | Art, config, playtest | pending |
 
 ---
