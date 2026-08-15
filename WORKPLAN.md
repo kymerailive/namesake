@@ -4518,7 +4518,7 @@ shape.
 
 ### Session 12 — 2026-08-15 — standing bands
 
-**Shipped.** `3a22d0c..RANGE2` plus this ledger commit, pushed to `origin/main`. CI green on all
+**Shipped.** `3a22d0c..e269b51` plus this ledger commit, pushed to `origin/main`. CI green on all
 three jobs — build and test, and the attach-bet harness on each loader.
 
 **It was red twice on the way there and both defects were real**, in the leg that opens a trade
