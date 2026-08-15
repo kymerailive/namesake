@@ -3,7 +3,27 @@
 **The ledger.** What happens next, in order, with exit criteria. Read first, update last.
 Where any other document disagrees on sequence, this wins.
 
-- **Status:** session 10 complete, **and the thesis is machinery.** Feed six villagers in one village,
+- **Status:** session 11 complete, **and a player can read what a village knows about them.** Stand a
+  lectern anywhere in a village, right-click it with an empty hand, and it says who there has an
+  opinion of you, what they watched you do, and what they were told about you by somebody who came
+  down the road — *"fed someone hungry · from Mazhsk, west · 1 heard it"*, in a village the player has
+  never done anything in. That is the first surface in eleven sessions a player can read without
+  typing a debug command, and `DESIGN.md` rules it is the entire onboarding surface because there is
+  no tutorial. **The mod stores nothing at all to make it work:** a lectern standing inside a
+  registered settlement *is* a notice board, everything on it is computed when it opens, and the
+  verify phase reads a real save's history off one placed in a world written by a previous launch.
+  `DESIGN.md` §9 said *a lectern with a block entity*, and a block entity is a second persisted store
+  in chunk data with a schema `NpcSchema` cannot see — the fifth time this project has ruled *one
+  file, one version number that cannot disagree with itself*. **Schema 7, unchanged, for the second
+  session running.** Two more compositions were opened and closed out loud, as at 08 and 10: a
+  standing must be named and the five bands are session 12's, so the board asks `Dialogue.poolFor` —
+  the same call the villager's line is selected by — and session 12 replaces one method; and a
+  settlement had no name, so it has a derived one, from the bell and the culture, costing zero bytes.
+  **Widths here are pixels rather than characters**, against `Window.calculateScale`'s 320×240 floor,
+  and the advance table that makes that pure is pinned to the real `Font` by a harness leg — which
+  found five of its numbers wrong on the first run that reached it. **415 unit tests, 119 harness legs
+  in `setup` and 29 in `verify`.**
+  Before that: session 10, **and the thesis is machinery.** Feed six villagers in one village,
   wait a day, walk to a village down the road that you have never done anything in, and a villager
   there says *"Someone mentioned you, in passing."* — because somebody who was standing in the first
   village walked the road. Six of six residents of the far village hold it, all six can still say who
@@ -92,8 +112,8 @@ Where any other document disagrees on sequence, this wins.
 | 08 | Gossip and distortion | **done** — 2026-08-14 |
 | 09 | Dialogue pools and residency | **done** — 2026-08-15 |
 | 10 | Roads and propagation — **SHIP-OR-KILL** | **done** — 2026-08-15 |
-| 11 | Notice Board | **NEXT** |
-| 12 | Standing bands | pending |
+| 11 | Notice Board | **done** — 2026-08-15 |
+| 12 | Standing bands | **NEXT** |
 | 13 | Day plan I — free slots | pending |
 | 14 | Day plan II — ERRAND activity | pending |
 | 15 | Art, config, playtest | pending |
@@ -520,6 +540,16 @@ and who was standing close enough to see it. The first is five named archetypes 
 second is the least grounded number in the instrument and is swept rather than asserted. Everything
 between a deed and the save file is called through `DeedBus.record`, the same door the game uses.
 
+**A sixth, added 2026-08-15, and it asserts nothing at all: a picture.** Every board a scripted run
+opens is screenshotted into `<loader>/run/screenshots/`. It is evidence for a person rather than a
+check — a failed grab changes no verdict — and it is here because **the rows are not the screen.**
+Every guard in this repository reads strings, and a right-aligned column that collides, a panel whose
+last row is sliced in half, a scrollbar nobody can see and a colour that vanishes into the background
+are all things that look perfectly fine as strings. Session 11 found three of its five defects that
+way and could not have found them any other way. Sessions 09 and 10 each found two defects by
+rendering their output and reading it; this is the same instrument with the last step no longer
+optional.
+
 ## Never cut — load-bearing walls, not tuning knobs
 
 The `spread ≥ 64` boundary-jitter floor · the 8/tick transition governor · the `id % 7` path gate ·
@@ -534,6 +564,14 @@ declined. Carry the telling instead and the next village hears your name as *"so
 north"* — acceptance step 5 fails and nothing goes red except the two tests written for it. Drop the
 home rule and an undegraded copy sets out again from every village it reaches, and your name is at
 the horizon. `GossipTest` holds both, and `SimulationTest` holds what they do to a second village.
+
+**Added at session 11: `NoticeBoardScreen.isPauseScreen` returns false, and it looks like a
+preference.** `Screen.isPauseScreen` defaults to **true**, and `Minecraft.runTick` sets `pause`
+whenever a pausing screen is up in single player — which **stops the integrated server ticking.**
+Every deadline the attach-bet harness has is counted in server ticks, so a board that paused would
+wedge a scripted run with no error, no timeout and no last line in the log. That is session 05's
+undiagnosed mid-run wedge exactly, arriving from a third direction after `pauseOnLostFocus`. It is
+also wrong on its own terms: a village whose clock stops while you read about it is not a village.
 
 **Added at session 08: `Deed.ATTRIBUTED` does two jobs and both are load-bearing.** It is the blur
 threshold *and* the floor on retelling — a story you cannot attribute is a story you cannot pass on —
@@ -3964,3 +4002,410 @@ come from the generator's noise rather than from a chunk, which is what makes it
 **No risk 5 movement and no exemption movement** — none fell due, and for the fourth session running
 the forcing function was not what kept rule 5 honest. No changes to the 16-session shape.
 
+
+### Session 11 — 2026-08-15 — the Notice Board
+
+**Shipped.** `RANGE_PLACEHOLDER` plus this ledger commit, pushed to `origin/main`. CI green on all
+three jobs — build and test, and the attach-bet harness on each loader.
+
+**A player can read what a village knows about them without typing a command, and nothing on disk
+knows a notice board exists.** Stand a lectern anywhere in a village, right-click it with an empty
+hand, and it says who there has an opinion of you, what they watched you do, and what they were told
+about you by somebody who came down the road — *"fed someone hungry · from Mazhsk, west · 1 heard
+it"*, in a village the player has never done anything in. That is `DESIGN.md` §10 step 5 as a
+*rendering* rather than as a line of dialogue, and it is the first surface in eleven sessions a player
+can read at all: everything this mod knows has until now been reachable through `/namesake debug` and
+nowhere else, and §2 rules that this board is the entire onboarding surface because there is no
+tutorial.
+
+**It is a vanilla lectern, and there is no block entity, no registered block and no persisted field
+anywhere in it.** A lectern standing inside a registered settlement *is* a notice board; everything on
+it is computed when it opens and dropped when it closes. The verify phase stands one up in a world
+written by a previous launch and reads that save's real history off it — **out of a save that stores
+nothing about a notice board at all.**
+
+#### The first contradiction: a block entity is a second save file
+
+`DESIGN.md` §9 and this ledger both say *a lectern with a block entity — zero new art*. The second
+half is honoured exactly. The first is not, and it is the same shape as the two ruled numbers session
+10 opened on and the retention session 08 opened on: two decisions that do not compose.
+
+**A block entity is a second persisted store.** Minecraft saves it into chunk data, on a versioning
+ladder of its own that `NpcSchema` cannot see, that hard rule 1's fixer ladder cannot cover, and that
+a load test against a pre-change save cannot reach. This project has ruled *one file, one version
+number that cannot disagree with itself* four times — settlements at 03, bonds at 05, rings at 06,
+gossip at 08.
+
+So the brief's question is the one that decides it: **what would it store?** Everything on the board is
+computed on open, so the only thing left is the single fact that this lectern is a board — and that is
+derivable. Four ways out, and what each costs:
+
+| | What it costs |
+|---|---|
+| **A block entity** | A second schema with no fixer, for one boolean |
+| **A block state or a data component** | The same bytes in the same chunk data, and now something has to *write* them — where deriving needs no writer at all |
+| **A registered block** | A registry entry, an item, a recipe, a blockstate file and a model file, so it is no longer zero art; and **every lectern already standing in every existing world stops being a board**, so the surface that exists to teach a new player what this mod does would have to be crafted first |
+| **Derive it** | Nothing. A lectern inside a settlement's membership radius is a notice board. |
+
+**The fourth is what shipped, and it is session 10's road-graph argument and session 09's residency
+argument for the third time:** a pure function of a table that has been on disk since schema 3, which
+cannot drift from that table because it *is* it. **Schema 7, unchanged** — no new record, no new
+field, no new key, no datafixer, for the second session running.
+
+**And the gesture is the one vanilla spends on nothing.** `LecternBlock.useWithoutItem` returns
+`CONSUME` and does nothing at all when the lectern has no book; putting a book on one goes through
+`useItemOn`, and a lectern that has a book opens the book. So reading, placing and taking a book are
+untouched, and **a lectern outside a village is left entirely alone** — which is session 10's ruling
+that a player's build is invisible to the road materialiser, applied to a gesture instead of to a
+block. The harness holds both negatives as well as the positive: *a hand with a book in it is somebody
+using a lectern*, and *the bell is not a notice board however central it is*.
+
+**Hard rule 6 costs this session nothing, and it is worth saying why rather than noting that it
+passed.** There is no serverbound packet at all: only the server opens an interaction, ruled at 02,
+and a reader of a notice board cannot ask it to do anything. No interaction token is minted either — a
+token exists to authorize a verb, and there is no verb.
+
+#### The second contradiction: what a standing is called, and whose answer it is
+
+`DESIGN.md` §2 rules **Bond UI | Bands + the deed ring. Never raw integers.** The five bands are
+session 12's and their thresholds come out of session 07's data, so the board must name a standing, is
+forbidden from printing the number, and the naming scheme does not exist yet. Four ways out:
+
+| | What it costs |
+|---|---|
+| **Invent a fifth naming scheme** | Two answers to *what is my standing* in the game at once — the board's and the villager's. That is the failure `CLAUDE.md` names about documents, in code; and session 12 replaces it anyway |
+| **Print the ring and no standing** | Fails the brief, and makes the board's first section its own absence for ever |
+| **Ship the integers** | Breaks a ruled decision |
+| **Ask `Dialogue.poolFor`** | Four names where session 12 will have five bands |
+
+**The fourth shipped, and the objection against it turns out to be its argument.** The stated worry was
+that `net.namesake.dialogue` is in the rule 5 ledger's display packages — but that list constrains what
+a *persisted field* may name as its consumer, and the board is itself a display. A display reading
+another display's classifier is not the shape §1 forbids. What is left is the thing that actually
+matters: **the board and the villager have to agree about what your standing is, and the only way to
+guarantee that is for there to be one implementation.** The board calls `Dialogue.poolFor` — the same
+call `Dialogue.speak` makes, not a copy of its arithmetic — so they agree by construction rather than
+by two implementations that currently match.
+
+**What session 12 has to replace is one method, and the answer is stated plainly because the brief
+asked for it.** Session 12's third ruled consumer *is* which dialogue pool is selected, which is
+`Dialogue.poolFor` itself. When that becomes a band lookup the board moves with it and needs no edit,
+because nothing on the board names a threshold or prints a number. What session 12 may *additionally*
+want is to print five band names where this prints four pool phrases — and that is a second change, to
+one table, rather than a mechanism change.
+
+**The cost is stated rather than buried: two bands that share a pool look identical on this board**, so
+a player whose trade price has moved may see the board stand still. That is strictly better than the
+board and the villager giving different answers. `BoardTest.theBoardAndTheVillagerShareOneAnswer`
+expresses the boundary as `Dialogue.WARM_WARMTH` rather than as the number twenty, so **session 12
+moving the threshold moves the test with it**, and a board that grew a threshold of its own goes red
+the first time the two differ — which is exactly what the first row of the breakage table below is.
+
+**And they are phrases rather than labels** — *has not met you*, *knows you*, *warm to you*, *wary of
+you* — because this board is the onboarding surface. A player reading four different sentences beside
+four names infers *this tracks how each person feels about me*; a player reading four category names
+has to be told what a category is. The switch is exhaustive with no default, so a fifth pool is a
+compile error rather than a band that silently renders as nothing.
+
+#### The third: settlements had no name, and now they have one that costs nothing
+
+`/namesake debug deeds` prints `@s0` and that is not a sentence. `Settlement` is six fields and session
+03 deleted its culture for being derivable. Two answers were available and they are not equally cheap:
+a **direction**, which `Deed.UNKNOWN_ACTOR`'s note has promised since session 08 and nothing had ever
+built; or a **name**, which §1 forbids as a persisted field whose only reader is a display.
+
+**Both shipped, and the name is derived, so §1 has nothing to classify.** That is the standing `Names`
+has held since session 03 — a total function with no stored state — and it is the whole reason a name
+was available at all in a session that must not touch the schema. Three findings fell out of building
+it, and the first is why it was cheap:
+
+1. **`Names.family` already *was* the place grammar.** Every culture's family suffixes are place words
+   — Vale's are literally *wood*, *field*, *ford*, *combe*, *mere*; Karsk's are *grad*, *vor*, *din* —
+   because a family name and a place name are the same shape in every language that table was modelled
+   on. A settlement name is one call to a function session 03 shipped, and `BoardTest` holds it: every
+   culture's place name ends in one of that culture's own place words.
+2. **The seed has to be the bell rather than the id.** A settlement id comes from a counter that
+   increments in the order a player happens to *visit*, so two playthroughs of one world seed would
+   name the same village differently. The bell does not move — and it is already what
+   `Personas.generate` reads the settlement's culture at, deliberately, so that two residents on
+   opposite sides of a culture border do not grow up in different cultures in one village. **So the
+   name and the tongue it is in come from one point on the map, and every resident agrees about it by
+   construction.**
+3. **The bearing is not a fallback for the name.** Both are shown — *from Mazhsk, west* — because a
+   player who has never been to Mazhsk cannot turn a noun into a direction. A place that has fallen out
+   of the settlement table keeps the bearing and loses the name, which is this mod's one rule about
+   detail arriving at a third site: **it degrades, it is never invented.**
+
+#### The width budget in this repo is the wrong one for a screen, in two different ways
+
+`CommandLayoutTest` measures 1,920 rendered sentences and twelve command states against a
+**sixty-character** chat width. Both halves of that are wrong here. A lectern GUI is not chat; and a
+character is not a unit of width — `Illinois` and `wwwwwwww` are eight characters and **32 against 48
+pixels**.
+
+**So the budget is read off the engine rather than chosen.** `Window.calculateScale` raises the GUI
+scale only while the framebuffer divided by the next scale is still at least 320 by 240, so 320×240 is
+the smallest effective GUI Minecraft will ever present — at any window size, at any scale setting,
+forced or automatic. The panel is 288 wide inside that and the text column is **272 scaled pixels**,
+laid out in two columns with the right one drawn against the right edge, which a screen can do for
+nothing and chat cannot. The rows went into the guard that already enumerates rather than into a fifth
+one that samples — the instruction session 09 was given, and the reason session 07's three over-wide
+absence branches shipped.
+
+**Measuring in pixels needs a table of advances, and a table written down can be wrong.** So it is
+pinned to the engine's own `Font` by a harness leg that checks every printable character and every
+rendered row and reports *which* ones disagree. It found **five** — the double quote, the apostrophe,
+the asterisk and both braces were each a pixel too wide — and **not one of them appears on the board
+today**, so no row disagreed and nothing a unit test could have reached was affected. A latent wrong
+number in a measurement table is the confident-wrong report this project has now written about in
+three different units.
+
+#### What shipped
+
+- **`net.namesake.board`** — three classes, none of them persisted. `Board` (what one village knows
+  about one player, deduped across the settlement on `Deed.id()` and counted); `BoardText` (the layout,
+  the two-column budget, the ASCII advance table, and the only pixel measurement in the mod);
+  `NoticeBoard` (the gesture and the server-side open).
+- **`net.namesake.client.NoticeBoardScreen`** — a panel drawn from four `fill` calls, scrolling, and
+  **not a pause screen**, which is not a preference: `Screen.isPauseScreen` defaults to true and
+  `Minecraft.runTick` stops the integrated server for one in single player, so a board that paused
+  would wedge a scripted run with no error and no last line in the log. That is session 05's
+  undiagnosed wedge exactly, and `HarnessClient.unattended` carries the diagnosis.
+- **`NoticeBoardPayload`** — clientbound and nothing else, computed per viewer and sent to one player.
+- **`ClientScreenSink`** — the twin of `ClientPacketSink`, for the mirror-image reason: NeoForge
+  registers a clientbound handler on the dedicated server too, so a handler written as
+  `NoticeBoardScreen::open` would resolve a `net.minecraft.client` type on a machine that has none.
+- **`Names.ofSettlement`** — a place name from the bell and the culture, derived and never stored.
+- **`BoardProbe`** and the client half of it — the font pin, and a **screenshot** of every board a
+  scripted run opens, because the rows are not the screen.
+- **`net.namesake.board` added to `SocialValueLedgerTest.DISPLAY_PACKAGES` before a line of the board
+  was written.** Session 09's best decision, repeated for the same reason: this board is now the most
+  tempting reader in the codebase for a field that has none, and `Deed.item`'s exemption falls due at
+  session 12 with the board already printing the object. **The board is not the payment**, and the
+  build says so rather than somebody having to remember it.
+- **Schema 7, unchanged.**
+
+#### What the exit criteria actually showed
+
+**Both loaders, every leg green**, in two launches each plus two cross-build load tests:
+
+| phase | legs | what it was run against |
+|---|---|---|
+| `setup` | **120** (94 before this session) | a fresh world on the session 11 build |
+| `verify` | **29** (15 before) | that world, saved and reloaded |
+| `verify` | **29** | the archived **schema-7** world, and **no migration ran** |
+| `verify` | **29** | the same world again |
+
+**415 unit tests**, up from 378, real JUnit XML, `failures=0 errors=0 skipped=0`.
+
+**The cross-build load test is the one that proves the central decision rather than argues it.** A
+world archived at `3cf2f04` — before a line of this session was written — loads on the session 11
+build with `no migration expected: world is already at schema 7`, and then the harness stands a
+lectern up in it and **reads that save's real history off the board.** There is nothing in that file
+about a notice board, because there is nothing to put in it.
+
+The far village's board, on screen, on both loaders — a village the player has never done anything in:
+
+```
+Styaskvor                                              day 2
+  A Karsk village. 6 people live here.
+  You are a guest here, not one of them.
+    Residents who trust you enough                    0 of 3
+    Hungry people you have fed                        0 of 3
+
+What the people here think of you
+  Naszizskork Gvakvor                              knows you
+  Nikryk Gvakvor                                   knows you
+  and 4 who have never met you.
+
+What they have seen you do
+  No history.
+  Nobody here has watched you do anything.
+
+What they have been told about you
+  Second-hand. Nobody here saw it happen.
+  fed someone hungry                                  day 1
+    from Mazhsk, west                              1 heard it
+```
+
+**Every clause of that is a different session's work arriving at one surface**, which is the only
+reason it is quoted whole: the name of the village is session 03's grammar, the people are session
+01's personas, *knows you* is session 09's pool, *No history.* is `DESIGN.md` §10 step 3 in its own
+words, and *from Mazhsk, west* is session 10's border with session 08's promise finally built on top
+of it.
+
+#### What the run found that nobody asked it
+
+**1. `DESIGN.md` §10 step 3's third clause is met, and it was the last one outstanding.** Session 09's
+log recorded that step 3 passed *"on its own clause and on nothing else"* — the stranger lines were
+09's, the road was 10's, and *Board shows "no history."* was 11's and did not exist. It exists, in
+those words, and the harness reads it off a real screen for a viewer who has done nothing.
+
+**2. The two loaders' dev clients disagree about whether you are the same person in two launches, and
+a leg that assumes either one is measuring the launcher.** Fabric mints `PlayerNNN` and therefore a
+fresh offline UUID every launch, so the player who runs `verify` has done nothing in that world;
+NeoForge is always `Dev`, so they are the player who wrote the save and their board is full. Both are
+correct. The verify leg went red on NeoForge only, with nothing wrong with the board. **That is the
+fourth cross-loader asymmetry this project has been bitten by** — after session 01's conversion event,
+session 01's `SavedData.Factory` and session 02's interact callback ordering — and the lesson is the
+same one each time: read what the two sides actually do rather than what one of them did.
+
+**3. A board is bounded by the ring and the population, not by anything small.** A settlement of nine
+holds up to nine full rings, so the distinct deeds one player is the actor of are bounded by
+`RING_CAPACITY × residents`. The board shows the newest thirty-two per section and **says how many it
+did not show**; `/namesake debug deeds` remains the unbounded view. A truncation nobody mentions reads
+as *that is everything*, which is the worst available property for the one surface whose job is to
+tell a player what this mod keeps.
+
+#### Five defects, and four of them were found by looking at the screen
+
+That is the fourth session running where that has been the instrument, and this time two of the four
+needed a *picture* rather than the rendered rows — which is why a scripted run now leaves screenshots
+behind.
+
+1. **A clip turned `north-east` into `north`.** The origin and the object shared one line, so the clip
+   that exists for an arbitrarily long modded registry id ran over the place instead, and a story from
+   the north-east was posted as coming from the north. **A shorter object is a detail degrading, which
+   this mod does everywhere and is allowed to; a different compass point is a detail being invented,
+   which is the one thing nothing in this mod may do.** Fixed structurally — the place gets its own
+   line and only the object is ever clipped — rather than by widening anything.
+2. **`ench`.** The same clip at the other end: an object squeezed to four characters is not a shorter
+   fact about what changed hands. Below five characters it is dropped instead.
+3. **The panel cut its last row in half along the middle.** Sized to its content and clamped to a
+   maximum, its height was not a whole number of rows, so the scissor sliced a line of text and the
+   board looked broken rather than scrollable. Found on a screenshot.
+4. **The scrollbar was two pixels of the border's own colour, sitting on the border.** A board with
+   four rows below the fold showed no sign that there was anything below them. Found on the same
+   screenshot. It has a track now, and it sits in the panel's padding.
+5. **And one line was bought back from the vertical margin, because of what the screenshot showed
+   underneath it.** At a sixteen-pixel margin the fold landed on row nineteen and *the first hearsay
+   row was row twenty* — so the one sentence the whole propagation thesis produces sat one line below
+   the bottom of the panel. Height is the forgiving direction, and it is now spent rather than matched.
+
+**And one that was my assertion rather than the board's behaviour**, recorded because getting it
+backwards is instructive: the first version asserted that a board with any history at all does not
+print *No history.* The far village turned it red immediately, and correctly — it has heard six stories
+about the player and watched them do nothing, so **exactly one of its two sections should be saying
+so**. *Every section prints its own absence* means every section, including while its neighbour is
+full.
+
+#### Rule 3: eighteen deliberate breakages, each watched to fail and then removed
+
+Sessions 09's and 10's discipline, kept: the failing test's **name** is captured rather than the
+build's exit status, a row whose `sed` matched nothing is refused rather than reported as green, and —
+session 10's own casualty — **the script restores only the one file it broke.** Eighteen rows,
+eighteen red, no `NOTHING FAILED`, and the tree clean at the end.
+
+| Breakage | Result |
+|---|---|
+| The board grows a standing threshold of its own instead of asking `Dialogue.poolFor` | **6 red**, including *"the board's boundary between warm and known is the villager's boundary"* |
+| Deeds are not deduped across the village, so the crowd is the history | **5 red**, including *"one feeding four people watched is one row saying four remember it"* |
+| A rumour nobody can attribute is posted about you anyway | **Red.** *"a rumour nobody can attribute is not on your board, because it is not about you"* |
+| The board shows everybody's history to whoever opened it | **Red.** *"a second player who has done nothing sees a board with no history on it"* |
+| A village that disagrees about the object picks one | **Red** |
+| A holder who was only told outranks one who watched it | **Red.** *"if anybody here watched it, the village watched it"* |
+| The bearing's half-sector offset is dropped | **Red.** *"a village barely south of due east is still east"* |
+| A settlement name folds its two coordinates together | **Red.** Two coordinates swapped are two different places |
+| A standing prints the number behind it | **Red.** `DESIGN.md` §2's *never raw integers* |
+| Two pools are given the same words | **Red** |
+| A deed type reaches a player as its enum name | **Red** |
+| The section with nothing in it stops saying so | **Red.** *"a village that has never seen you says so in every section, in its own words"* |
+| The truncation goes silent | **Red.** *"a board that cannot show everything says how much it left off"* |
+| A clipped object is shown as a fragment rather than dropped | **Red** |
+| The panel is allowed past the smallest GUI Minecraft will present | **2 red** |
+| A standing phrase widened past the widest name the generator can make | **Red.** The pixel budget, on the row it exists for |
+| An advance in the table drifts by one pixel | **Red** |
+| **`Bond.warmth` names the Notice Board as the mechanic that reads it** | **Red.** *"every named consumer exists, is not a display, and actually reads the field"* |
+
+**The last row is the one worth reading**, and it is session 09's twenty-first arriving one session
+later: the package went into `DISPLAY_PACKAGES` before a line of the board was written, so the most
+tempting lie available to this session is a build failure rather than a thing somebody has to
+remember.
+
+**And a nineteenth breakage is not in the table, because the engine ran it rather than a script.** The
+advance table was wrong on five characters when it was written, and the harness leg said which five.
+That is rule 3 with the failure and the fix in the right order for once: the guard produced a genuine
+red before it produced a green, and nobody arranged it.
+
+#### Not ruled at close, and one of them is the exit criterion
+
+**The exit criterion is the owner's and it has not been run.** *A new player who has read nothing can
+open the board and correctly explain what the mod tracks* is a person test like session 03's and
+session 10's, and no test in this repository can have an opinion about it.
+
+**What was checked is stated precisely so it is not mistaken for the criterion.** Every row of every
+state the board has fits the budget, measured in pixels rather than characters; the layout, the absence
+branches, the standing naming and the direction arithmetic are enumerated rather than sampled; and the
+board has been opened by a real player through vanilla's own interaction path, in two villages, on both
+loaders, drawn with the real font — and photographed. **It was also read before it was handed over**,
+in five states printed by the build and in four screenshots, which is where four of this session's five
+defects came from.
+
+**The playtest script:** stand a lectern anywhere inside a village and right-click it with an empty
+hand. Do it in the village you have been giving things to, then walk down the road and do it in the
+next one. **The second board is the one to read** — it should say *No history.* under what they have
+seen you do, and name your first village under what they have been told.
+
+**Discoverability is the open question, it is a feel question, and so it is the owner's.** A lectern is
+a notice board, and a village only has one if it generated a library or has a librarian; a player who
+does not know that has to place one. Three answers exist and none is obviously right: leave it (a
+lectern is cheap and many villages already have one); have the settlement survey stand one up beside
+the bell, which is a world change of the kind session 10 put behind a switch; or say so in a line of
+dialogue, which is session 09's territory and would need a register. **Session 15 owns config and is
+where this lands if the answer is a switch.**
+
+**And `Dialogue.registerFor` was left alone, deliberately, with the reason written down.** Session 10
+handed up the question of whether a villager whose ring holds a story about you should lead with it,
+because `ABOUT_OTHERS` sits on turn 1 and a player who talks once to each villager never reaches it.
+**The board is half an answer and not the whole one.** A hearsay row on the board is the same content
+with no turn count in front of it, so it is now reachable in one click by anybody who finds a board —
+but a player who never finds one still needs three right-clicks, and the two surfaces are for different
+things: the board is where you go to *look something up*, and the dialogue is where it *happens to
+you*. So the board lowers the cost of the ordering without removing it, and **whether a villager should
+lead with the gossip is still the owner's.** Two lines in `registerFor`, unchanged.
+
+#### Carried into session 12
+
+- `$env:JAVA_HOME` still must be pinned to JDK 21. Kill the dev client between runs, and delete
+  `<loader>/run/saves/namesake_attachbet` before a `setup`.
+- **The schema-7 archives are at `C:\MCA Reborn Rework\.archives\schema7-3cf2f04`, with their subjects
+  files, for both loaders.** Taken before a line of this session was written, and used: the load test
+  above is them. Session 12 should take a pair of its own the same way, whether or not it expects to
+  bump — and it may well, because bands are thresholds rather than state.
+- **Session 12 replaces `Dialogue.poolFor` and the board follows for free.** Nothing on the board names
+  a threshold or prints a number. If five band names read better than four pool phrases, that is a
+  second change, to `BoardText.standing`, and the exhaustive switch means adding a fifth constant is a
+  compile error rather than a blank cell.
+- **Session 12 still owes three fields against a budget of three consumers** — `Bond.respect`,
+  `Persona.professionId` and `Deed.item` — and the ledger still calls `professionId` the weakest of the
+  set. **The board prints `Deed.item` and that does not pay it:** `net.namesake.board` is a display
+  package, so naming the board is a build failure, which is the eighteenth breakage row above.
+- **Step 7 is session 12's exit criterion, and this session got as close to it as one client can.** The
+  same lectern, the same server-side function, a second UUID: their board has no history, everybody in
+  the village is a stranger to them, and the village has not taken them in. What is untested is a real
+  second connection. The structural claim underneath it is that **nothing about a board is cached** —
+  there is nowhere for one player's board to be stored, so there is nowhere for another to read it
+  from.
+- **The board is the second thing in this mod a player can see without a command**, after session 10's
+  roads, so it is the second thing that will get reported. It needs no switch: it takes a gesture
+  vanilla spends on nothing and it places no blocks.
+- **The most interesting row is still one scroll down on a tall board.** The far village's board fits
+  its four headings and the *second-hand* line above the fold, and the hearsay row's own second line
+  below it. The scrollbar is visible and the concept is delivered without scrolling, but if the owner
+  wants the payoff on the first screen the lever is the header block rather than the budget.
+- `DeedBus.witnessScan`, `DeedBus.emit` and `Gossip.drain` **still have meters pointed at nothing**,
+  unchanged and for the unchanged reasons. The board has none either, deliberately: it is computed once
+  per GUI open, which is an interaction rather than a tick, and the only cost that could grow with the
+  world is a walk of the persona table per distinct origin — which is memoised per board.
+- **`DESIGN.md` §5's second route being much the cheaper of the two** — residency by `FED_HUNGRY` ×3 at
+  day 6 against the trust band at day 28 — is still open and still not this session's. The board now
+  *shows* both routes and their progress, which is the first time either number has been visible to a
+  player at all, so a playtest of the board is also a first read of whether that balance is right.
+
+**Ledger change.** Session 11 → done, session 12 → NEXT. **No risk movement and no exemption
+movement** — none fell due, and for the fifth session running the forcing function was not what kept
+rule 5 honest; what did was adding a package to `DISPLAY_PACKAGES` before writing the code that would
+have wanted out of it. Five decisions added to `DESIGN.md` §2, taking the count 66 → 71, plus §9's
+Notice Board clause rewritten, §5's *"no history"* line made real, and §4 step 7's blur note updated
+because the direction it has promised since session 08 is finally built. No changes to the 16-session
+shape.

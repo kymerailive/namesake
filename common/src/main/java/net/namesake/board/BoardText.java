@@ -17,7 +17,7 @@ import java.util.Locale;
  * <p>{@code CommandLayoutTest} holds 1,920 rendered sentences and twelve command states to a
  * <b>sixty-character</b> chat width. That budget is right for chat and wrong here twice over: a
  * lectern GUI is not chat, and a character is not a unit of width — {@code Illinois} and
- * {@code wwwwwwww} are eight characters and 26 against 48 pixels. Every guard this project wrote
+ * {@code wwwwwwww} are eight characters and 32 against 48 pixels. Every guard this project wrote
  * after shipping an over-wide string measures the wrong space for a screen.
  *
  * <h2>So the budget is derived from the engine rather than chosen</h2>
