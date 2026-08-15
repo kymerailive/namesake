@@ -3,7 +3,38 @@
 **The ledger.** What happens next, in order, with exit criteria. Read first, update last.
 Where any other document disagrees on sequence, this wins.
 
-- **Status:** session 12 complete, **and what a village thinks of you is what it charges you.** Walk
+- **Status:** session 13 complete, **and you can tell who works by looking.** At nine in the morning
+  three villagers of six are at their lecterns, working audibly and restocking their counters, and
+  the other three are standing five to eight blocks away doing nothing at all — **not one of them
+  reached `WorkAtPoi.start`, and not one of their counters restocked**, measured after every
+  industrious villager already had. **The standoff is a veto rather than a band, and that is the
+  session's central finding.** `DESIGN.md` §7 rested on `SetWalkTargetFromBlockMemory`'s
+  `closeEnough = 9`, and three things about that sentence are wrong: the nine is **`distManhattan`**
+  and the ruled 3–8 m band was Euclidean; the operative guard is not that behaviour at all but
+  **`StrollToPoi(JOB_SITE, 0.4F, 1, 10)`**, which drags any villager within *ten* metres back onto
+  their workstation every eighty ticks; and **there is no gap to stand in**, because Manhattan ≤ 9
+  implies Euclidean ≤ 9.87. So the standoff is neither stable nor un-contested — it is contested
+  every four seconds and it loses. What holds it is an **erase**, in the window between the behaviour
+  that writes the walk target and the `MoveToTargetSink` that would path on it, which costs a hashmap
+  remove and never a path. **The session adds no path requests to the server at all.** §7's
+  `industry ≥ 96` was the third number that does not compose: measured over **4,536 real personas**
+  industry runs −47 to 85, so 96 selects **nobody** and every villager in the world would have stood
+  off — `Bond.respect`'s failure caught before a player saw it rather than seven sessions after. It
+  is **12**, that population's p25, so **one villager in four stands off**. §7 also said *boundaries
+  are global* and *the offset derives from industry* in one sentence, and they are different claims:
+  **the table is global, the moment a villager crosses it is not**, and the harness watched a village
+  split across the boundary. **What session 13 actually ships is the standoff and the transition
+  governor** — four of its five slots need no code, and `COMMONS`'s ruled steering turns out to be
+  literally `SetWalkTargetFromBlockMemory(MEETING_POINT, …, 6, …)`, which vanilla already does.
+  **The day plan runs per loaded entity and not in the record sweep**, so the 125–225 ns payload
+  budget is untouched, and it **persists nothing** — schema 8, unchanged, for the third session
+  running. **The villagers stuck in their own houses are diagnosed rather than fixed:** a bell writes
+  `HEARD_BELL_TIME` with no expiry, `HIDE` is the only vanilla package with no
+  `UpdateActivityFromSchedule`, and its one exit needs a hiding place that a villager with no bed
+  nearby can never get. It is named — `Posture.BELL_LOCKED` — and **the day plan was one missing line
+  from causing it.** **460 unit tests, up from 437**, and the attach-bet harness grew a day-plan leg
+  in each phase.
+  Before that: session 12, **and what a village thinks of you is what it charges you.** Walk
   up to a librarian who is warm to you and a book costs fifteen emeralds where a stranger pays
   twenty and somebody they have not forgiven pays twenty-seven — in a real trade window, with
   vanilla's own struck-through price drawing it for free, because the band *adds to*
@@ -5109,3 +5140,441 @@ rewritten — including the **standing split**, ruled to land at 15 — taking t
 count 71 → 78, plus §3's `Persona`, `Bond` and `Deed` rewritten, §5's *trusted price band* made
 literal, and **§10 step 5's price clause changed from 0.95 to 1.00** with the measurement that
 decided it. No changes to the 16-session shape.
+
+### Session 13 — 2026-08-15 — day plan I, the free slots
+
+**Shipped.** `13c750f..RANGE_PENDING` plus this ledger commit, pushed to `origin/main`. CI green on
+all three jobs — build and test, and the attach-bet harness on each loader.
+
+**The session opened on three ruled numbers that do not compose, and all three are in one section.**
+Sessions 08, 10, 11 and 12 each opened on one or two; §7 had three, and the third is the one the
+whole mechanic rested on.
+
+#### The first: the 9 m tolerance is Manhattan, and the band was Euclidean
+
+`SetWalkTargetFromBlockMemory(JOB_SITE, speed, closeEnough = 9, tooFar = 100, 1200)` —
+`VillagerGoalPackages.java:78` — compares with **`distManhattan`**, not Euclidean, and so does
+`MoveToTargetSink.reachedTarget`. `WorkAtPoi` compares with `closerToCenterThan`, which is Euclidean.
+Two metrics on one point of interest.
+
+So §7's *"3–8 m, inside vanilla's 9 m tolerance"* is two different nines. A villager six east and six
+north is Euclidean **8.49** — inside the ruled band — and Manhattan **12**, outside the tolerance, and
+vanilla walks them back. The diagonal break-even is Euclidean 6.36, and height counts on top of it.
+
+#### The second, and it is the one that decides the session: the tolerance was never the guard
+
+The brief asked whether a villager parked at 3–8 m *stays* there, and whether the standoff is stable
+or merely un-contested. **It is neither.** It is contested, every four seconds, and it loses.
+
+`StrollToPoi.create(JOB_SITE, 0.4F, closeEnoughDist = 1, maxDistFromPoi = 10)` sits in the WORK
+package's `RunOne` at weight 5 of 31 — `VillagerGoalPackages.java:69`. It takes `WALK_TARGET` as
+*registered* rather than *absent*, so it **overwrites**, and for any villager within **ten metres** of
+its job site it writes `WalkTarget(jobSite, 0.4F, closeEnough = 1)` on an 80-tick cooldown. A villager
+parked at 3–8 m is inside that, and is dragged back to within one block of the workstation.
+
+**And there is no gap to stand in.** `Manhattan ≤ 9` implies Euclidean ≤ 9.87, which is inside ten;
+and any point outside ten is outside the Manhattan tolerance, where `SetWalkTargetFromBlockMemory`
+walks them back to Manhattan 9 and `StrollToPoi` then takes them the rest of the way. **Vanilla's
+equilibrium for an employed villager in `WORK` is: on the workstation.** There is no band.
+
+Two more contestants were found and both are handled rather than assumed:
+`StrollAroundPoi(JOB_SITE, 0.4F, 4)` fires inside four metres and uses `setOrErase`, and
+`GoToPotentialJobSite` writes a walk target **every tick** — though only while `POTENTIAL_JOB_SITE`
+is present, which an employed villager does not have.
+
+#### So the standoff is a veto, and that is the session's central ruling
+
+A lazy villager who has arrived declines the walk target vanilla keeps offering, in the window between
+the behaviour that writes it and the sink that would path on it.
+`Brain.availableBehaviorsByPriority` is a `TreeMap`; `MoveToTargetSink` is priority **1** and the two
+writers are **2** and **5**; so a write this tick is not acted on until the next, and the
+end-of-server-tick hook sits between them. **An erase costs a hashmap remove and never a path.**
+
+**A veto is not a tug-of-war**, which is what §7 ruled the band out of. Nothing writes a competing
+destination, nothing paths twice, and the villager does not oscillate — it stands still, which is the
+observable. §7 was right about the outcome and wrong about the mechanism.
+
+The band it stands in is now an **intersection of two metrics** rather than a range: Manhattan ≤ 9
+keeps `SetWalkTargetFromBlockMemory` silent, `dx² + dz² ≥ 25` keeps `StrollAroundPoi` silent, and
+being past five is being well past 1.73. Both are re-checked on the *resolved* ground, because a
+standoff seven blocks out and three up a hill is Manhattan ten.
+
+**The veto is narrow in five ways**, and each clause exists because the alternative is a villager who
+cannot move: only while the brain has `WORK` active — which covers panic, raids, hiding and sleeping
+in one test, and covers any future one that a list of activity names would not; only in a labour slot;
+only for a villager who has arrived; only when the walk target **is the job site**, so a stroll, a
+dropped loaf, a bed and a trading player are all left alone; and never while trading, hurt, or able to
+see something hostile.
+
+#### The third: `industry ≥ 96` selects nobody
+
+§7's table said a villager works at industry ≥ 96. Rolled through the real `TraitRoll` across six
+cultures — **4,536 personas** — industry runs:
+
+| min | p5 | p25 | p50 | p75 | p95 | max |
+|---|---|---|---|---|---|---|
+| −47 | −11 | **12** | 25 | 39 | 58 | **85** |
+
+**The observed maximum is 85, so 96 selects 0.0% and every villager in the world would have stood
+off.** That is `Bond.respect` exactly — a threshold at 20 against an observed maximum of 4 — caught
+this time *before* it reached a player rather than seven sessions after, because the instrument was
+pointed at the number before the mechanic was built on it.
+
+**The threshold is 12, which is that population's p25**, so it is defined by the shape of the
+population rather than picked to hit a target. **75.0% diligent, 25.0% lazy**: a village of nine has
+two or three idlers and still reads as a working village, which is what §7's *"everyone at a
+workstation, **except** those eight blocks away"* requires of the exception.
+`DayPlanDistributionTest` holds both ends — red below two thirds diligent, red below 8% lazy, because
+**a mechanic that never fires passes every other test in the repository.**
+
+#### What §7's two claims turn out to be, since the brief asked for them argued
+
+**The table is global. The moment a villager crosses it is not.** They are about different objects:
+
+- The **slot table** is one static table, identical for every villager in every settlement in every
+  world. That is the entire mechanism behind the at-a-glance test — *four facts and the player can
+  predict any NPC* is only reachable if there are four facts to learn. A per-villager table would be
+  four hundred days happening at once, and nothing about it could be learned by watching.
+- The **boundary offset** is per-villager, so for up to a spread after every boundary the village is
+  split between the old slot and the new one.
+
+`DayPlanTest.theTableIsGlobalAndTheCrossingIsNot` holds both in one assertion — two villagers in
+different slots at the boundary, the same slot a spread later — so neither can drift into being the
+other. And the harness watched the split happen in a running game.
+
+**And "four are exact keyframes" is three.** `VILLAGER_DEFAULT` has five — 10, 2000, 9000, 11000,
+12000 — against eight slot starts, and the exact matches are 2000, 9000 and 11000. The fourth that
+matters, **12000**, is not a start at all: it is inside `HEARTH` and it is session 14's 6a/6b line.
+The fifth, **10**, is where vanilla actually leaves `REST`: `Timeline#getValueAt` wraps to its last
+keyframe before its first, so `getActivityAt(0)` answers **`REST`** and a villager is asleep for the
+first ten ticks of the day. §7's `DAWN` row is true of 1,990 of its 2,000 ticks.
+
+#### What session 13 actually ships, stated plainly because the brief asked for it plainly
+
+**The standoff and the transition governor.** Of the five slots this session owns, three have steering
+`none` and a slot with no steering is not code — and **two more turn out to need none either**, which
+is a result rather than an omission:
+
+| slot | §7's steering | what shipped |
+|---|---|---|
+| `DAWN` | walk+look (uncontested) | **nothing** — vanilla's `IDLE` package already strolls and looks |
+| `LABOUR_I` | none | **the standoff** |
+| `LABOUR_II` | none | **the standoff** |
+| `COMMONS` | walk target r≤6 of bell | **nothing** — that is literally `SetWalkTargetFromBlockMemory(MEETING_POINT, speed, 6, …)` at `VillagerGoalPackages.java:139`, at the ruled radius |
+| `NIGHT` | none for sleepers | **nothing** |
+
+Writing `COMMONS`'s would have been a second answer to a question that already has one, which this
+document has ruled against five times. The slot table still earns its place: the standoff is
+slot-gated, and session 14 hangs `ERRAND` off two of its rows. **The session's job in those four
+slots is to prove we did not break what vanilla already does there**, which is what the harness legs
+assert.
+
+#### Where the day plan runs, ruled before anything was measured
+
+**Outside the sweep, as a per-loaded-entity cost.** Three reasons and the first is sufficient:
+steering's only output is a brain memory on a loaded entity, and three hundred of the four hundred
+records have no entity, so a sweep visit would have nothing to do; the sweep visits a record about
+once a second and the veto has to act within one tick; and the plan persists nothing, so there is no
+record state to advance.
+
+So **the sweep's 125–225 ns per record visit is untouched** — the first session to put a real payload
+anywhere did not put it there — and the day plan is a new line item sized by *loaded entities*.
+Measured maximum in a real generated world: **eleven**. Designed against sixty to a hundred.
+
+**And it adds no path requests at all.** The one walk target it writes, at a boundary, *replaces* one
+vanilla was about to write to the same villager toward the same workstation. Everything after that is
+the veto, which never paths. That is why nothing in `Steering` calls `createPath` — a reachability
+pre-check would have cost eight path computations a tick against a budget of 5.95 µs.
+
+#### The two walls, measured through both of them at once
+
+| | |
+|---|---|
+| offsets occupied, 4,536 personas | 52 of 64 |
+| busiest single offset | **17.5 per 400** |
+| mean arrival rate | **6.25/tick**, against a governor serving 8 |
+| last villager across | **63 ticks** after the boundary — inside the spread |
+
+**Two assertions written before that one were both wrong, and how they were wrong is the useful
+part.** The first held the busiest *offset* to 12; the second held *arrivals at the governor* to 8.
+Both read ~17.5, because the traits are clustered and a uniform delay of up to seven ticks is a
+seven-tick moving average that does not flatten a hump that wide. The second is wrong **in kind**
+rather than in value: **a governor that is never exceeded is a governor that does nothing.** Its whole
+job is to absorb a burst into a queue, so the two numbers that decide whether the wall holds are the
+mean — which decides whether the queue is stable at all — and the worst delay, which is the only part
+a player could see. The governor adds **nothing** to the wave.
+
+**And the arithmetic behind the offset changed once, on a measurement.** The obvious `mark + jitter`
+occupied **43 of 64** offsets, because the traits the generator actually produces span about two
+thirds of their nominal range, so a mark derived from them only reaches the middle of the spread and a
+jitter carved out of the remainder narrows it further. Blending toward a uniform draw over the whole
+spread makes the coverage a property of the arithmetic rather than of a distribution the next culture
+added would move.
+
+#### The schema did not move
+
+**Schema 8, unchanged, for the second session running.** A plan derived from a persona, a settlement
+and a day **persists nothing at all**, so rule 5 has nothing to classify and hard rule 1 is owed
+nothing — which is the answer sessions 03, 09, 10 and 11 each reached about a different field,
+arriving for a fifth time. `DayPlanTest.theDayPlanIsDerived` fails the build if anything in
+`net.namesake.day` ever declares a codec. The schema-8 archives session 12 took forward were not
+needed and are untouched at `C:\MCA Reborn Rework\.archives\schema8-session12`.
+
+**Two exemptions remain — `fear` and `debt`, both at 16 — and no new one was opened.**
+`Persona.traits` gains a second non-display consumer, since the day plan reads `industry` and
+`tradition`; that needs no ledger change, because a field may have more than one and `Bond.trust`
+already does.
+
+#### The villagers stuck in their own houses — the mechanism, named
+
+Parked since session 11 and this session's by the ledger's own note, on the grounds that a villager
+who *cannot* reach their workstation is the same silence for the wrong reason. **It is vanilla's, the
+mechanism is now verified at source, and the day plan was one missing line from causing it.**
+
+`BellBlockEntity.updateEntities` writes `HEARD_BELL_TIME` into every living entity within 32 blocks of
+a rung bell, **with no expiry**. `ReactToBell` sits in CORE at priority 0 — so it runs in every
+activity — and re-asserts `HIDE` on every tick that memory is present. **`HIDE` is the only one of
+vanilla's seven packages with no `UpdateActivityFromSchedule`**: WORK, MEET, IDLE, PLAY and REST all
+end with `Pair.of(99, …)` and it does not, so *the schedule cannot pull a villager out of it.* Its one
+exit is `SetHiddenState`, which needs `HIDING_PLACE` **and** `HEARD_BELL_TIME` before it will time out
+after 300 ticks and erase both. `HIDING_PLACE` has exactly one writer, `LocateHidingPlace`, which
+requires `WALK_TARGET` to be **absent** and then needs a HOME point of interest within 32 blocks or a
+HOME memory.
+
+**Two deadlocks with no exit at all:** a villager with neither a nearby bed nor a HOME memory never
+gets a hiding place; and a villager whose `WALK_TARGET` is never absent on a tick `LocateHidingPlace`
+runs never gets one either. Neither memory declares a codec, so **neither is persisted — which is why
+it heals on a chunk unload and reads as intermittent**, and that matches the one thing known about it:
+*I have seen it; I do not know how often.*
+
+**What shipped is the name and the not-causing-it, not a repair.** Every repair available is a change
+to vanilla state we do not own — erasing somebody's bell memory, handing them a hiding place they did
+not choose — on a diagnosis with a verified mechanism and **no reproduction in hand.** So:
+
+- **`Steering.Posture.BELL_LOCKED`**, three memory reads, reported by `/namesake debug dayplan`, so
+  the next sighting comes back as evidence rather than as a description.
+- **The day plan never writes a walk target to a villager who is not in `WORK`.** One of ours landing
+  on a villager who happens to be hiding can cost them the tick that would have let them out.
+- **The day plan takes its own walk target back** when the slot ends or `WORK` stops — which vanilla
+  does **not** do for its own, because `Villager.registerBrainGoals` uses `addActivity` rather than
+  `addActivityAndRemoveMemoryWhenStopped` throughout, so a walk target written on the last tick of
+  `WORK` survives into `HIDE` untouched.
+
+**And `STUCK` is a separate posture from `STANDOFF`**, read off vanilla's own
+`CANT_REACH_WALK_TARGET_SINCE`. Without it the exit criterion's *you can hear which is which* is
+satisfied by a villager nobody meant to be quiet. A lazy villager who cannot reach their standoff has
+it withdrawn and is left to vanilla, because leaving an unreachable target of ours in place would let
+`tooLongUnreachableDuration` release their job site after 1,200 ticks — **costing that villager their
+profession because of a place we chose.**
+
+**What is honestly not delivered: the bug is diagnosed, not fixed, and not reproduced.** The next
+sighting is the owner's, and `/namesake debug dayplan` is what turns it into a fact.
+
+#### What the harness actually measured
+
+Six villagers on a flat platform two hundred blocks from anything, three rolled industrious and three
+not, each with a lectern of their own ten blocks apart and **no bell within reach** — deliberately,
+because a bell is the mechanism behind the villagers stuck in their houses and a leg that
+intermittently measured that instead would be session 12's counter leg again.
+
+| leg | result |
+|---|---|
+| the transition wave | **5 of 6 had crossed the 2000 boundary while the rest had not** — the offset read in a running game rather than in a test |
+| every villager ran its brain | least-ticked **547**, most-ticked **547** |
+| industrious reached `WorkAtPoi.start` | **3 of 3** |
+| lazy reached `WorkAtPoi.start` | **0 of 3**, measured after every industrious one already had |
+| industrious restocked | **3 of 3** — offer uses raised at 09:00 and reset by the engine |
+| **lazy restocked** | **0 of 3** |
+| lazy within `WorkAtPoi`'s 1.73 m | **0** |
+| lazy parked in the annulus at the instant | 1 of 3 — the other two were strolling, which is the point of the note below |
+| the veto | **1,186 job-site walk targets declined**, 5 villagers steered |
+| stuck or bell-locked | **0**, so every silence above is a silence the plan chose |
+
+**The veto count and the tick counts vary run to run and the assertions are written to survive that**
+— they are `> 0` and a ratio, never a value. Three runs read 18, 1,186 and 3,819 declines depending
+on how long the poll above took to be satisfied.
+
+**The two numbers that look weak are the honest ones.** *"1 of 3 industrious villagers are inside
+1.73 m right now"* and *"1 of 3 lazy villagers parked"* are **snapshots**, reported and not asserted,
+because `WorkAtPoi` runs on a 300-tick cooldown and a coin and a villager is at their bench for a
+fraction of any given second. The assertions are on `LAST_WORKED_AT_POI` and on offer uses, which are
+what the position is a means to.
+
+**And the measurement window opens when the lazy villagers *arrive*, not when they are told to go.**
+A standoff is five to eight blocks from the bench they are standing at when the boundary passes, so
+for the seconds it takes to walk out they are still inside 1.73 m and the coin can land — which it
+did, and the leg read it as the mechanic failing. The criterion is about *"the ones eight blocks away
+doing nothing"*, and a villager still walking is not yet eight blocks away.
+
+**Both loaders, and the reload phase:**
+
+| phase | what it showed |
+|---|---|
+| `setup` | every leg above, on a fresh world |
+| `verify` | the six came back, all generated, and **the day plan picked 5 of 5 up again** — the roster is rebuilt from the entity-load hook and from nothing else |
+
+**The reload leg was written wrong twice in the same way, and the diagnostic is what said so.** It
+read *zero villagers came back*, then *villagers came back and zero standoffs*. Both were the leg
+asserting on a state it had not waited for: `level.isLoaded` answers about blocks and not about
+entities, and a crossing goes through the path gate at one tick in seven and the governor at eight a
+tick, so the check was running the tick after the villagers arrived.
+
+**It was very nearly written down as an unexplained open question**, with the assertion softened to a
+printed line — which would have been an honest thing to do and the wrong one, because the evidence to
+close it was already being printed beside it. `Steering.explainStandoff` said, for each of the three:
+*lazy (industry −40), job at …, brain in work; candidates: [−3,−4] manhattan=7 OK …*. Every clause the
+standoff needs was true. Nothing was wrong except when the question was asked.
+
+#### What the exit criterion actually showed — and which clause is whose
+
+The brief asked for this table specifically, the way sessions 09 and 12's logs did. The criterion is
+*"At 09:00 every workstation has someone within arm's reach — except the ones eight blocks away doing
+nothing, and you can hear which is which. Lazy villagers demonstrably do not restock."* It is six
+clauses, and they do not all belong to the same instrument.
+
+| clause | machine-checked? | whose |
+|---|---|---|
+| **at 09:00** | **yes.** `DaySlotTest` pins all eight slot starts against `Schedule.VILLAGER_DEFAULT` by reading it, and 09:00 — day time 3000 — is inside `LABOUR_I`. The harness watched a village *split* across the boundary in a running game, which is the offset being read rather than merely computed. | — |
+| **every workstation has someone within arm's reach** | **the thing it is about, yes; the literal words, no, and they should not be.** `WorkAtPoi` has a 300-tick cooldown and then a coin, so a villager works about once every 600 ticks and is at their bench for a fraction of any given second. The leg asserts `LAST_WORKED_AT_POI` — the memory `WorkAtPoi.start` stamps — and *reports* the instantaneous position beside it without asserting it. | **whether a village at 09:00 reads as busy is the owner's** |
+| **except the ones eight blocks away** | **yes.** No lazy villager inside `WorkAtPoi`'s own 1.73 m; the lazy ones parked inside vanilla's Manhattan-9 and outside the annulus. | **the distance is now 5–8 rather than 3–8** — whether that reads as *over there* rather than *beside the bench* is the owner's |
+| **doing nothing** | **yes, and it is the clause that needed the most.** The veto count is asserted non-zero, so the standoff is *held* rather than merely early — a leg that passed without it would pass on a world where nothing had got round to contesting the position yet. | whether standing still reads as idling rather than as a broken villager is the owner's |
+| **and you can hear which is which** | **no, and no assertion in this repository can have an opinion about it.** `WorkAtPoi.start` calls `playWorkSound()` in the same breath as the memory the leg asserts, so what is checked is that the gate the sound comes out of was reached. Whether a person standing in a village hears the difference is a different question. | **the owner's, entirely** |
+| **lazy villagers demonstrably do not restock** | **yes, and by effect rather than by inference.** `restock()` resets every offer's use count and is called inside `WorkAtPoi.start`; the leg raises the uses on all six counters before the slot begins, and afterwards the industrious ones are back to zero and the lazy ones are not. | — |
+
+**And the lazy half is measured against an event rather than against a clock**, which is the session
+12 lesson one turn further. An absence cannot be polled for, so the leg waits until **every**
+industrious villager has reached `WorkAtPoi.start` and only then asserts that no lazy one has. If the
+three who are supposed to work have all worked, enough time has passed that a fourth would have too.
+Poll for the condition the thing you are about to do actually needs — and the condition for asserting
+a negative is somebody else's positive.
+
+#### Rule 3: fourteen deliberate breakages, and two of them found a guard that was not real
+
+Sessions 09 through 12's discipline kept — the failing test's **name** captured rather than the
+build's exit status, a row whose edit matched nothing **refused**, and only the one file each row
+broke restored, never `git checkout -- .`. A row that broke the *compile* rather than a test is
+reported as `COMPILE` and not counted, because a compile error is not evidence about a guard.
+
+| Breakage | Result |
+|---|---|
+| `DESIGN.md` §7's own `industry ≥ 96` restored | **Red.** *the industry distribution, and the share each candidate threshold would select* |
+| the threshold lowered until nobody is lazy | **Red.** Same test, other end — a mechanic that never fires |
+| the spread dropped below its own floor | **3 red**, including *the spread is wide enough that the governor can drain 400 villagers* |
+| the standoff stops checking Manhattan | **Red.** *the standoff test refuses a point either vanilla behaviour would act on* |
+| the standoff stops checking `StrollAroundPoi`'s reach | **Red.** Same test, other clause |
+| arm's reach given a round 2.0 instead of 1.73 | **NOTHING FAILED** — see below |
+| the boundary offset returns zero, so the village crosses at once | **3 red**, including the wave and the day-wrap |
+| the offset clamps a mark plus a jitter instead of blending | **Red.** *tradition decides how far whim may move somebody* |
+| the path gate opens every tick | **Red.** *the path gate opens one tick in seven* |
+| the spread made settable by a system property | **Red.** *the spread floor is in code and cannot be lowered by a property or a config* |
+| `LABOUR_I` moved off vanilla's `WORK` keyframe | **Red.** *the keyframes are vanilla's own* |
+| a gap opened in the slot table | **NOTHING FAILED** — see below |
+| `HAUL` claimed as a labour slot, spending session 14's budget | **Red.** *the standoff applies to the two labour slots and to no other WORK slot* |
+| a day-plan record given a codec, so the plan starts persisting | **Red.** *the day plan persists nothing, so there is no schema to move* |
+
+**Twelve red, two `NOTHING FAILED`, no refusals, and the tree clean at the end. The two are the
+point of the exercise and both were fixed.**
+
+1. **Arm's reach passed with 2.0 in place of 1.73.** The test asked about one block in, one diagonal,
+   and two blocks out — and two blocks out is 2.06 from the block's centre, so it is outside *both*
+   numbers. **A test that only asks about its own extremes cannot notice a constant moving between
+   them**, which is `PersonalityDistributionTest`'s opening paragraph arriving in a new place. The pin
+   is now a position between the two: one across and two up is **1.803**, outside 1.73 and inside 2.0.
+2. **A gap in the slot table passed, because the assertion was tautological.** It held that each slot
+   begins where its predecessor ends — and `DaySlot.endsAt` is *derived from the next slot's start*,
+   so it was true of any table whatsoever. Moving `NOON` from 6000 to 6100 turned nothing red. The
+   eight starts are now pinned to §7's own literals, which is what makes them ruled numbers rather
+   than an arrangement.
+
+#### What the run found that nobody asked it
+
+**1. The roster refused every villager in a real save, and it would have shipped.** `Steering`'s
+entity-load hook filtered on `Persona.isGenerated`. A persona is **minted** the moment a villager
+loads and **generated** a little later, once its settlement is known — `PersonaService` says so in
+its own javadoc and session 03's harness waits 2,400 ticks for it. So at the moment that hook fires
+almost nobody is generated, the hook does not fire again, and **the day plan would have steered
+nobody, for the life of the world.** Every unit test passed. What found it was six villagers standing
+perfectly still in a running game with nothing wrong with any of them.
+
+**2. A villager whose offset is zero would have lost their standoff for the whole slot.**
+`enterSlot` marked a slot served even on the path where it bailed because vanilla had not switched to
+`WORK` yet — and `UpdateActivityFromSchedule` runs at priority 99 in the *same tick* day time reaches
+2000. One tick wide, silent, and it would only ever have hit the most industrious of the lazy ones.
+
+**3. The offset was computed and never read.** `DayPlan.offsetOf` existed, was measured over 4,536
+personas, was reported by the debug command — and `Steering` transitioned on `DaySlot.at(dayTime)`,
+which changes for everybody on the same tick. The spread was doing nothing. It was found by writing
+the assertion for the wave, not by reading the code.
+
+**4. `Activity.WORK` requires `JOB_SITE`, which makes vanilla's job hunt a deadlock in a frozen
+world.** `Villager.registerBrainGoals` registers WORK with `JOB_SITE VALUE_PRESENT` as a requirement,
+and `GoToPotentialJobSite` — the behaviour that walks an unemployed villager to the workstation it is
+about to claim — refuses to run outside IDLE, WORK and PLAY. A villager spawned at night resolves to
+REST and can never leave it: no job, so no WORK; no WORK, so no job hunt. Two runs of this leg were
+spent measuring that instead of the standoff. **The fixture now employs its villagers outright**,
+because the mechanic under test is what a villager with a workstation does, not how they got one.
+
+**5. `isActive(WORK)` was the wrong guard, and it looked like the better one.** The first version
+refused to steer a villager whose brain was not running `WORK` — one test covering panic, raids,
+hiding and sleeping, and covering any activity vanilla adds later. It is wrong: **a villager idling
+through a labour slot is precisely who the standoff is for**, and vanilla's own strolling is what
+drifts them back onto their workstation. It is now an **allowlist** of `{WORK, IDLE}`, which is the
+shape vanilla itself uses — `GoToPotentialJobSite` allows exactly `{IDLE, WORK, PLAY}` — and which
+still excludes anything new by default. The elegant version was elegant and false.
+
+**5b. The veto ran only after arrival, and the walk out is where a villager is most vulnerable.**
+Measured, that lost **two of three** lazy villagers on one run and none on the next — the flakiest
+possible shape, and one that reads as *"sometimes the standoff works"*. A lazy villager sets off
+**from their own workstation**, so `StrollToPoi`'s re-assert turns them straight round before they
+get anywhere. The veto now runs from the moment the standoff is issued. Nothing about the wider
+window is riskier: the only walk target it ever erases is one pointing at the job site, and ours
+never does. The arrival test was widened from one Manhattan block to two in the same pass, because a
+villager who stopped a block short or was nudged by a neighbour is *there* by any reading a player
+would give, and at one block those villagers never counted as parked at all.
+
+**6. A sprinting poll stops villagers' brains, and every assertion downstream reads that as
+success.** The leg polled for `LAST_WORKED_AT_POI` with `sprint = true`, and a long `/tick sprint`
+outruns the chunk loader so mobs never enter the entity tick list — a trap this repository wrote down
+at session 06 and hit again here. **Five of six villagers sat at Manhattan 1 from their workstation,
+in `IDLE`, having never moved and never worked**; the sixth, standing where the player happened to be
+teleported, worked perfectly. A villager whose brain never ticks never leaves the activity
+`registerBrainGoals` left it in. The poll no longer sprints, and the leg now asserts
+`tickCount` advanced **before** it asserts anything about what the villagers did — because "the
+standoff worked on everybody" and "nobody's brain ran" produce the same silence.
+
+**7. A picture, for a deliverable that has no rows.** Session 11 added a screenshot of every board on
+the argument that *the rows are not the screen*; session 12 learned that *the screen is not the
+playthrough*. Session 13's whole output is where six villagers are standing, so the argument applies
+harder rather than less — a leg can assert that three villagers are five to eight blocks from their
+workstation and be describing a village that looks like nothing at all. The leg now stands the player
+back and photographs it.
+
+#### Carried into session 14
+
+- `$env:JAVA_HOME` still must be pinned to JDK 21. Kill the dev client between runs, and delete
+  `<loader>/run/saves/namesake_attachbet` before a `setup`. Read the verdict file rather than
+  Gradle's exit status.
+- **`DESIGN.md` §7's slot 6 is where the 6a/6b split lives, and 12000 is a real vanilla keyframe.**
+  `HEARTH` spans it — `IDLE` until 12000 and `REST` after — so session 14's split is a boundary
+  vanilla already has rather than one being invented. `DaySlot.vanillaActivity` answers for a slot's
+  *first* tick and says so.
+- **`HAUL` and `NOON` are deliberately not labour slots.** `DaySlot.isLabour` names two rows and a
+  test holds it, so session 14's `ERRAND` cannot be quietly handed the standoff's gate.
+- **The `ERRAND` activity has to be added with `addActivitySafely`**, and the reason is now written
+  down rather than inherited: `Villager.registerBrainGoals` uses `addActivity` throughout, which
+  passes an **empty** erase set — so nothing vanilla writes is ever cleaned up on an activity change,
+  and a walk target written on the last tick of one activity survives into the next. Session 13 takes
+  its own back for exactly that reason; session 14's custom activity owes the same.
+- **A new activity must not starve `WALK_TARGET`.** `LocateHidingPlace` requires it to be absent and
+  is the only writer of `HIDING_PLACE`, which is the only way out of `HIDE`. See the bell lock above.
+- **The day plan is a per-loaded-entity cost and the sweep payload budget is still unspent.** Session
+  14's `ERRAND` is the first thing that might want the sweep, and it should be argued rather than
+  assumed: a record with no entity has no walk target either.
+- `DeedBus.witnessScan`, `DeedBus.emit` and `Gossip.drain` **still have meters pointed at nothing**,
+  unchanged and for the unchanged reasons. `Steering.onServerTick` has one that is pointed at
+  something.
+- **`DESIGN.md` §5's second route being much the cheaper of the two** is still open and still not
+  this session's, and the trust threshold is still read twice.
+- **The three rulings on feel from session 12 are still open** and session 13 did not touch any of
+  them: whether three in-game days to a discount reads as earned, whether the four reachable board
+  phrases read right, and whether the fall from *warm to you* back to *trusts you* reads as intended.

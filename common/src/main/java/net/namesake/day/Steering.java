@@ -145,6 +145,19 @@ public final class Steering {
     private static final int PARKED_WITHIN = 1;
 
     /**
+     * How close counts as <i>arrived</i>, in Manhattan blocks, which is deliberately looser than
+     * {@link #PARKED_WITHIN}.
+     *
+     * <p>Two rather than one because arriving and being told to arrive are different questions.
+     * {@code MoveToTargetSink} stops when it is within the walk target's own {@code closeEnough},
+     * and then erases the target — but a villager that stopped a block short, was nudged by another,
+     * or ended its path on the far side of a block is <i>there</i> by any reading a player would
+     * give. At one block, those villagers never counted as parked and the standoff never reported
+     * itself as holding even while it was.
+     */
+    private static final int ARRIVED_WITHIN = 2;
+
+    /**
      * How close to the job site a walk target has to be before the veto will erase it.
      *
      * <p>{@code StrollToPoi} writes the job site position exactly, so zero would do. One block of
@@ -388,9 +401,16 @@ public final class Steering {
             if (tracked.standoff != null) {
                 if (slot.isLabour() && isSteerable(tracked.villager.getBrain())) {
                     updateArrival(level, tracked);
-                    if (tracked.parked) {
-                        declineTheJobSite(levelState, tracked, slot);
-                    }
+                    // FROM THE MOMENT THE STANDOFF IS ISSUED, not from the moment it is reached.
+                    // Gating this on `parked` left the walk out unprotected, and the walk out is
+                    // where a villager is most vulnerable: they set off from their own workstation,
+                    // so StrollToPoi's re-assert turns them straight round and they never get
+                    // anywhere. Measured, that lost two of three lazy villagers on one run and none
+                    // on the next — the flakiest possible shape, and the kind of thing that reads
+                    // as "sometimes the standoff works". Nothing about the wider window is riskier:
+                    // the only walk target ever erased is one pointing at the job site, and ours
+                    // never does.
+                    declineTheJobSite(levelState, tracked, slot);
                 } else {
                     releaseStandoff(tracked);
                     if (slot.isLabour()) {
@@ -771,7 +791,7 @@ public final class Steering {
         if (tracked.standoff == null || tracked.parked || tracked.gaveUp) {
             return;
         }
-        if (tracked.villager.blockPosition().distManhattan(tracked.standoff) <= PARKED_WITHIN) {
+        if (tracked.villager.blockPosition().distManhattan(tracked.standoff) <= ARRIVED_WITHIN) {
             tracked.parked = true;
             return;
         }

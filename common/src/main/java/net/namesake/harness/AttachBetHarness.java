@@ -512,6 +512,19 @@ public final class AttachBetHarness {
     private static final List<Integer> TICKS_AT_0900 = new ArrayList<>();
 
     /**
+     * The workers by <b>UUID</b>, and {@link #WORKERS_PRESENT} is re-resolved from it every time it
+     * is read.
+     *
+     * <p>Holding entity references across thousands of ticks is session 03's lesson with the
+     * consequence spelled out: a villager whose chunk unloads is {@code isRemoved()} and a stale
+     * reference to it <b>keeps answering</b> — same position, same memories, same {@code tickCount},
+     * for ever. Every assertion in this leg would then read a frozen villager as a villager standing
+     * perfectly still, which is exactly what the standoff is supposed to look like. The tick-count
+     * assertion is what caught it; this is what fixes it.
+     */
+    private static final List<UUID> WORKER_IDS = new ArrayList<>();
+
+    /**
      * <b>Session 13's exit criterion, and the two halves of it that a machine can hold.</b>
      *
      * <p><i>At 09:00 every workstation has someone within arm's reach — except the ones eight blocks
@@ -589,7 +602,7 @@ public final class AttachBetHarness {
                 // for "has a persona" is the session 12 defect in a new place: two conditions that
                 // are both "the villager is there", populated at different moments, and only one of
                 // them is what the thing under test actually asks.
-                if (stillWaiting(server, () -> WORKERS_PRESENT.size() == WORKERS
+                if (stillWaiting(server, () -> refreshWorkers(level) == WORKERS
                                 && WORKERS_PRESENT.stream().allMatch(v ->
                                         level.getEntity(v.getId()) == v
                                                 && PersonaService.personaOf(v)
@@ -648,11 +661,20 @@ public final class AttachBetHarness {
             case 36 -> {
                 // Sampled every tick on the way past, because the wave is the one thing here that
                 // only exists *during* a boundary. A tick later there is nothing left to see.
+                refreshWorkers(level);
                 sampleTheWave(server, level);
-                if (stillWaiting(server, () -> WORKERS_PRESENT.stream()
+                // ARRIVED, not merely assigned — and the difference is a whole clause of the exit
+                // criterion. A lazy villager's standoff is five to eight blocks from the bench they
+                // are standing at when the boundary passes, so for the seconds it takes to walk out
+                // they are still inside WorkAtPoi's 1.73 m and its coin can land. The criterion is
+                // about "the ones eight blocks away doing nothing"; a villager still walking is not
+                // yet eight blocks away, so the window opens when they get there.
+                if (stillWaiting(server, () -> refreshWorkers(level) == WORKERS
+                                && WORKERS_PRESENT.stream()
                                 .filter(v -> !isDiligent(v))
-                                .allMatch(v -> net.namesake.day.Steering.standoffOf(v).isPresent()),
-                        false, "every lazy villager to be given somewhere to stand")) {
+                                .allMatch(v -> net.namesake.day.Steering.postureOf(v)
+                                        == net.namesake.day.Steering.Posture.STANDOFF),
+                        false, "every lazy villager to reach the spot they were sent to")) {
                     return;
                 }
                 // Written whether or not the poll succeeded, and that is the point: the standoff has
@@ -674,9 +696,31 @@ public final class AttachBetHarness {
                 // schedule instead of the mechanic.
                 server.getGameRules().getRule(GameRules.RULE_DAYLIGHT).set(false, server);
                 level.setDayTime(3000);
+                refreshWorkers(level);
+                // THE MEASUREMENT WINDOW OPENS HERE, AND NOT ONE TICK EARLIER — which is the
+                // difference between measuring the standoff and measuring the hour before it.
+                //
+                // Every villager has been standing at their bench since step 34, in LABOUR_I, while
+                // the settlement survey that generates their personas finished. The plan cannot
+                // call anybody lazy until it knows who they are, so during that window vanilla was
+                // doing what vanilla does and ALL SIX worked. The leg read that as "three lazy
+                // villagers restocked" and blamed the mechanic. So both observables are cleared now
+                // that the standoffs are actually in place: the memory WorkAtPoi.start stamps, and
+                // the offer uses a restock resets.
+                for (Villager villager : WORKERS_PRESENT) {
+                    villager.getBrain().eraseMemory(MemoryModuleType.LAST_WORKED_AT_POI);
+                    villager.getOffers().forEach(offer -> {
+                        offer.resetUses();
+                        offer.increaseUses();
+                    });
+                }
                 TICKS_AT_0900.clear();
                 WORKERS_PRESENT.forEach(v -> TICKS_AT_0900.add(v.tickCount));
-                beginAwait(24000);
+                // Six thousand rather than twenty-four. WorkAtPoi averages ~600 ticks a villager, so
+                // three of them all firing wants a couple of thousand; twenty-four thousand is
+                // twenty minutes of real time on this machine and longer on a runner, and a leg
+                // that takes that long to fail is a leg nobody can iterate on.
+                beginAwait(6000);
             }
             case 37 -> {
                 // THE POLL THIS WHOLE LEG TURNS ON. Not a tick count, and not a position: the
@@ -690,7 +734,8 @@ public final class AttachBetHarness {
                 // six villagers sat at Manhattan 1 from their workstation, in IDLE, having never
                 // moved and never worked; the sixth, standing where the player was teleported,
                 // worked perfectly. This repository has written that trap down once already.
-                if (stillWaiting(server, () -> WORKERS_PRESENT.stream()
+                if (stillWaiting(server, () -> refreshWorkers(level) == WORKERS
+                                && WORKERS_PRESENT.stream()
                                 .filter(AttachBetHarness::isDiligent)
                                 .allMatch(v -> v.getBrain()
                                         .hasMemoryValue(MemoryModuleType.LAST_WORKED_AT_POI)),
@@ -713,6 +758,7 @@ public final class AttachBetHarness {
                         "the camera to settle before the picture")) {
                     return;
                 }
+                refreshWorkers(level);
                 BoardProbe.requestShot("namesake-dayplan-" + PHASE);
                 for (Villager villager : WORKERS_PRESENT) {
                     BlockPos job = net.namesake.day.Steering.jobSiteOf(villager);
@@ -740,6 +786,22 @@ public final class AttachBetHarness {
 
     private static boolean isDiligent(Villager villager) {
         return PersonaService.personaOf(villager).map(p -> DILIGENT.contains(p.id())).orElse(false);
+    }
+
+    /**
+     * Re-resolves the six workers from their UUIDs. Called at the head of every step that reads
+     * them; see {@link #WORKER_IDS} for why a held reference is a lie.
+     *
+     * @return how many of them the level can currently find
+     */
+    private static int refreshWorkers(ServerLevel level) {
+        WORKERS_PRESENT.clear();
+        for (UUID id : WORKER_IDS) {
+            if (level.getEntity(id) instanceof Villager villager && !villager.isRemoved()) {
+                WORKERS_PRESENT.add(villager);
+            }
+        }
+        return WORKERS_PRESENT.size();
     }
 
     /**
@@ -808,13 +870,21 @@ public final class AttachBetHarness {
         // leaves the activity it was registered in — and every assertion below would read that as
         // the standoff working perfectly on everybody.
         int leastTicked = Integer.MAX_VALUE;
+        int mostTicked = 0;
         for (int i = 0; i < WORKERS_PRESENT.size() && i < TICKS_AT_0900.size(); i++) {
-            leastTicked = Math.min(leastTicked,
-                    WORKERS_PRESENT.get(i).tickCount - TICKS_AT_0900.get(i));
+            int advanced = WORKERS_PRESENT.get(i).tickCount - TICKS_AT_0900.get(i);
+            leastTicked = Math.min(leastTicked, advanced);
+            mostTicked = Math.max(mostTicked, advanced);
         }
-        record(leastTicked >= 600, "PLAN every villager actually ran its brain since 09:00 — the "
-                + "least-ticked advanced " + leastTicked + " tick(s), against WorkAtPoi's ~600-tick "
-                + "average between spells of work");
+        // Compared against each other rather than against a constant, so the assertion does not
+        // depend on how long the poll above happened to take. What it is about is a villager who
+        // is frozen while the others run — the failure that reads as the standoff working on
+        // everybody, and the reason this is the first line of this method.
+        record(leastTicked >= mostTicked * 9 / 10,
+                "PLAN every villager ran its brain at the same rate since 09:00 — least-ticked "
+                        + leastTicked + ", most-ticked " + mostTicked + ". A villager whose chunk "
+                        + "stopped ticking stands perfectly still, which is what a standoff looks "
+                        + "like from every other assertion here");
 
         List<Villager> diligent = WORKERS_PRESENT.stream()
                 .filter(AttachBetHarness::isDiligent).toList();
@@ -959,6 +1029,7 @@ public final class AttachBetHarness {
 
         BENCHES.clear();
         WORKERS_PRESENT.clear();
+        WORKER_IDS.clear();
         for (int i = 0; i < WORKERS; i++) {
             int x = (i - WORKERS / 2) * BENCH_SPACING;
             BlockPos bench = workshopSite.offset(x, 0, 0);
@@ -975,6 +1046,7 @@ public final class AttachBetHarness {
             }
             villager.setPersistenceRequired();
             employ(level, villager, bench);
+            WORKER_IDS.add(villager.getUUID());
             WORKERS_PRESENT.add(villager);
         }
     }
@@ -3316,6 +3388,24 @@ public final class AttachBetHarness {
                 beginAwait(4800);
             }
             case 5 -> {
+                // The villagers, not the chunks. `isLoaded` said the blocks were back; entities
+                // arrive on their own schedule and this leg read zero of them because it asked the
+                // first question and asserted on the second. Session 03's rule, and the sixth time
+                // this run has been the one to notice.
+                // The villagers, not the chunks, and then the plan's answer about them rather than
+                // their mere presence. `isLoaded` said the blocks were back and this leg read zero
+                // villagers; then it read villagers and zero standoffs, because a crossing goes
+                // through the path gate at one tick in seven and the governor at eight a tick, and
+                // the check was running the tick after they arrived. Both were the same mistake
+                // twice — asserting on a state that had not been waited for.
+                if (stillWaiting(server, () -> {
+                    List<Villager> back = level.getEntitiesOfClass(Villager.class,
+                            new AABB(workshopSite).inflate(64));
+                    return !back.isEmpty() && back.stream()
+                            .anyMatch(v -> net.namesake.day.Steering.standoffOf(v).isPresent());
+                }, false, "the workshop's villagers to come back and be sent to a standoff again")) {
+                    return;
+                }
                 checkTheDayPlanSurvivedReload(server, level);
                 finish(server, true);
             }
@@ -3368,7 +3458,12 @@ public final class AttachBetHarness {
                 .count();
         record(standingOff > 0,
                 "PLAN RELOAD " + standingOff + " villager(s) were sent back to a standoff on the "
-                        + "reloaded world, so the plan is derived rather than remembered");
+                        + "reloaded world, so the plan is derived rather than remembered — nothing "
+                        + "about it is on disk and it comes back anyway");
+        for (Villager villager : back) {
+            Namesake.LOGGER.info("[harness] reload standoff for {}: {}", villager.getId(),
+                    net.namesake.day.Steering.explainStandoff(level, villager));
+        }
 
         CommandSourceStack source = server.createCommandSourceStack()
                 .withPosition(net.minecraft.world.phys.Vec3.atCenterOf(workshopSite));
