@@ -561,8 +561,20 @@ public final class AttachBetHarness {
      * property {@code TradingTest.theCheapestTradeCannotMove} says a one-item cost does not have.
      */
     private static Villager standUpATrader(ServerLevel level, int offset) {
-        Villager villager = EntityType.VILLAGER.spawn(level,
-                counterSite.offset(offset, 0, 0), MobSpawnType.COMMAND);
+        BlockPos where = counterSite.offset(offset, 0, 0);
+        // A floor, because two hundred blocks from a village is whatever the generator felt like and
+        // CI generates a different world every run. A villager standing in an ocean drowns halfway
+        // through the leg and the failure reads as "the band is wrong". Session 03 lost a leg to a
+        // heightmap answering with the world floor; this is the same class of problem answered by
+        // not asking the question.
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                level.setBlockAndUpdate(where.offset(dx, -1, dz), Blocks.STONE.defaultBlockState());
+                level.setBlockAndUpdate(where.offset(dx, 0, dz), Blocks.AIR.defaultBlockState());
+                level.setBlockAndUpdate(where.offset(dx, 1, dz), Blocks.AIR.defaultBlockState());
+            }
+        }
+        Villager villager = EntityType.VILLAGER.spawn(level, where, MobSpawnType.COMMAND);
         if (villager == null) {
             return null;
         }

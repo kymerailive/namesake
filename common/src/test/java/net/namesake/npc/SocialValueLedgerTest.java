@@ -384,12 +384,19 @@ class SocialValueLedgerTest {
             // settlement gossip about you, session 12's price band — and the pool selection, which
             // is what this entry has warned against naming since session 05, is a display sitting
             // downstream of it rather than the consumer.
+            // A second real consumer arrived at session 12 and is worth naming here even though one
+            // is enough: Standing.of reads this axis for three of the four band boundaries, and
+            // Standing.TRUSTED_TRUST *is* Residency.TRUST_THRESHOLD rather than a copy of it. So the
+            // two consumers are one number seen twice — move it and both move — which is what makes
+            // DESIGN.md §5's "residency also grants the trusted price band" a property of the code.
             Entry.consumedBy(Bond.class, "trust", List.of("trust", "axis"),
                     Residency.class, "verdict",
                     "Residency.verdict counts the residents holding TRUST_THRESHOLD or more and "
                             + "grants DESIGN.md §5's band at three of them. The third resident "
                             + "crosses 20 on day 28, measured. Trust does not decay, so residency "
-                            + "is earned by consistency rather than by intensity."),
+                            + "is earned by consistency rather than by intensity. Session 12 added "
+                            + "Standing.of, which reads the same axis at the same mark for the "
+                            + "trade price band."),
 
             // Paid off in session 09, and NOT by what its own exemption predicted — the second time
             // this mechanism has caught a consumer that was named in good faith and was not one.
@@ -412,7 +419,10 @@ class SocialValueLedgerTest {
                             + "deed is emitted, no bond moves and no memory is written. Feeding the "
                             + "hungry and giving what they want are never gated, so onboarding and "
                             + "the acceptance script's step 2 are untouched and there is no "
-                            + "deadlock — the two ungated routes are the two that raise warmth."),
+                            + "deadlock — the two ungated routes are the two that raise warmth. "
+                            + "Session 12 added Standing.WARM, and it is warmth's for the same "
+                            + "reason the gate is: the best price in the village decays, so it "
+                            + "lapses if you stop turning up. Trust could not express that."),
 
             // Session 12: DELETED, and this is the third time the mechanism has caught a consumer
             // that was named in good faith and was not one — after cultureId at 03 and warmth at 08.

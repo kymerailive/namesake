@@ -28,7 +28,7 @@ Where any other document disagrees on sequence, this wins.
   this one could claim: `runClient` on Fabric mints a fresh player every launch, so the person
   running `verify` is genuinely somebody else — sixteen villagers across two settlements, all
   speaking a stranger line and all charging ×1.00, while the player who earned something still has
-  it. **437 unit tests, 135 harness legs in `setup` and 35 in `verify`** (38 on a migrating run).
+  it. **437 unit tests, 137 harness legs in `setup` and 35 in `verify`** (38 on a migrating run).
   Two ruled numbers did not compose and the session opened on both, as 08, 10 and 11 did: the price
   band's axis, and §10 step 5's **0.95**, which is not on the ruled ladder and — measured — is not
   what one gift two villages away produces either. The number gave way, to **1.00**, and the finding
@@ -4600,9 +4600,11 @@ it is **where one witnessed killing puts a person, halved.**
 | a full-strength blow (8+) | −7 | −3 to −4 |
 | **a killing** | **−54** | **−40 to −42** |
 
-Twenty bare-handed punches to one person reach −19. Eight full blows reach about −24. **One murder
-puts everybody who watched it twice inside the band, immediately and permanently**, because trust
-does not decay in either direction. The comparison is `<=` rather than `<` for the same reason.
+Twenty bare-handed punches to one person reach −19. Eight with an iron sword reach −24 and eight at
+full strength reach −32. **One murder puts everybody who watched it twice inside the band,
+immediately and permanently**, because trust does not decay in either direction. The comparison is
+`<=` rather than `<` for the same reason: at the boundary itself it is the difference between a band
+that includes its own name and one that does not, and breaking it turns four tests red.
 
 #### The second: `DESIGN.md` §10 step 5 said 0.95 and the ladder has no 0.95
 
@@ -4900,8 +4902,10 @@ name them, and the second of the three is `BAND STEP 7`.
   `<loader>/run/saves/namesake_attachbet` before a `setup`. A watchdog exit still makes Gradle report
   a failure over a PASS verdict — **read the verdict file**, which happened once this session.
 - **The schema-7 archives are at `C:\MCA Reborn Rework\.archives\schema7-1770423`**, with their
-  subjects files, for both loaders — and they were used: the load test above is them. Session 13
-  should take a **schema-8** pair the same way before it starts, whether or not it expects to bump.
+  subjects files, for both loaders — and they were used: the load test above is them. **And a
+  schema-8 pair is already waiting at `C:\MCA Reborn Rework\.archives\schema8-session12`**, taken
+  from the final green run rather than left for session 13 to make: it costs ten minutes at the
+  start of a session and it has cost two sessions already, so this one is paid forward.
 - **Session 13 changes no schema if it can help it.** The day plan is a slot LUT and a steering
   policy; nothing in `DESIGN.md` §7 needs a persisted field, and a plan stores *what*, never *when*.
 - **`DESIGN.md` §7's 1.73 m `WorkAtPoi` reach is still unverified in-engine**, and session 13's whole
