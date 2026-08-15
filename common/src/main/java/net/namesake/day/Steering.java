@@ -28,8 +28,45 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * <b>The industry standoff, the transition governor and the path gate.</b> Session 13, and this is
- * the whole of what the session steers.
+ * <b>The industry standoff, the transition governor, the path gate — and session 14's errands and
+ * the watchdog that ends them.</b>
+ *
+ * <h2>Session 14, and it is two mechanics rather than one</h2>
+ *
+ * <p>{@link Errand} is the activity: what it is made of, why it borrows a vanilla key, and why
+ * {@code addActivitySafely} is the shape it is. This class is the other half — <b>when</b> a
+ * villager goes on one, and <b>how they come back</b>, and the second is the load-bearing one.
+ *
+ * <p>An errand is the standoff's opposite in every respect that costs anything, and the comparison
+ * is the budget argument the close of session 13 asked for:
+ *
+ * <table border="1">
+ *   <caption>what each mechanic costs a loaded villager, per tick</caption>
+ *   <tr><th></th><th>the standoff (13)</th><th>an errand (14)</th></tr>
+ *   <tr><td>who</td><td>one villager in four, in two slots</td>
+ *       <td>everybody in two slots; one in five after dark</td></tr>
+ *   <tr><td>held by</td><td>a <b>veto</b> — a memory read every tick and an erase every eighty</td>
+ *       <td>an <b>activity swap</b> — vanilla's WORK package is not running, so nothing contests
+ *           and there is nothing to decline</td></tr>
+ *   <tr><td>per tick, per steered villager</td><td>{@code updateArrival} plus
+ *       {@link #declineTheJobSite}</td><td><b>nothing</b></td></tr>
+ *   <tr><td>brain cost</td><td>vanilla's eleven WORK behaviours</td>
+ *       <td>{@link Errand#behaviours}' three</td></tr>
+ * </table>
+ *
+ * <p>So the peak the ~5.95 µs budget is measured against does not move: a tick happens at one time
+ * of day, and the most expensive slot is still a labour slot. See {@code WORKPLAN.md}'s session 14
+ * log for the measurement.
+ *
+ * <h2>The deactivation watchdog, which was built before anything that could activate an errand</h2>
+ *
+ * <p>{@code ERRAND} has no {@code UpdateActivityFromSchedule} — it cannot, because the schedule says
+ * {@code WORK} at eleven o'clock and would switch it off inside twenty ticks. <b>That is exactly the
+ * shape of the bug this project inherited:</b> {@code HIDE} is the only vanilla package with no
+ * schedule exit, and a bedless villager who hears a bell is stuck in it for the life of the world.
+ * An {@code ERRAND} with no exit is a second bell lock and it would be ours. {@link #leaveErrand} is
+ * the exit and {@link #watchTheErrand} is what makes sure it is reached; between them they are four
+ * layers, and {@link #watchTheErrand}'s javadoc is where they are written down.
  *
  * <h2>What session 13 actually ships, stated plainly</h2>
  *
@@ -214,6 +251,12 @@ public final class Steering {
         NO_JOB,
         /** Not a labour slot, or vanilla is not running {@code WORK}. The plan says nothing. */
         OFF_DUTY,
+        /** {@link Errand#HAUL}: eleven o'clock, on the way to the middle of the village. */
+        HAULING,
+        /** {@link Errand#NOON}: noon, at their own hearth and not asleep in it. */
+        AT_HEARTH,
+        /** {@link Errand#WATCH}: after dark, and the reason the village is not empty. */
+        ON_WATCH,
         /**
          * <b>Hiding, with no way out. The inherited bug, named.</b>
          *
@@ -270,6 +313,12 @@ public final class Steering {
         private Persona persona;
         /** The slot this villager was last steered for, so a boundary is a change rather than a clock. */
         private DaySlot servedSlot;
+        /**
+         * Whether the {@link DaySlot#VIGIL_BEGINS_AT} half of {@link DaySlot#HEARTH} was what they
+         * were served for. The second half of the served state, because the plan acts on one
+         * boundary that is not a slot start.
+         */
+        private boolean servedVigil;
         /** Where the plan sent them, or null while they are working. */
         private BlockPos standoff;
         /** True once they have arrived, so the veto has something to protect. */
@@ -278,6 +327,24 @@ public final class Steering {
         private boolean gaveUp;
         /** In the governor's queue, so a slow tick does not enqueue the same villager twice. */
         private boolean queued;
+        /**
+         * The errand the plan believes this villager is on, or null. <b>Not the truth</b> — the
+         * brain is — which is what {@link #watchTheErrand} exists to reconcile.
+         */
+        private Errand errand;
+        /** Where the errand sent them, so only <i>our</i> walk target is ever taken back. */
+        private BlockPos errandTarget;
+        /** Cached with the persona: does this villager stand watch. See {@link DayPlan#standsWatch}. */
+        private boolean watches;
+        /**
+         * Cached with the persona: this villager's own crossing of {@link DaySlot#VIGIL_BEGINS_AT}.
+         *
+         * <p>Cached rather than derived per tick for the reason the whole day plan is: computing
+         * {@link DayPlan#offsetOf} per loaded villager per tick is a sixty-four-bit hash that cost
+         * 2.4 µs of a 5.95 µs budget at session 13, and this one answers a question that changes
+         * once a day.
+         */
+        private int vigilOffset;
 
         Tracked(Villager villager, Persona persona) {
             this.villager = villager;
@@ -293,6 +360,24 @@ public final class Steering {
         private int stuck;
         /** How many villagers the plan has run vanilla's HIDE exit for. See unstickTheBellLock. */
         private int unstuck;
+        /**
+         * How many errands have been <b>begun</b> since the server started.
+         *
+         * <p>Cumulative rather than a gauge of how many are running, deliberately: a gauge has to be
+         * decremented on every path a villager can leave by, and one of those paths is a chunk
+         * unloading, which is the path nobody remembers. A counter that only ever goes up cannot
+         * drift, and how many are running right now is a scan of the roster that only the debug
+         * command and the harness ever ask for.
+         */
+        private int errands;
+        /**
+         * How many villagers the watchdog found in {@code ERRAND} that the plan had lost track of.
+         *
+         * <p><b>This number should be zero and it is counted anyway.</b> It is the only evidence
+         * that would exist if the deactivation watchdog were doing real work rather than standing
+         * by, and a watchdog nobody can tell has fired is a watchdog nobody knows is broken.
+         */
+        private int strays;
     }
 
     private static final Map<ServerLevel, LevelState> STATE = new HashMap<>();
@@ -382,6 +467,12 @@ public final class Steering {
         long dayTime = level.getDayTime();
         // ONCE PER LEVEL PER TICK, and it is what keeps this method affordable. See the loop below.
         DaySlot clockSlot = DaySlot.at(dayTime);
+        // The one boundary inside a slot, hoisted out of the loop for the same reason. Negative
+        // everywhere except HEARTH, so the per-villager test below is two integer compares against
+        // a value that is already in a register rather than a floorMod per villager per tick.
+        int sinceVigil = clockSlot == DaySlot.HEARTH
+                ? (int) Math.floorMod(dayTime, (long) DaySlot.DAY_LENGTH) - DaySlot.VIGIL_BEGINS_AT
+                : -1;
 
         List<Integer> gone = null;
         for (Map.Entry<Integer, Tracked> entry : levelState.roster.entrySet()) {
@@ -420,6 +511,23 @@ public final class Steering {
                     ? clockSlot
                     : DayPlan.slotFor(tracked.persona, dayTime);
 
+            // The second half of the served state, and it costs a boolean field read for the four
+            // villagers in five who never stand watch and for the twenty hours a day that are not
+            // HEARTH. Only the watch has a reason to cross a boundary in the middle of a slot, so
+            // only the watch pays anything for one.
+            boolean vigil = slot == DaySlot.HEARTH
+                    && (tracked.servedVigil
+                        || (tracked.watches && sinceVigil >= tracked.vigilOffset && sinceVigil >= 0));
+            boolean crossed = slot != tracked.servedSlot || vigil != tracked.servedVigil;
+
+            if (tracked.errand != null && crossed) {
+                // THE WINDOW ENDED. The first and cheapest layer of the deactivation watchdog, and
+                // the one that runs for every villager on every tick: an errand lasts exactly as
+                // long as the slot it was issued in, and the comparison that says so is the same
+                // one the transition governor is driven by. See leaveErrand.
+                leaveErrand(level, levelState, tracked);
+            }
+
             if (tracked.standoff != null) {
                 if (slot.isLabour() && isSteerable(tracked.villager.getBrain())) {
                     updateArrival(level, tracked);
@@ -451,7 +559,12 @@ public final class Steering {
                 // reads per villager per tick is the cost that took the day plan over budget once
                 // already. A seventh of the roster is ample for something measured in minutes.
                 unstickTheBellLock(level, tracked);
-                if (slot != tracked.servedSlot && !tracked.queued) {
+                watchTheErrand(level, levelState, tracked);
+                // RE-READ rather than reusing `crossed`, and it is not tidiness. Both the standoff
+                // release above and unstickTheBellLock set servedSlot to null on purpose, so that a
+                // villager vanilla took away is re-enqueued rather than left unserved for the rest
+                // of the slot — and a comparison made before those ran would miss it by a tick.
+                if ((slot != tracked.servedSlot || vigil != tracked.servedVigil) && !tracked.queued) {
                     levelState.waiting.addLast(tracked);
                     tracked.queued = true;
                 }
@@ -464,7 +577,10 @@ public final class Steering {
         for (int served = 0; served < TRANSITIONS_PER_TICK && !levelState.waiting.isEmpty(); served++) {
             Tracked next = levelState.waiting.pollFirst();
             next.queued = false;
-            enterSlot(level, levelState, next, DayPlan.slotFor(next.persona, dayTime));
+            DaySlot slot = DayPlan.slotFor(next.persona, dayTime);
+            boolean vigil = slot == DaySlot.HEARTH
+                    && next.watches && sinceVigil >= next.vigilOffset && sinceVigil >= 0;
+            enterSlot(level, levelState, next, slot, vigil);
         }
     }
 
@@ -566,11 +682,15 @@ public final class Steering {
      * {@link DayPlan#pathGateOpen}.
      */
     private static void enterSlot(ServerLevel level, LevelState levelState, Tracked tracked,
-                                  DaySlot slot) {
+                                  DaySlot slot, boolean vigil) {
         // The one place the cached persona is refreshed. See Tracked.
         PersonaService.personaOf(tracked.villager)
                 .filter(Persona::isGenerated)
-                .ifPresent(fresh -> tracked.persona = fresh);
+                .ifPresent(fresh -> {
+                    tracked.persona = fresh;
+                    tracked.watches = DayPlan.standsWatch(fresh);
+                    tracked.vigilOffset = DayPlan.offsetOf(fresh, DaySlot.HEARTH);
+                });
 
         if (slot.isLabour() && !isSteerable(tracked.villager.getBrain())) {
             // TWO THINGS AT ONCE, AND THE SECOND IS WHY THIS RETURNS WITHOUT MARKING THE SLOT SERVED.
@@ -595,10 +715,29 @@ public final class Steering {
             // they are re-enqueued the next time their own path gate opens.
             return;
         }
+
+        Errand errand = slot.mayCarryAnErrand()
+                ? DayPlan.errandFor(tracked.persona, slot, vigil)
+                : null;
+        if (errand != null && !mayEnter(errand, tracked.villager)) {
+            // NOT MARKED SERVED, for session 13's own reason one slot along. A villager who is
+            // hiding, asleep, trading or a tick short of the activity switch is not a villager who
+            // has missed their errand — they are one the plan has not been able to ask yet, and
+            // marking the window served would cost them the whole of it, silently. They are
+            // re-enqueued the next time their own path gate opens.
+            return;
+        }
+
         tracked.servedSlot = slot;
+        tracked.servedVigil = vigil;
         tracked.parked = false;
         tracked.standoff = null;
         tracked.gaveUp = false;
+
+        if (errand != null) {
+            beginErrand(level, levelState, tracked, errand);
+            return;
+        }
 
         if (!slot.isLabour() || DayPlan.isDiligent(tracked.persona)) {
             // A diligent villager is left entirely alone. Vanilla walks them to their workstation,
@@ -626,6 +765,274 @@ public final class Steering {
         if (Profiling.ENABLED) {
             Meters.count("Steering.enterSlot walk targets");
         }
+    }
+
+    // --- the errand, and the watchdog that was written before it -----------------------------------
+
+    /**
+     * <b>The only activities the plan will take a villager <i>out of</i> for an errand.</b> An
+     * allowlist, and wider than {@link #STEERABLE} by exactly one entry.
+     *
+     * <p>{@code REST} is the extra one and it is {@link Errand#WATCH}'s whole existence: the watch
+     * begins on vanilla's 12000 keyframe, which is the tick the schedule turns {@code IDLE} into
+     * {@code REST}, so a watch that refused to start from {@code REST} would never start at all.
+     * {@code HIDE}, {@code PANIC}, {@code RAID} and {@code PRE_RAID} stay out for session 13's
+     * reasons unchanged — a villager who is fleeing, hiding or defending a raid has somewhere better
+     * to be than the market.
+     */
+    private static final Set<Activity> ERRAND_FROM =
+            Set.of(Activity.WORK, Activity.IDLE, Activity.REST);
+
+    /**
+     * <b>Whether it is safe to put this villager on an errand right now — six clauses, as one pure
+     * function.</b>
+     *
+     * <p>Split out and made pure for session 13's reason, restated because it applies harder here:
+     * <b>these are the riskiest lines in the session.</b> Switching a villager's activity is how a
+     * villager stops doing what vanilla told them to do, and every clause below names somebody the
+     * plan would otherwise strand.
+     *
+     * <ol>
+     *   <li><b>an errand at all</b> — null is the common case and is two thirds of the day;</li>
+     *   <li><b>an activity on {@link #ERRAND_FROM}</b> — an allowlist, so anything vanilla adds
+     *       later is refused by default. {@code HIDE} is the one that matters: it is the only
+     *       package with no schedule exit, and pulling a villager out of it would be this session
+     *       fighting {@code ReactToBell} — which sits in CORE at priority 0 and re-asserts
+     *       {@code HIDE} every tick — for the rest of the world's life;</li>
+     *   <li><b>no bell memory</b>, which is the same clause one step earlier and is the one that
+     *       matters. {@code HEARD_BELL_TIME} has <b>no expiry</b>, so a villager who merely
+     *       <i>heard</i> a bell is a villager {@code ReactToBell} will put back into {@code HIDE}
+     *       on the next tick. Entering an errand there is a tug-of-war this mod would lose sixty
+     *       times a second, and {@code DESIGN.md} §7 rules the day plan out of tug-of-wars;</li>
+     *   <li><b>not asleep</b> — and this one is subtle enough that it had to be read out of
+     *       {@code Brain}. {@code tickEachRunningBehavior} walks {@code getRunningBehaviors()},
+     *       which scans <b>every</b> priority and <b>every</b> activity regardless of what is
+     *       active, so a {@code SleepInBed} that has already started keeps ticking after the
+     *       activity changes underneath it. A watch chosen out of somebody's bed would be a villager
+     *       asleep on duty, in {@code ERRAND}, going nowhere;</li>
+     *   <li><b>not trading</b> — dragging a villager out from under their own trade screen, which is
+     *       session 13's clause and is the same one;</li>
+     *   <li><b>not a baby</b> — a baby runs {@code Schedule.VILLAGER_BABY} and the {@code PLAY}
+     *       package, and §7's midday economy is about people with work to do.</li>
+     * </ol>
+     */
+    static boolean mayEnter(Errand errand, Activity activity, boolean heardBell, boolean asleep,
+                            boolean trading, boolean baby) {
+        return errand != null
+                && activity != null && ERRAND_FROM.contains(activity)
+                && !heardBell
+                && !asleep
+                && !trading
+                && !baby;
+    }
+
+    /** The same question of a live villager. Six reads, and it runs behind the governor. */
+    private static boolean mayEnter(Errand errand, Villager villager) {
+        Brain<Villager> brain = villager.getBrain();
+        return mayEnter(errand, brain.getActiveNonCoreActivity().orElse(null),
+                brain.hasMemoryValue(MemoryModuleType.HEARD_BELL_TIME),
+                villager.isSleeping(),
+                villager.getTradingPlayer() != null,
+                villager.isBaby());
+    }
+
+    /**
+     * Sends one villager on one errand: a destination out of a vanilla memory, the activity, and a
+     * walk target. Behind both walls — the caller has spent one of {@link #TRANSITIONS_PER_TICK} and
+     * the villager has already passed {@link DayPlan#pathGateOpen}.
+     *
+     * <p><b>One path request per villager per window, and no veto at all.</b> That is the whole
+     * budget argument for this session: with {@code ERRAND} active, vanilla's {@code WORK} package
+     * is not running, so nothing writes the job site back and there is nothing to decline. Session
+     * 13's standoff pays a memory read and sometimes an erase on every tick of every steered
+     * villager; an errand pays nothing after the tick it begins.
+     */
+    private static void beginErrand(ServerLevel level, LevelState levelState, Tracked tracked,
+                                    Errand errand) {
+        Villager villager = tracked.villager;
+        if (errand.needsAJob() && jobSiteOf(villager) == null) {
+            // Nothing to carry. A nitwit and an unemployed villager are left to vanilla, which is
+            // the same absence branch the standoff has and the same direction of failing safe.
+            return;
+        }
+        BlockPos where = villager.getBrain().getMemory(errand.destination())
+                .filter(pos -> pos.dimension() == level.dimension())
+                .map(GlobalPos::pos)
+                .orElse(null);
+        if (where == null) {
+            // No bell in reach, or no bed claimed. AcquirePoi writes both and a villager in the
+            // wilderness has neither, so the plan has nowhere to send them and says nothing.
+            return;
+        }
+
+        Brain<Villager> brain = villager.getBrain();
+        if (!Errand.addActivitySafely(brain)) {
+            // Twice refused. It should not be reachable — ERRAND is registered with no conditions,
+            // so a registered activity always activates — and it is handled rather than asserted,
+            // because setActiveActivityIfPossible drops a brain to IDLE on the way past and a
+            // villager left in IDLE through a working slot is a bug a player would see.
+            Namesake.LOGGER.warn("Persona {} refused the ERRAND activity twice; putting them back on "
+                    + "vanilla's schedule rather than leaving them where the attempt left them",
+                    tracked.persona.id());
+            brain.updateActivityFromSchedule(level.getDayTime(), level.getGameTime());
+            return;
+        }
+        tracked.errand = errand;
+        tracked.errandTarget = where;
+        brain.setMemory(MemoryModuleType.WALK_TARGET,
+                new WalkTarget(where, errand.speed(), errand.closeEnough()));
+        levelState.errands++;
+        if (Profiling.ENABLED) {
+            Meters.count("Steering.beginErrand activations");
+        }
+    }
+
+    /**
+     * <b>The deactivation watchdog's second and third layers, and it runs behind the path gate.</b>
+     *
+     * <p>{@code DESIGN.md} did not say what this is for, so it says it now: <b>an {@code ERRAND}
+     * with no way out is a second bell lock, and this session would have written it.</b> {@code HIDE}
+     * is the only vanilla package with no {@code UpdateActivityFromSchedule}; that is precisely why
+     * a bedless villager who hears a bell is stuck in their house for the life of the world, and
+     * {@code ERRAND} omits the same behaviour for the same structural reason — the schedule says
+     * {@code WORK} at eleven o'clock and would switch us off inside twenty ticks. So the plan owns
+     * the exit, and it owns it in four layers because each one catches a failure the one above
+     * cannot:
+     *
+     * <ol>
+     *   <li><b>The window ends.</b> The slot comparison in {@link #tickLevel}, on the fast path, for
+     *       every villager on every tick. This is the ordinary exit and it costs one reference
+     *       compare that the transition governor was already making.</li>
+     *   <li><b>Vanilla took them.</b> A bell, a raid, a panic, a cure, a chunk load — anything that
+     *       calls {@code setActiveActivity} or {@code refreshBrain}. Here, and the consequence is
+     *       not the activity but <b>our walk target</b>: {@code LocateHidingPlace} requires
+     *       {@code WALK_TARGET} to be absent and is the only writer of {@code HIDING_PLACE}, so one
+     *       of ours left behind on a villager who has just heard a bell is the inherited bug caused
+     *       by the session that was supposed to be avoiding it.</li>
+     *   <li><b>We lost track of them.</b> A villager whose brain is running {@code ERRAND} that this
+     *       plan cannot account for is put back on vanilla's schedule, unconditionally. That is the
+     *       layer that makes {@code ERRAND} a <i>window</i> rather than a state: it does not ask how
+     *       they got there and it does not need our bookkeeping to be right, which is the point,
+     *       because layer 1 depends on bookkeeping and this one does not.</li>
+     *   <li><b>And one that is free and is recorded rather than built:</b> every one of the five
+     *       {@code refreshBrain} callers ends in {@code registerBrainGoals}, which sets
+     *       {@code IDLE} and then calls {@code updateActivityFromSchedule}. So a save and a reload,
+     *       a cure, a profession change and growing up are all exits from {@code ERRAND} that cost
+     *       this mod nothing — the same reason the bell lock heals on a chunk cycle, working for us
+     *       for once.</li>
+     * </ol>
+     *
+     * <p>Behind the path gate at a seventh of the roster, for {@link #unstickTheBellLock}'s reason:
+     * the longest a villager can be in {@code ERRAND} unaccounted for is seven ticks, and three set
+     * lookups per villager per tick is the cost that took the day plan over its budget once already.
+     */
+    private static void watchTheErrand(ServerLevel level, LevelState levelState, Tracked tracked) {
+        boolean running = tracked.villager.getBrain().isActive(Errand.ACTIVITY);
+        if (tracked.errand != null) {
+            if (!running) {
+                // Layer 2. Vanilla moved them on; take our walk target back before it can starve
+                // LocateHidingPlace, and stop claiming an errand we are not on.
+                forgetErrand(tracked);
+            }
+            return;
+        }
+        if (running) {
+            // Layer 3. Nobody can say why this villager is on an errand, so they are not on one.
+            levelState.strays++;
+            Namesake.LOGGER.info("Persona {} was running the ERRAND activity with no errand the day "
+                    + "plan can account for. Put back on vanilla's own schedule.",
+                    tracked.persona.id());
+            leaveErrand(level, levelState, tracked);
+        }
+    }
+
+    /**
+     * <b>Runs vanilla's own way out of {@code ERRAND}, and verifies by effect that it took.</b>
+     *
+     * <p>The exit is {@code brain.updateActivityFromSchedule} — the same call
+     * {@code SetHiddenState}'s else-branch makes and the same one session 13's bell-lock repair
+     * makes, for the same reason: <b>the mod does not decide what a villager does next, the schedule
+     * does.</b> This session invents no recovery either.
+     *
+     * <p><b>And then it checks, because that call can silently do nothing.</b>
+     * {@code updateActivityFromSchedule} opens with {@code gameTime - lastScheduleUpdate > 20} and
+     * returns without touching anything inside that window. An errand that ended less than twenty
+     * ticks after it began — a bell at the wrong moment, a slot boundary a villager crossed twice —
+     * would leave the villager in {@code ERRAND} with the one thing that could take them out
+     * already spent. <b>That is the second bell lock exactly</b>, and it is one line of throttle
+     * rather than a missing behaviour. So the answer is read back, and if the schedule declined,
+     * {@code setActiveActivityToFirstValid} forces it: the scheduled activity if its requirements
+     * are met — {@code WORK} needs a job site and a villager may have lost one — and {@code IDLE},
+     * which is vanilla's own default and has no requirements at all, if they are not.
+     */
+    private static void leaveErrand(ServerLevel level, LevelState levelState, Tracked tracked) {
+        forgetErrand(tracked);
+        Brain<Villager> brain = tracked.villager.getBrain();
+        if (!brain.isActive(Errand.ACTIVITY)) {
+            // Already somewhere else — a bell, a raid, or a refreshBrain that rebuilt the brain from
+            // vanilla's list. Nothing to exit, and running the schedule at a villager who is legally
+            // hiding would be session 13's repair firing without its patience.
+            return;
+        }
+        brain.updateActivityFromSchedule(level.getDayTime(), level.getGameTime());
+        if (brain.isActive(Errand.ACTIVITY)) {
+            Activity scheduled = brain.getSchedule().getActivityAt(
+                    (int) Math.floorMod(level.getDayTime(), (long) DaySlot.DAY_LENGTH));
+            brain.setActiveActivityToFirstValid(List.of(scheduled, Activity.IDLE));
+            if (Profiling.ENABLED) {
+                Meters.count("Steering.leaveErrand forced exits");
+            }
+        }
+    }
+
+    /**
+     * Drops the plan's claim on an errand and takes back the walk target it wrote — <b>and only if
+     * it is still ours.</b>
+     *
+     * <p>Session 13's {@code releaseStandoff}, at the other mechanic, and the filter is the whole
+     * of it: if vanilla has written something else there — a bed, a hiding place, something hostile
+     * to flee — that is the villager getting on with their life and it is not ours to cancel.
+     */
+    private static void forgetErrand(Tracked tracked) {
+        BlockPos sent = tracked.errandTarget;
+        tracked.errand = null;
+        tracked.errandTarget = null;
+        if (sent == null) {
+            return;
+        }
+        Brain<Villager> brain = tracked.villager.getBrain();
+        brain.getMemory(MemoryModuleType.WALK_TARGET)
+                .filter(target -> target.getTarget().currentBlockPosition().equals(sent))
+                .ifPresent(target -> brain.eraseMemory(MemoryModuleType.WALK_TARGET));
+    }
+
+    /**
+     * <b>Why this villager is or is not on an errand, in one line.</b> {@link #explainStandoff}'s
+     * twin, and it exists for the same reason: an errand has six ways to decline silently and from
+     * outside they all look like a villager standing where vanilla left them.
+     */
+    public static String explainErrand(ServerLevel level, Villager villager) {
+        Persona persona = PersonaService.personaOf(villager).orElse(null);
+        if (persona == null || !persona.isGenerated()) {
+            return "no generated persona";
+        }
+        long dayTime = level.getDayTime();
+        DaySlot slot = DayPlan.slotFor(persona, dayTime);
+        boolean vigil = Math.floorMod(dayTime, (long) DaySlot.DAY_LENGTH) >= DaySlot.VIGIL_BEGINS_AT
+                && slot == DaySlot.HEARTH;
+        Errand errand = DayPlan.errandFor(persona, slot, vigil);
+        if (errand == null) {
+            return "slot " + slot + (vigil ? " (past the vigil)" : "") + " carries no errand for "
+                    + "them (boldness " + persona.trait(Persona.BOLDNESS) + ", watch needs "
+                    + DayPlan.BOLDNESS_TO_WATCH + ")";
+        }
+        Brain<Villager> brain = villager.getBrain();
+        return errand + " in slot " + slot
+                + "; brain in " + brain.getActiveNonCoreActivity().orElse(null)
+                + ", may enter " + mayEnter(errand, villager)
+                + ", destination " + brain.getMemory(errand.destination()).orElse(null)
+                + ", job " + jobSiteOf(villager)
+                + ", running " + brain.isActive(Errand.ACTIVITY);
     }
 
     /**
@@ -729,11 +1136,19 @@ public final class Steering {
         if (isBellLocked(brain)) {
             return Posture.BELL_LOCKED;
         }
+        LevelState levelState = STATE.get(level);
+        Tracked tracked = levelState == null ? null : levelState.roster.get(villager.getId());
+        // Before NO_JOB, because two of the three errands are for everybody: a villager with no
+        // workstation still eats at noon and can still stand watch. Read off the brain as well as
+        // off our own state, so what this reports is what the villager is running rather than what
+        // the plan meant — which is the same reason the harness asserts LAST_WORKED_AT_POI rather
+        // than a flag of ours.
+        if (tracked != null && tracked.errand != null && brain.isActive(Errand.ACTIVITY)) {
+            return tracked.errand.posture();
+        }
         if (jobSiteOf(villager) == null) {
             return Posture.NO_JOB;
         }
-        LevelState levelState = STATE.get(level);
-        Tracked tracked = levelState == null ? null : levelState.roster.get(villager.getId());
         // This villager's own slot, offset and all — so a villager who has not crossed yet reads
         // OFF_DUTY rather than WORKING, which is what they are.
         DaySlot slot = tracked == null
@@ -880,8 +1295,56 @@ public final class Steering {
         }
         return levelState.roster.size() + " tracked, " + levelState.steered + " steered, "
                 + levelState.vetoes + " job-site walk target(s) declined, "
+                + errandCount(level) + " on an errand now (" + levelState.errands + " begun), "
+                + levelState.strays + " stray errand(s) ended by the watchdog, "
                 + levelState.unstuck + " bell lock(s) opened, "
                 + levelState.waiting.size() + " waiting on the governor";
+    }
+
+    /**
+     * How many villagers the watchdog has found running {@code ERRAND} with no errand the plan could
+     * account for, since the server started.
+     *
+     * <p>A number rather than a sentence, for {@link #vetoCount}'s reason: the harness asserts on it,
+     * and a guard that reads prose with {@code String.contains} goes quiet the day somebody rewords a
+     * log line. <b>It should be zero</b>, and that is exactly why it is readable — a watchdog whose
+     * firing nobody can see is a watchdog nobody knows has stopped working.
+     */
+    public static int strayErrandCount(ServerLevel level) {
+        LevelState levelState = STATE.get(level);
+        return levelState == null ? 0 : levelState.strays;
+    }
+
+    /**
+     * How many villagers in this level are on an errand right now — <b>counted off the brains rather
+     * than off a tally</b>, so a villager whose chunk unloaded cannot leave a number behind.
+     */
+    public static int errandCount(ServerLevel level) {
+        LevelState levelState = STATE.get(level);
+        if (levelState == null) {
+            return 0;
+        }
+        int running = 0;
+        for (Tracked tracked : levelState.roster.values()) {
+            if (tracked.errand != null && tracked.villager.getBrain().isActive(Errand.ACTIVITY)) {
+                running++;
+            }
+        }
+        return running;
+    }
+
+    /** Which errand this villager is on, if the plan put them on one and the brain agrees. */
+    public static Optional<Errand> errandOf(Villager villager) {
+        if (!(villager.level() instanceof ServerLevel level)) {
+            return Optional.empty();
+        }
+        LevelState levelState = STATE.get(level);
+        Tracked tracked = levelState == null ? null : levelState.roster.get(villager.getId());
+        if (tracked == null || tracked.errand == null
+                || !villager.getBrain().isActive(Errand.ACTIVITY)) {
+            return Optional.empty();
+        }
+        return Optional.of(tracked.errand);
     }
 
     /**

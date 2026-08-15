@@ -122,6 +122,80 @@ class DayPlanDistributionTest {
     }
 
     /**
+     * The share of a real population that may be out after dark.
+     *
+     * <p>§7's at-a-glance line is <i>streets empty but for two torches on the perimeter</i>. Two of
+     * nine is 22%, and a third of a village standing about at midnight is not a watch — it is a
+     * village that never went to bed.
+     */
+    private static final double MAXIMUM_WATCH_SHARE = 0.33;
+
+    /** And the other end, which is {@link #MINIMUM_LAZY_SHARE}'s argument at a second threshold. */
+    private static final double MINIMUM_WATCH_SHARE = 0.10;
+
+    /**
+     * <b>The boldness distribution, and the share each candidate threshold would put on watch.</b>
+     *
+     * <p>The third time this project has pointed the instrument at a threshold before building on
+     * it, and it exists because of the two times it was not: {@code Bond.respect} shipped a ladder
+     * whose lowest mark was five times the observed maximum and survived seven sessions, and §7's
+     * own {@code industry ≥ 96} selected 0.0% of a real population. A threshold nobody crosses and a
+     * threshold everybody crosses are both green in every other test in the repository.
+     *
+     * <p>{@link DayPlan#BOLDNESS_TO_WATCH} is read off the table this prints, at the percentile that
+     * leaves a village of nine with two people out — so the number is a property of the population
+     * the generator makes rather than one somebody chose to hit a target.
+     */
+    @Test
+    @DisplayName("the boldness distribution, and the share each candidate threshold sends on watch")
+    void theBoldnessDistribution() {
+        List<Persona> population = population(20260815L);
+        int[] boldness = population.stream()
+                .mapToInt(p -> p.trait(Persona.BOLDNESS)).sorted().toArray();
+
+        StringBuilder report = new StringBuilder(
+                "\n=== day plan: boldness over the real generator ===\n")
+                .append(String.format(Locale.ROOT, "  %d personas, %d cultures%n",
+                        population.size(), Culture.COUNT))
+                .append(String.format(Locale.ROOT,
+                        "  min %d  p5 %d  p25 %d  p50 %d  p75 %d  p80 %d  p90 %d  p95 %d  max %d%n",
+                        boldness[0], at(boldness, 5), at(boldness, 25), at(boldness, 50),
+                        at(boldness, 75), at(boldness, 80), at(boldness, 90), at(boldness, 95),
+                        boldness[boldness.length - 1]));
+
+        report.append("  threshold   on watch   in a village of nine\n");
+        for (int threshold : new int[]{0, 10, 20, 25, 30, 35, 40, 45, 50, 60, 80}) {
+            long watch = 0;
+            for (int value : boldness) {
+                if (value >= threshold) {
+                    watch++;
+                }
+            }
+            double share = watch / (double) boldness.length;
+            report.append(String.format(Locale.ROOT, "  %9d   %7.1f%%   %18.1f%s%n",
+                    threshold, share * 100.0, share * 9,
+                    threshold == DayPlan.BOLDNESS_TO_WATCH ? "   <-- BOLDNESS_TO_WATCH" : ""));
+        }
+        System.out.println(report);
+
+        long watch = population.stream().filter(DayPlan::standsWatch).count();
+        double share = watch / (double) population.size();
+
+        assertTrue(share >= MINIMUM_WATCH_SHARE, () -> String.format(Locale.ROOT,
+                "DayPlan.BOLDNESS_TO_WATCH = %d puts %.1f%% of a real population on watch, which is "
+                        + "close enough to nobody that the village would simply go quiet at eight "
+                        + "and DESIGN.md §7's twenty-o'clock line would be unbuildable rather than "
+                        + "unbuilt. A mechanic that never fires passes every other test here.",
+                DayPlan.BOLDNESS_TO_WATCH, share * 100.0));
+
+        assertTrue(share <= MAXIMUM_WATCH_SHARE, () -> String.format(Locale.ROOT,
+                "DayPlan.BOLDNESS_TO_WATCH = %d keeps %.1f%% of a real population out after dark — "
+                        + "%.1f of a village of nine. The line is 'streets empty but for two', and "
+                        + "an exception has to be an exception.",
+                DayPlan.BOLDNESS_TO_WATCH, share * 100.0, share * 9));
+    }
+
+    /**
      * <b>The wall, measured through both of its halves rather than declared.</b>
      *
      * <p>§7 promises <i>worst case ~6/tick</i> against 400 villagers, and this is the test that

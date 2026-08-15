@@ -1,9 +1,12 @@
 package net.namesake.day;
 
+import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.Bootstrap;
 import net.namesake.npc.Persona;
 import net.namesake.testing.MethodBody;
 import net.namesake.testing.ModClasses;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -18,6 +21,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -31,11 +35,119 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class DayPlanTest {
 
+    /**
+     * <b>Added at session 14, and the failure it prevents is worth writing down because it does not
+     * look like this class's problem at all.</b>
+     *
+     * <p>Everything here was registry-free until {@link DayPlan#errandFor} started returning an
+     * {@link Errand}, whose constants hold {@code MemoryModuleType}s and whose activity key is a
+     * vanilla {@code Activity} — both registry entries. Touching one without a bootstrap does not
+     * fail politely: {@code BuiltInRegistries.<clinit>} throws, and from then on <b>every other test
+     * class in the same JVM</b> gets {@code NoClassDefFoundError: Could not initialize class
+     * BuiltInRegistries} from wherever it happened to be. One missing line here turned thirteen
+     * tests red in four classes, none of which had changed.
+     *
+     * <p>{@link DaySlot} is still loadable without this, which is why it asks vanilla for an
+     * activity rather than storing one.
+     */
+    @BeforeAll
+    static void bootstrapMinecraft() {
+        SharedConstants.tryDetectVersion();
+        Bootstrap.bootStrap();
+    }
+
     private static Persona persona(long id, int industry, int tradition) {
         byte[] traits = new byte[Persona.TRAIT_COUNT];
         traits[Persona.INDUSTRY] = (byte) industry;
         traits[Persona.TRADITION] = (byte) tradition;
         return Persona.create(new UUID(0x5EEDL, id), 0L).placed(1, 1, (byte) 0).withTraits(traits);
+    }
+
+    private static Persona withBoldness(long id, int boldness) {
+        byte[] traits = new byte[Persona.TRAIT_COUNT];
+        traits[Persona.BOLDNESS] = (byte) boldness;
+        return Persona.create(new UUID(0xB01DL, id), 0L).placed(1, 1, (byte) 0).withTraits(traits);
+    }
+
+    // --- session 14: which slot carries which errand, and for whom -------------------------------
+
+    /**
+     * <b>{@code DESIGN.md} §7's slots 2, 3, 6b and 7, as a table rather than as prose.</b>
+     *
+     * <p>Four rows and three of them have an <i>and</i> in them, which is where this would go wrong
+     * quietly: {@code HEARTH} carries an errand only past the vigil <b>and</b> only for the watch,
+     * {@code NIGHT} only for the watch, and the other four slots never. A villager put on an errand
+     * during a labour slot would have session 13's veto erasing session 14's walk target every tick;
+     * a watch that began at 6a would have the bold standing about for an hour before anybody else
+     * went indoors, which is the same picture as nothing happening.
+     */
+    @Test
+    @DisplayName("the errand table: two slots for everybody, two for the watch, and four for nobody")
+    void theErrandTableIsDesignSevens() {
+        Persona bold = withBoldness(1, DayPlan.BOLDNESS_TO_WATCH);
+        Persona timid = withBoldness(2, DayPlan.BOLDNESS_TO_WATCH - 1);
+        assertTrue(DayPlan.standsWatch(bold));
+        assertFalse(DayPlan.standsWatch(timid));
+
+        for (Persona anybody : List.of(bold, timid)) {
+            assertEquals(Errand.HAUL, DayPlan.errandFor(anybody, DaySlot.HAUL, false),
+                    "eleven o'clock is everybody's, and the roads filling is the observable");
+            assertEquals(Errand.NOON, DayPlan.errandFor(anybody, DaySlot.NOON, false),
+                    "everybody eats");
+            for (DaySlot quiet : List.of(DaySlot.DAWN, DaySlot.LABOUR_I, DaySlot.LABOUR_II,
+                    DaySlot.COMMONS)) {
+                assertNull(DayPlan.errandFor(anybody, quiet, false),
+                        () -> quiet + " must carry no errand. The two labour slots are session 13's "
+                                + "standoff and COMMONS and DAWN are vanilla's own — writing ours "
+                                + "there would be a second answer to a question that has one.");
+            }
+        }
+
+        assertNull(DayPlan.errandFor(bold, DaySlot.HEARTH, false),
+                "6a is left entirely to vanilla: at five o'clock everybody is still out, so a watch "
+                        + "standing about then looks exactly like everybody else");
+        assertEquals(Errand.WATCH, DayPlan.errandFor(bold, DaySlot.HEARTH, true),
+                "6b is the line — vanilla's own 12000 keyframe, where the schedule sends the village "
+                        + "to bed and the watch does not go");
+        assertNull(DayPlan.errandFor(timid, DaySlot.HEARTH, true),
+                "and it is not everybody, or the streets would not empty at all");
+        assertEquals(Errand.WATCH, DayPlan.errandFor(bold, DaySlot.NIGHT, false),
+                "the watch runs to the end of the day, so twenty o'clock is the same two people");
+        assertNull(DayPlan.errandFor(timid, DaySlot.NIGHT, false));
+
+        // And the two that carry one for everybody must be the two that need one. HAUL needs a job
+        // because you carry what you made; NOON does not, because everybody eats.
+        assertTrue(Errand.HAUL.needsAJob(), "you carry what you made");
+        assertFalse(Errand.NOON.needsAJob());
+        assertFalse(Errand.WATCH.needsAJob());
+    }
+
+    /**
+     * <b>Every errand walks to a memory vanilla writes, and that is the whole reason this costs
+     * nothing.</b>
+     *
+     * <p>{@code AcquirePoi} in vanilla's CORE package writes {@code HOME} and {@code MEETING_POINT}
+     * for every villager already. Reading the settlement table instead would be a registry lookup
+     * per villager per errand — the shape of the cost that took session 13 over its budget — and it
+     * would make an errand impossible for a villager whose settlement has not been surveyed, which
+     * is most of them for the first few thousand ticks of their life.
+     */
+    @Test
+    @DisplayName("every errand destination is a vanilla memory rather than a place of ours")
+    void everyDestinationIsVanillas() {
+        for (Errand errand : Errand.values()) {
+            assertTrue(errand.destination() == net.minecraft.world.entity.ai.memory
+                            .MemoryModuleType.MEETING_POINT
+                            || errand.destination() == net.minecraft.world.entity.ai.memory
+                            .MemoryModuleType.HOME,
+                    () -> errand + " walks to " + errand.destination() + ", which is not one of the "
+                            + "two points of interest vanilla already gives every villager");
+            assertTrue(errand.closeEnough() >= 1,
+                    () -> errand + " must have a real arrival radius or MoveToTargetSink will never "
+                            + "call them arrived");
+            assertTrue(errand.speed() > 0.0F && errand.speed() <= 1.0F,
+                    () -> errand + "'s speed is outside anything vanilla uses for a villager");
+        }
     }
 
     // --- the wall that is a wall because it is in code -------------------------------------------

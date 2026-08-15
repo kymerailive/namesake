@@ -154,6 +154,41 @@ public final class DayPlan {
     public static final int INDUSTRY_TO_WORK = 12;
 
     /**
+     * <b>The boldness a villager needs to stay out after the rest have gone in, read off the same
+     * measured population as {@link #INDUSTRY_TO_WORK} and for the same reason.</b>
+     *
+     * <p><b>Its provenance is different from {@link #INDUSTRY_TO_WORK}'s and the difference is worth
+     * stating.</b> Industry's threshold is a percentile for its own sake — p25, chosen so the split
+     * is a property of the population's shape. This one has a <i>ruled target</i> to hit: §7's
+     * at-a-glance line for twenty o'clock is <i>streets empty but for two torches on the
+     * perimeter</i>, and <b>two</b> is a number. So this is the boldness mark that leaves two people
+     * out of a village of nine, read off a measured distribution rather than guessed:
+     *
+     * <table border="1">
+     *   <caption>boldness over the real {@code TraitRoll}, 4,536 personas, six cultures</caption>
+     *   <tr><th>min</th><th>p25</th><th>p50</th><th>p75</th><th>p80</th><th>p95</th><th>max</th></tr>
+     *   <tr><td>−67</td><td>−16</td><td>1</td><td><b>19</b></td><td>24</td><td>44</td><td>78</td></tr>
+     * </table>
+     *
+     * <p>Twenty puts <b>25.0%</b> of that population on watch — <b>2.2 of a village of nine</b>,
+     * against §7's two — and it sits a point above p75. The neighbouring candidates are worse in
+     * both directions: 25 gives 1.8 and 30 gives 1.3, which is a village that mostly has no watch at
+     * all, and 10 gives 3.4, which is a third of the village standing about at midnight.
+     *
+     * <p>{@code DayPlanDistributionTest.theBoldnessDistribution} prints that table and holds both
+     * ends: red past a third of a village, and red below a tenth — because <b>a mechanic that never
+     * fires passes every other test in the repository.</b> That second clause is
+     * {@code Bond.respect}'s failure and §7's own {@code industry ≥ 96}, and this is the third time
+     * this project has pointed the instrument at a threshold before building on it rather than after.
+     *
+     * <p><b>Boldness rather than industry, and the axis is the argument:</b> the question the watch
+     * asks is who is willing to be outside in the dark. It is also {@code boldness}'s first
+     * non-display consumer — the axes are rolled independently, so about one villager in sixteen is
+     * both an idler by day and a watchman by night, which is a person rather than a category.
+     */
+    public static final int BOLDNESS_TO_WATCH = 20;
+
+    /**
      * How long a walk target that cannot be pathed has to have been failing before this villager is
      * called stuck rather than lazy, in ticks.
      *
@@ -214,6 +249,44 @@ public final class DayPlan {
      */
     public static boolean isDiligent(Persona persona) {
         return persona.trait(Persona.INDUSTRY) >= INDUSTRY_TO_WORK;
+    }
+
+    /**
+     * <b>Whether this villager is one of the two who stay out after dark.</b>
+     *
+     * <p>One comparison, on one axis, and not a coin — the same villagers keep watch every night,
+     * which is what makes it a thing about them a player can learn rather than weather. Session 13's
+     * argument for {@link #isDiligent}, at the other end of the day.
+     */
+    public static boolean standsWatch(Persona persona) {
+        return persona.trait(Persona.BOLDNESS) >= BOLDNESS_TO_WATCH;
+    }
+
+    /**
+     * <b>Which errand, if any, this villager has in this slot.</b> {@code DESIGN.md} §7's slots 2,
+     * 3, 6b and 7, as one pure function.
+     *
+     * <p>Pure, and split out from {@link Steering} for the reason session 13 split
+     * {@code Steering.declines} out: the alternative is a harness leg costing six minutes a case,
+     * and a table nobody can add a case to cheaply is a table that stops being checked. Everything
+     * about <i>who</i> and <i>when</i> is here; everything about <i>whether it is safe right now</i>
+     * is {@link Steering#mayEnter}, which is the other half and is equally pure.
+     *
+     * @param pastVigil whether this villager has crossed {@link DaySlot#VIGIL_BEGINS_AT}. Only
+     *                  meaningful inside {@link DaySlot#HEARTH}, and it is passed in rather than
+     *                  derived because the caller has already resolved this villager's own crossing
+     *                  and re-deriving it is the sixty-four-bit hash session 13 spent 2.4 µs on.
+     * @return the errand, or null when the plan has nothing to say — which is the common case and
+     *         is every tick of two thirds of the day.
+     */
+    public static Errand errandFor(Persona persona, DaySlot slot, boolean pastVigil) {
+        return switch (slot) {
+            case HAUL -> Errand.HAUL;
+            case NOON -> Errand.NOON;
+            case HEARTH -> pastVigil && standsWatch(persona) ? Errand.WATCH : null;
+            case NIGHT -> standsWatch(persona) ? Errand.WATCH : null;
+            default -> null;
+        };
     }
 
     /**

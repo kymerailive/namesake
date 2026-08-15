@@ -157,6 +157,90 @@ class SteeringTest {
     }
 
     /**
+     * <b>The other gate, and the riskier one: what may be taken <i>out of</i> vanilla's hands.</b>
+     *
+     * <p>The veto declines a walk target. An errand switches a villager's whole activity, which
+     * stops eleven vanilla behaviours running — so a wrong clause here does not make a villager
+     * stand still, it makes them stop being a villager. Each clause names the person it would
+     * otherwise strand.
+     */
+    @Test
+    @DisplayName("an errand is only ever begun from somewhere it is safe to leave")
+    void theErrandGateIsNarrow() {
+        assertTrue(Steering.mayEnter(Errand.HAUL, Activity.WORK, false, false, false, false),
+                "a working villager at eleven o'clock is the whole of what this mechanic is");
+        assertTrue(Steering.mayEnter(Errand.WATCH, Activity.REST, false, false, false, false),
+                "REST is on the allowlist and the watch is why: the window opens on vanilla's own "
+                        + "12000 keyframe, which is the tick the schedule turns IDLE into REST, so "
+                        + "a watch that refused to start from REST would never start at all");
+        assertTrue(Steering.mayEnter(Errand.NOON, Activity.IDLE, false, false, false, false),
+                "an unemployed villager idles through a working slot and still eats at noon");
+
+        assertFalse(Steering.mayEnter(null, Activity.WORK, false, false, false, false),
+                "no errand in this slot for this villager — the common case, and two thirds of the day");
+
+        for (Activity activity : List.of(Activity.HIDE, Activity.PANIC, Activity.RAID,
+                Activity.PRE_RAID, Activity.MEET, Activity.PLAY)) {
+            assertFalse(Steering.mayEnter(Errand.HAUL, activity, false, false, false, false),
+                    () -> "a villager in " + activity + " has somewhere better to be than the "
+                            + "market. HIDE is the one that matters: it is the only vanilla package "
+                            + "with no schedule exit, so taking a villager out of it would be this "
+                            + "mod fighting ReactToBell — CORE, priority 0, every tick — for the "
+                            + "rest of the world's life.");
+        }
+        assertFalse(Steering.mayEnter(Errand.HAUL, null, false, false, false, false),
+                "a brain with no non-core activity at all is not one to switch");
+
+        assertFalse(Steering.mayEnter(Errand.HAUL, Activity.WORK, true, false, false, false),
+                "HEARD_BELL_TIME has NO EXPIRY, so a villager who merely heard a bell is one "
+                        + "ReactToBell will put back into HIDE on the next tick. Beginning an "
+                        + "errand there is a tug-of-war lost sixty times a second.");
+        assertFalse(Steering.mayEnter(Errand.WATCH, Activity.REST, false, true, false, false),
+                "Brain.tickEachRunningBehavior walks every RUNNING behaviour regardless of which "
+                        + "activity is active, so a SleepInBed that has already started keeps "
+                        + "ticking after the switch — a watch chosen out of somebody's bed is a "
+                        + "villager asleep on duty, in ERRAND, going nowhere");
+        assertFalse(Steering.mayEnter(Errand.HAUL, Activity.WORK, false, false, true, false),
+                "dragging a villager out from under their own trade screen");
+        assertFalse(Steering.mayEnter(Errand.HAUL, Activity.WORK, false, false, false, true),
+                "a baby runs Schedule.VILLAGER_BABY and the PLAY package; §7's midday economy is "
+                        + "about people with work to do");
+    }
+
+    /**
+     * <b>Every clause of the errand gate is load-bearing.</b> {@link #everyClauseChangesTheAnswer}'s
+     * shape at the second gate, for the same reason: a clause that does not change the answer is a
+     * clause somebody can delete without anything going red.
+     */
+    @Test
+    @DisplayName("every errand clause is load-bearing — the base case fires and each variation does not")
+    void everyErrandClauseChangesTheAnswer() {
+        assertTrue(Steering.mayEnter(Errand.HAUL, Activity.WORK, false, false, false, false),
+                "the base case must fire, or the rest proves nothing");
+
+        record Variation(String what, boolean mayEnter) {
+        }
+        List<Variation> variations = List.of(
+                new Variation("no errand",
+                        Steering.mayEnter(null, Activity.WORK, false, false, false, false)),
+                new Variation("hiding",
+                        Steering.mayEnter(Errand.HAUL, Activity.HIDE, false, false, false, false)),
+                new Variation("has heard a bell",
+                        Steering.mayEnter(Errand.HAUL, Activity.WORK, true, false, false, false)),
+                new Variation("asleep",
+                        Steering.mayEnter(Errand.HAUL, Activity.WORK, false, true, false, false)),
+                new Variation("trading",
+                        Steering.mayEnter(Errand.HAUL, Activity.WORK, false, false, true, false)),
+                new Variation("a baby",
+                        Steering.mayEnter(Errand.HAUL, Activity.WORK, false, false, false, true)));
+
+        for (Variation variation : variations) {
+            assertFalse(variation.mayEnter(), () -> "changing only \"" + variation.what()
+                    + "\" left the errand gate open, so that clause is not doing anything.");
+        }
+    }
+
+    /**
      * <b>The narrowing is what makes it safe, so removing any one clause has to be visible.</b>
      *
      * <p>This is the shape hard rule 3 asks for, written as a test rather than as a breakage pass:

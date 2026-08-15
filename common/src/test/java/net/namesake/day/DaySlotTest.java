@@ -13,6 +13,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -143,6 +144,62 @@ class DaySlotTest {
         assertTrue(DaySlot.LABOUR_I.isLabour() && DaySlot.LABOUR_II.isLabour());
         assertFalse(DaySlot.HAUL.isLabour(), "HAUL is session 14's ERRAND, not session 13's");
         assertFalse(DaySlot.NOON.isLabour(), "NOON is session 14's ERRAND, not session 13's");
+    }
+
+    /**
+     * <b>The two mechanics are disjoint by slot, and that is a correctness property rather than
+     * tidiness.</b>
+     *
+     * <p>They are two answers to the same question about the same villager. A slot that was both
+     * would have session 13's veto erasing a walk target session 14 had just written, every tick,
+     * and the villager would stand at their workstation while every counter in the mod said they
+     * were on their way to the bell.
+     */
+    @Test
+    @DisplayName("no slot is both a labour slot and an errand slot")
+    void theTwoMechanicsDoNotOverlap() {
+        for (DaySlot slot : DaySlot.values()) {
+            assertFalse(slot.isLabour() && slot.mayCarryAnErrand(),
+                    () -> slot + " is both a labour slot and an errand slot. The standoff holds a "
+                            + "villager near their workstation by erasing walk targets that point "
+                            + "at it; an errand sends them across the village. One of them would "
+                            + "win every tick and nothing would go red.");
+        }
+        assertEquals(Set.of(DaySlot.HAUL, DaySlot.NOON, DaySlot.HEARTH, DaySlot.NIGHT),
+                java.util.Arrays.stream(DaySlot.values())
+                        .filter(DaySlot::mayCarryAnErrand)
+                        .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new)),
+                "DESIGN.md §7 hands session 14 slots 2, 3, 6b and 7. These are ruled rows.");
+    }
+
+    /**
+     * <b>The 6a/6b line, and it is vanilla's own keyframe rather than a number this mod invented.</b>
+     *
+     * <p>§7's slot 6 is one row that spans an activity change — {@code IDLE→REST} — and the change
+     * is at 12000. That is where {@link Errand#WATCH}'s window opens, so the plan needs a crossing
+     * there; it is deliberately <b>not</b> a ninth slot, because the whole mechanism behind the
+     * at-a-glance test is that there are few enough facts to learn by watching.
+     */
+    @Test
+    @DisplayName("the vigil is vanilla's 12000 keyframe and it sits inside HEARTH, not on a boundary")
+    void theVigilIsVanillasOwnKeyframe() {
+        assertEquals(12000, DaySlot.VIGIL_BEGINS_AT, "DESIGN.md §7's 6a/6b line is a ruled number");
+        assertSame(Activity.IDLE,
+                Schedule.VILLAGER_DEFAULT.getActivityAt(DaySlot.VIGIL_BEGINS_AT - 1),
+                "6a is vanilla IDLE — the plan leaves it alone entirely");
+        assertSame(Activity.REST, Schedule.VILLAGER_DEFAULT.getActivityAt(DaySlot.VIGIL_BEGINS_AT),
+                "and 6b is vanilla REST, which is what makes the watch visible: everybody else is "
+                        + "walking home");
+        assertSame(DaySlot.HEARTH, DaySlot.at(DaySlot.VIGIL_BEGINS_AT),
+                "the vigil must fall inside HEARTH rather than starting a slot of its own");
+        assertTrue(DaySlot.VIGIL_BEGINS_AT > DaySlot.HEARTH.startsAt()
+                        && DaySlot.VIGIL_BEGINS_AT < DaySlot.HEARTH.endsAt(),
+                "strictly inside, so 6a and 6b are both non-empty");
+        for (DaySlot slot : DaySlot.values()) {
+            assertNotEquals(DaySlot.VIGIL_BEGINS_AT, slot.startsAt(),
+                    "the vigil is not a slot start and must not quietly become one — the table has "
+                            + "eight rows and DESIGN.md §7 rules all eight");
+        }
     }
 
     /**

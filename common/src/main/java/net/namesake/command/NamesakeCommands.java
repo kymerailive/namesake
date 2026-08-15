@@ -620,13 +620,17 @@ public final class NamesakeCommands {
                 .append("\n  slot ").append(slot).append(" ").append(slot.startsAt())
                 .append("-").append(slot.endsAt())
                 .append(", vanilla ").append(slot.vanillaActivity().getName())
-                .append(slot.isLabour() ? " — the standoff applies" : " — the plan says nothing here")
+                .append(slot.isLabour() ? " — the standoff applies"
+                        : slot.mayCarryAnErrand() ? " — an errand may apply"
+                        : " — the plan says nothing here")
                 .append("\n  ").append(Steering.describe(level))
                 .append("\n  industry >= ").append(DayPlan.INDUSTRY_TO_WORK)
-                .append(" turns up for work (p25 of the real generator, so about one in four does not)");
+                .append(" turns up for work (p25 of the real generator, so about one in four does not)")
+                .append("\n  boldness >= ").append(DayPlan.BOLDNESS_TO_WATCH)
+                .append(" stands watch after dark (one in four, so a village of nine keeps two out)");
 
         int nameColumn = 14;
-        out.append("\n  ").append(pad("who", nameColumn)).append(" ind  off  posture      job");
+        out.append("\n  ").append(pad("who", nameColumn)).append(" ind  bld  off  posture      job");
 
         int steered = 0;
         int trouble = 0;
@@ -636,7 +640,8 @@ public final class NamesakeCommands {
                 continue;
             }
             Steering.Posture posture = Steering.postureOf(villager);
-            if (posture == Steering.Posture.STANDOFF || posture == Steering.Posture.WALKING_OUT) {
+            if (posture == Steering.Posture.STANDOFF || posture == Steering.Posture.WALKING_OUT
+                    || Steering.errandOf(villager).isPresent()) {
                 steered++;
             }
             if (posture == Steering.Posture.STUCK || posture == Steering.Posture.BELL_LOCKED) {
@@ -644,9 +649,9 @@ public final class NamesakeCommands {
             }
             BlockPos job = Steering.jobSiteOf(villager);
             out.append("\n  ").append(pad(nameOf(persona), nameColumn))
-                    .append(String.format(Locale.ROOT, "%+4d %4d  %-11s",
-                            persona.trait(Persona.INDUSTRY), DayPlan.offsetOf(persona, slot),
-                            posture))
+                    .append(String.format(Locale.ROOT, "%+4d %+4d %4d  %-11s",
+                            persona.trait(Persona.INDUSTRY), persona.trait(Persona.BOLDNESS),
+                            DayPlan.offsetOf(persona, slot), posture))
                     .append(job == null ? "   —"
                             : String.format(Locale.ROOT, " %3dm",
                                     (int) Math.round(Math.sqrt(job.distSqr(villager.blockPosition())))));
@@ -655,7 +660,7 @@ public final class NamesakeCommands {
             // Every section prints its own absence. Session 11's rule, at a fourth surface.
             out.append("\n  no villager is loaded within 48 blocks of you.");
         }
-        out.append("\n  ").append(steered).append(" standing off, ").append(trouble)
+        out.append("\n  ").append(steered).append(" steered by the plan, ").append(trouble)
                 .append(" neither working nor standing off on purpose");
         if (trouble > 0) {
             out.append(" — see STUCK/BELL_LOCKED above, which is a villager who cannot get anywhere"

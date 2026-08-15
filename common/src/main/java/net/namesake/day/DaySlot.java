@@ -72,10 +72,10 @@ public enum DaySlot {
      */
     LABOUR_I(2000),
 
-    /** Session 14's {@code ERRAND}: sacks moving one direction. Nothing here steers it yet. */
+    /** Session 14's {@link Errand#HAUL}: eleven o'clock, and the roads fill. */
     HAUL(5000),
 
-    /** Session 14's midday economy. Nothing here steers it yet. */
+    /** Session 14's {@link Errand#NOON}: noon, and the hearths fill. */
     NOON(6000),
 
     /** The second working stretch, and the other one the standoff applies in. */
@@ -93,14 +93,35 @@ public enum DaySlot {
      */
     COMMONS(9000),
 
-    /** Hearths fill, then beds. Vanilla changes activity inside this slot, at 12000. */
+    /**
+     * Hearths fill, then beds. <b>Vanilla changes activity inside this slot, at
+     * {@link #VIGIL_BEGINS_AT}</b>, and that is §7's 6a/6b line: 6a is left entirely to vanilla and
+     * 6b is when {@link Errand#WATCH} takes the bold outside while everybody else goes to bed.
+     */
     HEARTH(11000),
 
-    /** Streets empty. Sleepers sleep, and §7 rules the steering here <b>none</b>. */
+    /** Streets empty. Sleepers sleep — §7 rules the steering <b>none</b> for them — and the watch stays out. */
     NIGHT(14000);
 
     /** Ticks in a Minecraft day. */
     public static final int DAY_LENGTH = 24000;
+
+    /**
+     * <b>The one boundary the plan acts on that is not a slot start: vanilla's own 12000
+     * keyframe.</b> {@code DESIGN.md} §7's 6a/6b line.
+     *
+     * <p>{@code Schedule.VILLAGER_DEFAULT} turns {@code IDLE} into {@code REST} here, in the middle
+     * of {@link #HEARTH} — so it is a moment vanilla already has rather than one this mod invents,
+     * and it is the moment a village visibly goes indoors. {@link Errand#WATCH}'s window opens on
+     * it, which is why the plan needs a crossing here and nowhere else inside a slot.
+     *
+     * <p><b>It is not a ninth slot deliberately.</b> §7's table has eight rows, the eight starts are
+     * ruled numbers, and the whole mechanism behind the at-a-glance test is that there are few
+     * enough facts to learn by watching. A ninth row would be a ninth fact for a boundary only one
+     * villager in five ever crosses. {@code DaySlotTest.theKeyframesAreVanillasOwn} holds that this
+     * number is one of vanilla's five and that it falls strictly inside {@link #HEARTH}.
+     */
+    public static final int VIGIL_BEGINS_AT = 12000;
 
     private static final DaySlot[] VALUES = values();
 
@@ -145,6 +166,23 @@ public enum DaySlot {
      */
     public boolean isLabour() {
         return this == LABOUR_I || this == LABOUR_II;
+    }
+
+    /**
+     * True while an {@link Errand} can begin in this slot — the four rows {@code DESIGN.md} §7 hands
+     * session 14.
+     *
+     * <p><b>Deliberately disjoint from {@link #isLabour}</b>, and {@code DaySlotTest} holds that:
+     * the standoff and an errand are two answers to the same question about the same villager, and a
+     * slot that was both would have session 13 vetoing a walk target session 14 had just written.
+     *
+     * <p>It is a <i>may</i> rather than a <i>does</i>, and both of the reasons are in
+     * {@link DayPlan#errandFor}: {@link #HEARTH} only carries one past {@link #VIGIL_BEGINS_AT}, and
+     * {@link #HEARTH} and {@link #NIGHT} only carry one for the villagers who stand watch. This is
+     * the cheap test that ends the question for the other twenty hours of the day.
+     */
+    public boolean mayCarryAnErrand() {
+        return this == HAUL || this == NOON || this == HEARTH || this == NIGHT;
     }
 
     /**
