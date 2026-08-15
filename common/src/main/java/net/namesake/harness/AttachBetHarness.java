@@ -552,6 +552,15 @@ public final class AttachBetHarness {
                 record(BENCHES.size() == WORKERS,
                         "PLAN stood " + BENCHES.size() + " workstation(s) up on empty ground, "
                                 + BENCH_SPACING + " blocks apart, with no bell anywhere near them");
+                // MID-MORNING, AND THIS IS LOAD-BEARING RATHER THAN SCENERY. configure() freezes
+                // this world at 18000 so a zombie villager does not burn during the cure leg, and
+                // 18000 is REST. GoToPotentialJobSite — the behaviour that walks an unemployed
+                // villager to the workstation it is about to take — refuses to run unless the
+                // active non-core activity is IDLE, WORK or PLAY. So at night these six would have
+                // stood beside six lecterns for ever, unemployed, and the first run of this leg did
+                // exactly that: "all six villagers claimed a workstation of their own" failed with
+                // nobody having claimed anything.
+                level.setDayTime(2500);
                 beginAwait(6000);
             }
             case 35 -> {

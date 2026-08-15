@@ -230,6 +230,8 @@ public final class Steering {
         private boolean parked;
         /** Set when a standoff turned out to be unreachable, so it is not offered again today. */
         private boolean gaveUp;
+        /** In the governor's queue, so a slow tick does not enqueue the same villager twice. */
+        private boolean queued;
 
         Tracked(Villager villager, Persona persona) {
             this.villager = villager;
@@ -350,9 +352,10 @@ public final class Steering {
                     releaseStandoff(tracked);
                 }
             }
-            if (slot != tracked.servedSlot && DayPlan.pathGateOpen(tracked.persona, gameTime)) {
+            if (slot != tracked.servedSlot && !tracked.queued
+                    && DayPlan.pathGateOpen(tracked.persona, gameTime)) {
                 levelState.waiting.addLast(tracked);
-                tracked.servedSlot = slot;
+                tracked.queued = true;
             }
         }
         if (gone != null) {
@@ -361,6 +364,7 @@ public final class Steering {
 
         for (int served = 0; served < TRANSITIONS_PER_TICK && !levelState.waiting.isEmpty(); served++) {
             Tracked next = levelState.waiting.pollFirst();
+            next.queued = false;
             enterSlot(level, levelState, next, DayPlan.slotFor(next.persona, dayTime));
         }
     }
@@ -422,32 +426,42 @@ public final class Steering {
      */
     private static void enterSlot(ServerLevel level, LevelState levelState, Tracked tracked,
                                   DaySlot slot) {
-        tracked.parked = false;
-        tracked.standoff = null;
-        tracked.gaveUp = false;
         // The one place the cached persona is refreshed. See Tracked.
         PersonaService.personaOf(tracked.villager)
                 .filter(Persona::isGenerated)
                 .ifPresent(fresh -> tracked.persona = fresh);
 
+        if (slot.isLabour() && !tracked.villager.getBrain().isActive(Activity.WORK)) {
+            // TWO THINGS AT ONCE, AND THE SECOND IS WHY THIS RETURNS WITHOUT MARKING THE SLOT SERVED.
+            //
+            // The guard itself is the inherited bug's own mechanism pointed back at us. A bell
+            // writes HEARD_BELL_TIME with no expiry into every living entity within 32 blocks;
+            // ReactToBell (CORE, priority 0) then re-asserts HIDE every tick while it is present;
+            // the HIDE package is the only one of the seven with no UpdateActivityFromSchedule, so
+            // the schedule cannot pull a villager out of it; and its one exit, SetHiddenState, needs
+            // HIDING_PLACE, which only LocateHidingPlace writes and which requires WALK_TARGET to be
+            // ABSENT. So a walk target of ours, written to a villager who happens to be hiding, can
+            // cost them the tick that would have let them out — and a villager who never gets out of
+            // HIDE is stuck indoors for the rest of the world's life. Writing that ourselves was one
+            // missing line away.
+            //
+            // And it must not mark the slot served, which the harness found rather than a review. A
+            // villager whose offset is zero crosses into LABOUR_I on the very tick day time reaches
+            // 2000, and vanilla's UpdateActivityFromSchedule — which switches IDLE to WORK — runs at
+            // priority 99 in the *same* tick. So for one tick the slot is labour and the brain is
+            // not yet working. Marking that served would cost those villagers their standoff for the
+            // whole slot, silently, and only the most industrious of the lazy ones. Left unserved,
+            // they are re-enqueued the next time their own path gate opens.
+            return;
+        }
+        tracked.servedSlot = slot;
+        tracked.parked = false;
+        tracked.standoff = null;
+        tracked.gaveUp = false;
+
         if (!slot.isLabour() || DayPlan.isDiligent(tracked.persona)) {
             // A diligent villager is left entirely alone. Vanilla walks them to their workstation,
             // WorkAtPoi fires, the sound plays and the trades restock. Not steering is the feature.
-            return;
-        }
-        if (!tracked.villager.getBrain().isActive(Activity.WORK)) {
-            // THE GUARD THIS SESSION ALMOST SHIPPED WITHOUT, and it is the inherited bug's own
-            // mechanism pointed back at us. A bell writes HEARD_BELL_TIME with no expiry into every
-            // living entity within 32 blocks; ReactToBell (CORE, priority 0) then re-asserts HIDE
-            // every tick while it is present; the HIDE package is the only one of the seven with no
-            // UpdateActivityFromSchedule, so the schedule cannot pull a villager out of it; and its
-            // one exit, SetHiddenState, needs HIDING_PLACE, which only LocateHidingPlace writes and
-            // which requires WALK_TARGET to be ABSENT.
-            //
-            // So a walk target of ours, written to a villager who happens to be hiding, can cost
-            // them the tick that would have let them out — and a villager who never gets out of
-            // HIDE is a villager stuck indoors for the rest of the world's life. That is the bug
-            // this session inherited, and writing it ourselves was one missing line away.
             return;
         }
         BlockPos jobSite = jobSiteOf(tracked.villager);
