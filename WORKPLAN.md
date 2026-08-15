@@ -30,6 +30,8 @@ Where any other document disagrees on sequence, this wins.
   running `verify` is genuinely somebody else — sixteen villagers across two settlements, all
   speaking a stranger line and all charging ×1.00, while the player who earned something still has
   it. **437 unit tests, 140 harness legs in `setup` and 35 in `verify`** (38 on a migrating run).
+  **And the owner played it: a librarian at TRUSTED sold a book for 18 emeralds against a
+  struck-through 20, in their own world.**
   Two ruled numbers did not compose and the session opened on both, as 08, 10 and 11 did: the price
   band's axis, and §10 step 5's **0.95**, which is not on the ruled ladder and — measured — is not
   what one gift two villages away produces either. The number gave way, to **1.00**, and the finding
@@ -4599,16 +4601,53 @@ moved unchanged, which is why every dialogue and board test written against it s
 at 0 is session 09's hostile-pool boundary. And `RESENTED` at −20 is the only genuinely new number:
 it is **where one witnessed killing puts a person, halved.**
 
-**And a correction to how that reads, found while writing the playtest script rather than while
-writing the code.** The paragraph above describes `TRUSTED` as a rung you cross on day 28, and **you
-do not cross it on the way up at all.** `Standing.of` tests warmth before trust, and a player filling
-the daily allowance moves both axes together — 8/8, 16/15, 24/22 — so both thresholds are crossed on
-the *same gift* and `WARM` wins the ordering. `TRUSTED` is the state a relationship **falls back to**
-once warmth decays under twenty and trust does not: it is where you land three days after you stop
-visiting. That is the ruled design working exactly as the row above it says — *the discount you keep
-versus the discount you have to keep earning* — but it is the opposite shape from a ladder, and the
-day-28 figure is when a *village* reaches the residency band rather than when one villager is seen to
-enter this one. The mechanism is unchanged; only this description of it was wrong.
+**And two clarifications to how that reads, both found while writing the playtest script rather than
+while writing the code, and both measured before being written down — the second time, at least.**
+
+**First: the day-28 figure is a village's, not a villager's.** It is when the *third resident*
+crosses the residency mark. One villager a player is feeding directly crosses it much sooner —
+measured over the real generator, 4,536 personas across six cultures:
+
+| in-game days of saturating gifts to reach trust 20 | share |
+|---|---|
+| 2 | 19.4% |
+| **3** | **57.7%** |
+| 4 | 20.4% |
+| 5 or more | 2.5% |
+
+**77% inside three days.** The spread is the personality allowance, which runs 4 to 12 over a real
+population and is commonest at 8 and 9.
+
+**Second: whether a player ever *sees* the `TRUSTED` band on the way up depends on that same roll**,
+and it is worth measuring because it is not visible from the code:
+
+| allowance | bands walked, feeding to the cap daily | share of 4,536 rolled personas |
+|---|---|---|
+| 4, 5, 6, 7, 9, 10 | `NEUTRAL → TRUSTED → WARM` | **75.7%** |
+| 8, 11, 12 | `NEUTRAL → WARM`, skipping `TRUSTED` | **24.3%** |
+
+So three villagers in four show the middle rung and one in four does not. It is skipped exactly when
+both axes cross twenty on the same gift, and `Standing.of` then returns the better band — which is a
+ruling rather than an accident of ordering, and `Standing.java` says so where it makes it: *warmth
+before trust, because `WARM` is the higher band.*
+
+**And the one that is a design question rather than a description.** `TRUSTED` is also where a
+relationship *lands* when warmth decays and trust does not — except that warmth decays toward
+`round(peak × 0.4)`, so the fall back has a ceiling:
+
+| peak warmth reached | falls back to `TRUSTED` after |
+|---|---|
+| 22 | 3 in-game days |
+| 30 | 11 days |
+| 43 | 24 days |
+| **49 and above** | **never** |
+
+Past a peak of about forty-nine, four tenths of it is twenty and **the top discount is permanent.**
+That is `Bond.DECAY_TARGET` doing exactly what §2 rules — *absence cools a bond; it never resets one*
+— and it is stated here rather than left to be found because it is a real bound on the sentence this
+session built its argument out of: *the discount you keep versus the discount you have to keep
+earning* stops needing to be earned once it is deep enough. **The owner's to rule; nothing was
+changed on the strength of it.**
 
 | what a player does, once | trust to the subject | to each witness |
 |---|---|---|
@@ -4922,8 +4961,8 @@ that is a seventh instrument rather than an anecdote.** Every one of them is a *
 true of the shipped code, invisible to any assertion, and only visible to somebody asking "what will
 a person actually see?"
 
-- **`TRUSTED` is never entered on the way up.** See the correction above. Nothing was wrong; the
-  ledger's description of it was.
+- **Whether `TRUSTED` is entered on the way up depends on the villager's rolled allowance** — 75.7%
+  of a real population walk through it and 24.3% skip it. See the table above.
 - **`has not met you` cannot appear on a board.** `Board.of` counts a stranger rather than naming
   them, so that phrase reaches a person only through a unit test — which is exactly where it was
   green.
@@ -4939,6 +4978,29 @@ screen* and started taking screenshots. This one learned that **the screen is no
 a surface can render correctly, in a state no player will ever be in. The cheapest instrument for it
 turned out to be writing the instructions and then checking them against the source before handing
 them over.
+
+**And the first version of this section was wrong, which is the more useful half of the story.** It
+said flatly that `TRUSTED` is *never* entered on the way up. That was written from one reviewer's
+reading, pushed to `main`, and handed to the owner mid-playtest — **before the adversarial pass that
+was already running had finished.** The refutation came back with the arithmetic: the claim holds for
+allowance 8 and 11 and fails for most other rolls, and the *reason* given was wrong as well, since
+the test ordering is a ruling about which band wins a tie rather than an accident.
+
+Both the original claim and its refutation were then settled the way this ledger says everything is
+settled — **by running it**, rather than by preferring the more recent argument. And the first run
+was wrong too: it swept allowances 5 to 12 against a *synthetic* trait distribution, which put the
+skip share at about a third. Rerun over the real `TraitRoll` population across six cultures, the
+allowance range is 4 to 12 and the share is **24.3%**. The tables above are the second run. **Three
+attempts at one number, and the only one that was right came from the real generator** — which is
+session 03's lesson, and session 07's, and the reason `PersonalityDistributionTest` builds a
+population instead of a fixture.
+
+**The rule this project already has, restated because it was broken by the person who wrote it
+down:** a plausible finding from a careful reader is a *hypothesis*. Session 03 says it about a
+named consumer — *treat the note as a hypothesis, not an instruction*. It is the same rule about a
+code review. **Do not ship a correction faster than you would ship the thing it corrects**, and
+least of all into a document whose whole purpose is being the version that does not disagree with
+itself.
 
 #### Rule 3: fourteen deliberate breakages, each watched to fail and then removed
 
@@ -5006,26 +5068,37 @@ name them, and the second of the three is `BAND STEP 7`.
   villager in the world charges. That makes it a more expensive number to retune than it was, and it
   is the owner's to rule either way.
 
-#### The playtest
+#### The playtest — run at the close, and the price moved on the owner's own screen
 
-**One, and it is the first outstanding playtest since session 10.** Everything above is machine-
-checked and none of it is a person opening a trade screen.
+**The owner ran it in the same sitting, and the ladder is no longer only a harness number.** A
+librarian rolled at `gift× 0.96` — allowance 7 — walked as follows on `/namesake debug bonds`:
 
-The script: **find a librarian and open their trades — write the price down.** Then give that villager
-things until the Notice Board says *warm to you*, and open their trades again: it should cost less,
-with vanilla's struck-through price showing the difference, and a recipe should unlock. Then **punch
-them once** and open the trades a third time: higher than the stranger price you wrote down first.
-(Punch a villager in a village that has *not* taken you in — see finding 2 above.)
+```
+day 1   trust +14  warmth +13   cap 7/7/0
+day 2   trust +14  warmth +12   (no gifts; warmth decaying a point a day)
+day 3   trust +21  warmth +18
+```
 
-**And two things to look at while you are there**, both carried rather than new:
+Trust past twenty with warmth still under it is **`TRUSTED`**, and the trade window showed
+**18 emeralds against a struck-through 20** — ×0.90, drawn by vanilla for free, in a world nobody
+built for the test. `/recipe take` answered *"No recipes could be forgotten"*, so the lectern recipe
+was genuinely unknown and the teach was armed rather than silently satisfied.
 
-- **the hearsay row in your own world.** It has been checked by machine on both loaders and read off a
-  screenshot, and you have never met it by accident. This session walks between two villages for step
-  7 anyway — open a board in the far one.
-- **whether the six standing phrases read right.** *has not met you · knows you · trusts you · warm to
-  you · wary of you · will not forget.* The first, second, fourth and fifth are the ones you ruled at
-  the close of 11 and they are unchanged. The other two are new, and *will not forget* was chosen by
-  the pixel budget as much as by me.
+**What that is evidence of, stated precisely so it is not mistaken for the whole script.** It is the
+first two consumers reaching a person: a bond earned by ordinary play, a band read off it, and a real
+price in a real vanilla trade screen. **It is not** a reading of the `WARM` price, the strike, the
+recipe toast, the board's phrases, or the hearsay row — none of those were on the screenshots and
+none of them are claimed.
+
+**No ruling on feel was given, so all three questions carry into 13** rather than being marked met:
+whether three in-game days to a discount reads as earned, whether the four reachable phrases read
+right, and whether the fall from *warm to you* back to *trusts you* reads as intended or as decay a
+player would resent. The mechanism is proven; how it feels is still the owner's and still open.
+
+**And one carried item is now smaller than it was.** The playtest reached `TRUSTED` on its first
+villager — which is the rung the first version of this ledger's own correction said was unreachable.
+The owner's screenshots are the third and final piece of evidence in that sequence, and they agree
+with the measurement rather than with either of my descriptions of it.
 
 **Ledger change.** Session 12 → done, session 13 → NEXT. **Risk 5 shrank for the second time and for
 the opposite reason:** at 09 it shrank because two fields were paid; here because three were deleted,
