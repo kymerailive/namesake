@@ -18,8 +18,11 @@ import net.namesake.profile.Profiling;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Optional;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -96,12 +99,44 @@ public final class SettlementRegistrar {
         return true;
     }
 
+    /**
+     * <b>How long a settled area keeps offering to generate the personas waiting on it.</b>
+     *
+     * <p>{@link #settled} used to call {@code Personas.generateLoadedNear} <b>once</b>, and once is
+     * a sample of {@code getEntitiesOfClass} at one instant. Session 03 wrote down what is wrong
+     * with that in its own log — <i>building a large structure stalls the server, and the catch-up
+     * ticks that follow briefly unload entities in neighbouring chunks; they come back a few ticks
+     * later</i> — and then this line sampled once anyway. A villager who is not in the loaded list
+     * on that single tick is <b>never generated at all</b>: no culture, no name, no traits, until
+     * their chunk happens to cycle, because {@code Personas.onPersonaLoaded} only runs on entity
+     * load and the survey never comes back.
+     *
+     * <p>Found at the close of session 13 by CI, which failed the ten-session-old
+     * <i>3/3 wilderness villagers were generated</i> leg on NeoForge twice — and then failed it on
+     * the previous commit too, which is what proved it was this rather than that session's changes.
+     * The same run passes on the owner's machine every time. <b>Three to four times slower is the
+     * measured difference between the runner and this machine</b>, and this is the first defect that
+     * only that gap can see.
+     *
+     * <p>A hundred ticks: five seconds, long enough for chunk tickets to settle after a teleport and
+     * far shorter than the chunk cycle that is the only other cure. It costs one entity query per
+     * settled cell per tick for five seconds, once per place ever.
+     */
+    private static final int GENERATION_RETRY_TICKS = 100;
+
+    /** Areas that finished their survey recently, and how many ticks they keep retrying for. */
+    private static final Map<Retry, Integer> RETRYING = new HashMap<>();
+
+    private record Retry(ResourceKey<Level> dimension, BlockPos origin) {
+    }
+
     /** Hooked to the end of every server tick by both loaders. */
     public static void onServerTick(MinecraftServer server) {
         if (Profiling.MOD_INERT) {
             // Hard rule 4's baseline: the same world with none of our code in it. See Profiling.
             return;
         }
+        retryGeneration(server);
         if (scoring) {
             return;
         }
@@ -158,6 +193,7 @@ public final class SettlementRegistrar {
         QUEUE.clear();
         PENDING.clear();
         PROBED.clear();
+        RETRYING.clear();
         active = null;
         scoring = false;
     }
@@ -256,6 +292,42 @@ public final class SettlementRegistrar {
         if (generated > 0) {
             Namesake.LOGGER.debug("Generated {} persona(s) waiting on the survey around {}",
                     generated, scan.origin.toShortString());
+        }
+        // And keep offering for a few seconds, because the villagers who needed this most are the
+        // ones whose chunk was mid-churn on the one tick above. See GENERATION_RETRY_TICKS.
+        RETRYING.put(new Retry(scan.level.dimension(), scan.origin), GENERATION_RETRY_TICKS);
+    }
+
+    /**
+     * Offers generation again to anybody who was not loaded when their survey landed.
+     *
+     * <p>Runs before the survey step rather than after it, so a cell that settles this tick starts
+     * retrying next tick rather than immediately — the {@link #settled} call has already covered
+     * this one, and doing it twice in a tick would be an entity query for nothing.
+     */
+    private static void retryGeneration(MinecraftServer server) {
+        if (RETRYING.isEmpty()) {
+            return;
+        }
+        Iterator<Map.Entry<Retry, Integer>> entries = RETRYING.entrySet().iterator();
+        while (entries.hasNext()) {
+            Map.Entry<Retry, Integer> entry = entries.next();
+            ServerLevel level = server.getLevel(entry.getKey().dimension());
+            if (level == null || entry.getValue() <= 0) {
+                entries.remove();
+                continue;
+            }
+            entry.setValue(entry.getValue() - 1);
+            int generated = Personas.generateLoadedNear(level, entry.getKey().origin());
+            if (generated > 0) {
+                // INFO rather than DEBUG: this is a villager who would otherwise have had no name
+                // for the rest of the world's life, and the only evidence the retry is earning its
+                // place is how often it finds somebody.
+                Namesake.LOGGER.info("Generated {} persona(s) that were not loaded when the survey "
+                                + "around {} landed, {} tick(s) later",
+                        generated, entry.getKey().origin().toShortString(),
+                        GENERATION_RETRY_TICKS - entry.getValue());
+            }
         }
     }
 
