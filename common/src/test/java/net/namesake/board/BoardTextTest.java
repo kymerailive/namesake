@@ -216,6 +216,10 @@ class BoardTextTest {
         assertTrue(object.isEmpty() || "enchanted golden apple".startsWith(object), () -> object);
         assertTrue(object.isEmpty() || object.length() >= BoardText.MIN_OBJECT,
                 () -> "'" + object + "' is a fragment rather than a name");
+
+        // Squeezed to nothing useful, it is dropped rather than shown: "ench" is not a shorter
+        // fact about what changed hands, it is a different one.
+        assertEquals("", BoardText.object(memory, "w".repeat(38)));
     }
 
     private static void assertNotEqualsIgnoringCase(String unwanted, String actual) {

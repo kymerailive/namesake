@@ -456,7 +456,7 @@ public final class AttachBetHarness {
             case 16, 17 -> runWitnessCheck(server, level);
             case 18 -> runGossipCheck(server, level);
             case 19, 20, 21, 22, 23, 24 -> runRoadCheck(server, level);
-            case 25, 26 -> runNoticeBoardCheck(server, level);
+            case 25, 26, 27, 28, 29 -> runNoticeBoardCheck(server, level);
             default -> finish(server, true);
         }
     }
@@ -1593,7 +1593,17 @@ public final class AttachBetHarness {
      */
     private static void openTheBoard(MinecraftServer server, ServerLevel level, BlockPos lectern) {
         ServerPlayer player = player(server);
+        // The negatives first, and they are what "vanilla is untouched" actually means. A hand with
+        // something in it is somebody putting a book on a lectern or building with it, and a block
+        // that is not a lectern is not a notice board however close to the bell it is standing.
+        player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.WRITABLE_BOOK));
+        record(!NoticeBoard.isBoardGesture(player, InteractionHand.MAIN_HAND,
+                        level.getBlockState(lectern)),
+                "BOARD a hand with a book in it is somebody using a lectern, and is left alone");
         player.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
+        record(!NoticeBoard.isBoardGesture(player, InteractionHand.MAIN_HAND,
+                        level.getBlockState(registeredSettlement.centre())),
+                "BOARD the bell is not a notice board, however central it is");
         record(NoticeBoard.isBoardGesture(player, InteractionHand.MAIN_HAND,
                         level.getBlockState(lectern)),
                 "BOARD an empty lectern with an empty hand is the gesture, and vanilla spends it on "
@@ -1636,8 +1646,14 @@ public final class AttachBetHarness {
             record(board.hasHistory(), "BOARD " + which
                     + " the board is showing a real save's history: " + board.witnessed().size()
                     + " thing(s) seen, " + board.hearsay().size() + " heard about");
-            record(!rendered.contains("No history."), "BOARD " + which
-                    + " and it is not printing its own absence, because there is something to print");
+            // "No history." belongs to the section that has none, not to the board. The first
+            // version of this asserted it was absent whenever the board held anything at all, and
+            // the far village turned it red on the first run that reached it — correctly: it has
+            // heard six stories about the player and has watched them do nothing, so exactly one of
+            // its two sections should be saying so. Every section prints its own absence means
+            // every section, including while its neighbour is full.
+            record(board.witnessed().isEmpty() == rendered.contains("No history."), "BOARD " + which
+                    + " the section with nothing in it is the one printing its own absence");
         } else {
             // DESIGN.md §10 step 3, in the letter, in a running game: the player who is holding the
             // mouse arrived after the save was written and has done nothing here.

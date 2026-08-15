@@ -45,7 +45,8 @@ public final class NoticeBoardScreen extends Screen {
     private static final int PANEL = 0xF0140F0B;
     private static final int TOP_RULE = 0xFF6E5B44;
     private static final int BOTTOM_RULE = 0xFF3A2F22;
-    private static final int SCROLLBAR = 0xFF6E5B44;
+    private static final int SCROLL_TRACK = 0xFF2A2018;
+    private static final int SCROLL_THUMB = 0xFF9A8460;
 
     private final List<BoardText.Line> lines;
 
@@ -70,13 +71,22 @@ public final class NoticeBoardScreen extends Screen {
         return lines;
     }
 
+    /**
+     * <b>The panel is a whole number of rows tall, and that is a defect being fixed.</b>
+     *
+     * <p>Sized to the content and clamped, it came out at a height the last visible row did not
+     * divide into — so the scissor cut a line of text in half along its middle and the board looked
+     * broken rather than scrollable. Found by taking a screenshot of it and looking, which is the
+     * fourth session running that this has been the instrument.
+     */
     @Override
     protected void init() {
-        int content = lines.size() * BoardText.LINE_HEIGHT;
-        panelHeight = Math.min(BoardText.MAX_PANEL_HEIGHT, content + 2 * BoardText.PADDING);
+        int fits = (BoardText.MAX_PANEL_HEIGHT - 2 * BoardText.PADDING) / BoardText.LINE_HEIGHT;
+        int shown = Math.min(lines.size(), fits);
+        panelHeight = shown * BoardText.LINE_HEIGHT + 2 * BoardText.PADDING;
         panelX = (width - BoardText.PANEL_WIDTH) / 2;
         panelY = (height - panelHeight) / 2;
-        maxScroll = Math.max(0, content - (panelHeight - 2 * BoardText.PADDING));
+        maxScroll = Math.max(0, lines.size() - shown) * BoardText.LINE_HEIGHT;
         scroll = Math.min(scroll, maxScroll);
     }
 
@@ -125,11 +135,17 @@ public final class NoticeBoardScreen extends Screen {
         }
         graphics.disableScissor();
 
+        // Drawn in the panel's own right-hand padding rather than over the text column, and with a
+        // track behind it: the first version was two pixels of the same brown as the border, sitting
+        // on the border, and a screenshot of a board with four rows off the bottom showed no sign
+        // that there was anything below them at all.
         if (maxScroll > 0) {
             int track = textBottom - textTop;
-            int thumb = Math.max(8, track * track / (track + maxScroll));
+            int thumb = Math.max(12, track * track / (track + maxScroll));
             int offset = (track - thumb) * scroll / maxScroll;
-            graphics.fill(right - 3, textTop + offset, right - 1, textTop + offset + thumb, SCROLLBAR);
+            int x = right - BoardText.PADDING + 2;
+            graphics.fill(x, textTop, x + 3, textBottom, SCROLL_TRACK);
+            graphics.fill(x, textTop + offset, x + 3, textTop + offset + thumb, SCROLL_THUMB);
         }
     }
 

@@ -3,6 +3,7 @@ package net.namesake.harness;
 import net.minecraft.client.GraphicsStatus;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.ParticleStatus;
+import net.minecraft.client.Screenshot;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.Difficulty;
 import net.minecraft.world.level.GameRules;
@@ -33,6 +34,7 @@ public final class HarnessClient {
     private static boolean quitting;
     private static boolean tuned;
     private static int waited;
+    private static int boards;
 
     private HarnessClient() {
     }
@@ -163,6 +165,41 @@ public final class HarnessClient {
         BoardProbe.answer(new BoardProbe.Answer(true, rows, widest, disagreements));
         Namesake.LOGGER.info("[harness] notice board on screen: {} row(s), widest {}px, "
                 + "{} font disagreement(s)", rows.size(), widest, disagreements.size());
+        // Logged here as well as returned, so a run that never reaches the verdict — a step routed
+        // wrongly, a deadline missed — still leaves behind the one thing a second launch would be
+        // spent finding out. The whole table is corrected from one run or from none.
+        for (String disagreement : disagreements) {
+            Namesake.LOGGER.warn("[harness] font: {}", disagreement);
+        }
+        grabTheBoard(minecraft);
+    }
+
+    /**
+     * <b>A picture of the board, because the rows are not the screen.</b>
+     *
+     * <p>Every guard in this repository reads strings, and strings are what a right-aligned column, a
+     * panel that is too small, a colour nobody can read against the background and a scrollbar in the
+     * wrong place all look like when they are fine. Session 09's last two defects and two of session
+     * 10's were correct string concatenation found by somebody looking at the output; this is the
+     * cheapest available way to make "look at it" a thing a run leaves behind rather than a thing
+     * somebody has to remember to do.
+     *
+     * <p>Best effort by construction. A failed grab is logged and changes no verdict — a screenshot is
+     * evidence for a person, not an assertion, and a headless runner that cannot produce one has not
+     * found a defect in the board.
+     */
+    private static void grabTheBoard(Minecraft minecraft) {
+        try {
+            // Named by phase as well as by order: setup and verify are two launches into one run
+            // directory, and a bare counter meant the second overwrote the first — which is how a
+            // picture of a board with no history on it was read as the populated one.
+            Screenshot.grab(minecraft.gameDirectory,
+                    "namesake-board-" + AttachBetHarness.phase() + "-" + ++boards + ".png",
+                    minecraft.getMainRenderTarget(),
+                    message -> Namesake.LOGGER.info("[harness] {}", message.getString()));
+        } catch (RuntimeException e) {
+            Namesake.LOGGER.warn("[harness] could not grab a screenshot of the board", e);
+        }
     }
 
     /**

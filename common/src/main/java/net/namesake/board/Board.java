@@ -237,8 +237,14 @@ public record Board(
 
         List<Memory> witnessed = new ArrayList<>();
         List<Memory> hearsay = new ArrayList<>();
+        // Memoised because resolving one costs a walk of the persona table, and a long playthrough's
+        // board can hold a hundred distinct events from a handful of places. Local to this call: a
+        // board is computed once, on open, and thrown away — see the class comment on why there is
+        // nowhere for one to be cached between two of them.
+        Map<Integer, Origin> origins = new LinkedHashMap<>();
         for (Tally tally : tallies.values()) {
-            Memory memory = tally.toMemory(registry, here);
+            Memory memory = tally.toMemory(origins.computeIfAbsent(tally.deed.settlementId(),
+                    id -> originOf(registry, here, id)));
             (memory.firstHand() ? witnessed : hearsay).add(memory);
         }
         Comparator<Memory> newestFirst = Comparator.comparingInt(Memory::day).reversed();
@@ -320,9 +326,9 @@ public record Board(
             }
         }
 
-        private Memory toMemory(NpcRegistry registry, Settlement here) {
+        private Memory toMemory(Origin origin) {
             return new Memory(deed.gameDay(), deed.type(), item, repeats, holders, confidence,
-                    originOf(registry, here, deed.settlementId()));
+                    origin);
         }
     }
 

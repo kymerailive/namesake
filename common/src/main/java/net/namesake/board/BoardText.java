@@ -409,10 +409,18 @@ public final class BoardText {
      * chances of a missing-glyph box and {@code DialogueTest} has guarded it since — so a character
      * outside this range is a defect rather than a case, and {@link #width} says so by name instead
      * of guessing a width for it.
+     *
+     * <p><b>Five of these numbers were wrong when this table was first written, and the harness found
+     * every one of them in a single run.</b> {@code "}, {@code '}, {@code *}, <code>{</code> and
+     * <code>}</code> were each a pixel too wide. Not one of them appears on the board today, so no
+     * row disagreed and nothing a unit test could reach was affected — which is precisely why the pin
+     * is against the engine's own {@code Font} and reports <i>which</i> characters differ. A latent
+     * wrong number in a measurement table is the confident-wrong report this project has now written
+     * about in three different units.
      */
     static final int[] ADVANCES = {
             //     !  "  #  $  %  &  '  (  )  *  +  ,  -  .  /
-            4, 2, 5, 6, 6, 6, 6, 3, 4, 4, 5, 6, 2, 6, 2, 6,
+            4, 2, 4, 6, 6, 6, 6, 2, 4, 4, 4, 6, 2, 6, 2, 6,
             //  0  1  2  3  4  5  6  7  8  9  :  ;  <  =  >  ?
             6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 2, 2, 5, 6, 5, 6,
             //  @  A  B  C  D  E  F  G  H  I  J  K  L  M  N  O
@@ -422,7 +430,7 @@ public final class BoardText {
             //  `  a  b  c  d  e  f  g  h  i  j  k  l  m  n  o
             3, 6, 6, 6, 6, 6, 5, 6, 6, 2, 6, 5, 3, 6, 6, 6,
             //  p  q  r  s  t  u  v  w  x  y  z  {  |  }  ~
-            6, 6, 6, 6, 4, 6, 6, 6, 6, 6, 6, 5, 2, 5, 7};
+            6, 6, 6, 6, 4, 6, 6, 6, 6, 6, 6, 4, 2, 4, 7};
 
     /** The first and last characters {@link #ADVANCES} covers. */
     public static final char FIRST_PRINTABLE = ' ';
