@@ -29,7 +29,11 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
 import net.namesake.Namesake;
+import net.namesake.board.Board;
+import net.namesake.board.BoardText;
+import net.namesake.board.NoticeBoard;
 import net.namesake.culture.Culture;
 import net.namesake.culture.Names;
 import net.namesake.dialogue.Dialogue;
@@ -163,6 +167,11 @@ public final class AttachBetHarness {
     private static final List<Resident> RESIDENTS = new ArrayList<>();
     private static BlockPos villageSite;
     private static Settlement registeredSettlement;
+
+    /** Session 11: the two lecterns this run stood up, and the far village's bell. */
+    private static BlockPos homeBoard;
+    private static BlockPos awayBoard;
+    private static BlockPos farBell;
 
     /** Session 10: the village down the road, and the ground the road was laid over. */
     private static BlockPos neighbourSite;
@@ -447,6 +456,7 @@ public final class AttachBetHarness {
             case 16, 17 -> runWitnessCheck(server, level);
             case 18 -> runGossipCheck(server, level);
             case 19, 20, 21, 22, 23, 24 -> runRoadCheck(server, level);
+            case 25, 26 -> runNoticeBoardCheck(server, level);
             default -> finish(server, true);
         }
     }
@@ -1463,6 +1473,231 @@ public final class AttachBetHarness {
         }
     }
 
+    // --- session 11: the Notice Board ------------------------------------------------------------
+
+    /**
+     * <b>A lectern placed in a village, opened by a real player, drawn through the real screen.</b>
+     *
+     * <p>Everything about the board that is arithmetic — the layout, the absence branches, the
+     * standing naming, the direction — is a unit test, which is the line {@code WORKPLAN.md} draws.
+     * Four things are not, and all four are here:
+     *
+     * <ol>
+     *   <li><b>The loader's own hook is wired.</b> The click goes through
+     *       {@code ServerPlayerGameMode.useItemOn}, which is vanilla's real path, so Fabric's
+     *       {@code UseBlockCallback} and NeoForge's {@code RightClickBlock} are actually exercised
+     *       rather than assumed. Sessions 00, 01 and 02 each lost time to the gap between "compiles"
+     *       and "works in a game", and this is that gap.</li>
+     *   <li><b>The screen is on the screen.</b> The packet crossed, the shared handler ran, and the
+     *       client set a {@code NoticeBoardScreen} — three things no test in {@code common} can
+     *       see.</li>
+     *   <li><b>The advance table is true.</b> {@code BoardText.ADVANCES} is measured against the real
+     *       {@code Font}, character by character and row by row. Only a running client has one.</li>
+     *   <li><b>It renders a real save's history</b>, in two villages: the one the player did things in
+     *       and the one down the road that only heard about it.</li>
+     * </ol>
+     *
+     * <p>Run <b>after</b> the bond and ring snapshot of case 24 rather than before, and that is safe
+     * rather than lucky: opening a board writes nothing. It reads the registry and places one vanilla
+     * block. Session 10's defect 3 is the reason that sentence is here at all.
+     */
+    private static void runNoticeBoardCheck(MinecraftServer server, ServerLevel level) {
+        switch (step) {
+            case 25 -> {
+                ServerPlayer player = player(server);
+                teleport(player, level, villageSite.getX() + 6, villageSite.getY() + 2,
+                        villageSite.getZ() + 6);
+                // Chunk IO, so no sprint: session 03 lost a whole leg to getHeight answering with
+                // the world floor for a chunk that was not loaded, and a lectern placed at the world
+                // floor is a lectern nobody can click.
+                beginAwait(2400);
+            }
+            case 26 -> {
+                if (stillWaiting(server, () -> level.isLoaded(villageSite), false,
+                        "the village's chunks to come back")) {
+                    return;
+                }
+                homeBoard = putUpABoard(level, registeredSettlement.centre());
+                openTheBoard(server, level, homeBoard);
+                beginAwait(1200);
+            }
+            case 27 -> {
+                if (stillWaiting(server, () -> BoardProbe.answer().isPresent(), false,
+                        "the notice board to reach the client's screen")) {
+                    return;
+                }
+                checkTheBoard(server, level, homeBoard, "HOME", true);
+
+                int far = roadEdge == null ? Persona.UNASSIGNED
+                        : roadEdge.other(registeredSettlement.id());
+                farBell = NpcRegistry.get(server).settlements().byId(far)
+                        .map(Settlement::centre).orElse(null);
+                if (farBell == null) {
+                    Namesake.LOGGER.info("[harness] no second village in this world; "
+                            + "skipping the far board leg");
+                    advance(server, 5);
+                    return;
+                }
+                teleport(player(server), level, farBell.getX() + 6, farBell.getY() + 2,
+                        farBell.getZ() + 6);
+                beginAwait(2400);
+            }
+            case 28 -> {
+                if (stillWaiting(server, () -> level.isLoaded(farBell), false,
+                        "the far village's chunks to come back")) {
+                    return;
+                }
+                awayBoard = putUpABoard(level, farBell);
+                openTheBoard(server, level, awayBoard);
+                beginAwait(1200);
+            }
+            case 29 -> {
+                if (stillWaiting(server, () -> BoardProbe.answer().isPresent(), false,
+                        "the far village's notice board to reach the client's screen")) {
+                    return;
+                }
+                checkTheBoard(server, level, awayBoard, "AWAY", true);
+                checkTheFarBoardNamesWhereItCameFrom(server, level);
+                checkASecondPlayerSeesTheirOwnBoard(server, level);
+                writeSubjects(level);
+                advance(server, 5);
+            }
+            default -> finish(server, true);
+        }
+    }
+
+    /**
+     * Stands a lectern up beside the bell, on whatever the ground turns out to be.
+     *
+     * <p>A plain vanilla {@code Blocks.LECTERN} and nothing else, which is the whole of session 11's
+     * answer to "what does the block entity store": <b>there is no block entity and no registered
+     * block.</b> A lectern inside a registered settlement is a notice board because it is standing
+     * there, and this leg is that sentence as a fixture — the harness places the same block a player
+     * would craft, and the board opens.
+     */
+    private static BlockPos putUpABoard(ServerLevel level, BlockPos bell) {
+        BlockPos beside = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                bell.offset(3, 0, 3));
+        level.setBlockAndUpdate(beside, Blocks.LECTERN.defaultBlockState());
+        Namesake.LOGGER.info("[harness] stood a lectern at {} ({} blocks from the bell at {})",
+                beside, (int) Math.sqrt(beside.distSqr(bell)), bell);
+        return beside;
+    }
+
+    /**
+     * The real click. Empty main hand, right-click, through vanilla's own interaction path.
+     *
+     * <p>Not a direct call to {@code NoticeBoard.onServerGesture}: that would prove the board and
+     * skip the loader hook, which is the half a unit test cannot reach and the half that has broken
+     * before.
+     */
+    private static void openTheBoard(MinecraftServer server, ServerLevel level, BlockPos lectern) {
+        ServerPlayer player = player(server);
+        player.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
+        record(NoticeBoard.isBoardGesture(player, InteractionHand.MAIN_HAND,
+                        level.getBlockState(lectern)),
+                "BOARD an empty lectern with an empty hand is the gesture, and vanilla spends it on "
+                        + "nothing");
+        BoardProbe.request();
+        player.gameMode.useItemOn(player, level, ItemStack.EMPTY, InteractionHand.MAIN_HAND,
+                new BlockHitResult(net.minecraft.world.phys.Vec3.atCenterOf(lectern), Direction.UP,
+                        lectern, false));
+    }
+
+    private static void checkTheBoard(MinecraftServer server, ServerLevel level, BlockPos lectern,
+                                      String which, boolean expectHistory) {
+        BoardProbe.Answer seen = BoardProbe.answer().orElse(null);
+        record(seen != null && seen.open(), "BOARD " + which
+                + " a lectern in the village put a notice board on the client's screen");
+        if (seen == null) {
+            return;
+        }
+
+        // The table this mod measures every board row with, against the font that draws them. A
+        // table written down is a table that can be wrong, and this is the only place it can be
+        // held to the truth.
+        record(seen.disagreements().isEmpty(), "BOARD " + which + " the advance table agrees with "
+                + "the real font on every printable character and every row"
+                + (seen.disagreements().isEmpty() ? ""
+                        : ": " + String.join("; ", seen.disagreements())));
+        record(seen.widest() <= BoardText.TEXT_WIDTH, "BOARD " + which + " the widest row draws at "
+                + seen.widest() + "px against the " + BoardText.TEXT_WIDTH + "px budget");
+
+        Board board = NoticeBoard.boardAt(level, lectern, player(server).getUUID()).orElse(null);
+        record(board != null, "BOARD " + which + " the lectern is inside a registered settlement");
+        if (board == null) {
+            return;
+        }
+        String rendered = String.join("\n", seen.rows());
+        record(board.named() && rendered.contains(board.place()),
+                "BOARD " + which + " the village on the board has a name and it is on the screen: "
+                        + board.place());
+        if (expectHistory) {
+            record(board.hasHistory(), "BOARD " + which
+                    + " the board is showing a real save's history: " + board.witnessed().size()
+                    + " thing(s) seen, " + board.hearsay().size() + " heard about");
+            record(!rendered.contains("No history."), "BOARD " + which
+                    + " and it is not printing its own absence, because there is something to print");
+        } else {
+            // DESIGN.md §10 step 3, in the letter, in a running game: the player who is holding the
+            // mouse arrived after the save was written and has done nothing here.
+            record(rendered.contains("No history."), "BOARD " + which
+                    + " a player who has done nothing here reads \"No history.\" on the screen");
+        }
+        for (String row : seen.rows()) {
+            if (!row.isBlank()) {
+                Namesake.LOGGER.info("[board {}] {}", which, row);
+            }
+        }
+    }
+
+    /**
+     * <b>Session 10's loose end, on a screen.</b> {@code /namesake debug deeds} says {@code @s0}; the
+     * far village's board says which village the story came from and which way it is.
+     */
+    private static void checkTheFarBoardNamesWhereItCameFrom(MinecraftServer server,
+                                                            ServerLevel level) {
+        Board board = NoticeBoard.boardAt(level, awayBoard, player(server).getUUID()).orElse(null);
+        if (board == null || board.hearsay().isEmpty()) {
+            record(false, "BOARD AWAY the far village holds nothing it was told about the player");
+            return;
+        }
+        Board.Origin origin = board.hearsay().get(0).origin();
+        record(!origin.here() && origin.hasPlace() && !origin.bearing().isEmpty(),
+                "BOARD AWAY a hearsay row names where the story came from: "
+                        + BoardText.source(origin));
+        String rendered = String.join("\n",
+                BoardText.of(board).stream().map(BoardText.Line::flat).toList());
+        record(rendered.contains(BoardText.source(origin)),
+                "BOARD AWAY and it is on the board rather than only in the record");
+    }
+
+    /**
+     * <b>{@code DESIGN.md} §10 step 7, as far as one client can prove it.</b>
+     *
+     * <p>The same lectern, the same server-side function, a different UUID. A genuine second client
+     * is session 12's exit criterion and is not available to a scripted single-player run — what is
+     * available is the claim underneath it, which is that <b>nothing about a board is shared</b>:
+     * nothing caches one, and the only input that decides its contents is the viewer handed in.
+     */
+    private static void checkASecondPlayerSeesTheirOwnBoard(MinecraftServer server,
+                                                            ServerLevel level) {
+        UUID nobody = UUID.nameUUIDFromBytes("a second player who has done nothing".getBytes(
+                java.nio.charset.StandardCharsets.UTF_8));
+        Board mine = NoticeBoard.boardAt(level, homeBoard, player(server).getUUID()).orElseThrow();
+        Board theirs = NoticeBoard.boardAt(level, homeBoard, nobody).orElseThrow();
+
+        record(mine.hasHistory() && !theirs.hasHistory(),
+                "BOARD two players at one lectern do not see each other's history (mine: "
+                        + mine.witnessed().size() + " seen, theirs: " + theirs.witnessed().size()
+                        + ")");
+        record(theirs.opinions().isEmpty() && theirs.strangers() == theirs.residents(),
+                "BOARD and everybody in the village is a stranger to the one who has done nothing ("
+                        + theirs.strangers() + " of " + theirs.residents() + ")");
+        record(!theirs.residency().granted(),
+                "BOARD and the village has not taken them in either");
+    }
+
     /**
      * Lays the ground the road will be built over: natural cover, and a floor somebody built.
      *
@@ -2065,10 +2300,55 @@ public final class AttachBetHarness {
                         .withPosition(net.minecraft.world.phys.Vec3.atCenterOf(villageSite));
                 server.getCommands().performPrefixedCommand(source, "namesake debug settlements");
                 server.getCommands().performPrefixedCommand(source, "namesake debug dump");
+
+                homeBoard = putUpABoard(level, registeredSettlement.centre());
+                openTheBoard(server, level, homeBoard);
+                beginAwait(1200);
+            }
+            case 3 -> {
+                if (stillWaiting(server, () -> BoardProbe.answer().isPresent(), false,
+                        "the notice board to reach the client's screen")) {
+                    return;
+                }
+                checkTheBoardSurvivedReload(server, level);
                 finish(server, true);
             }
             default -> finish(server, true);
         }
+    }
+
+    /**
+     * <b>The Notice Board after a save, a quit and a reload — and it stored nothing to survive.</b>
+     *
+     * <p>This is the leg that makes session 11's central decision checkable rather than merely
+     * argued. There is no block entity, no registered block and no persisted field anywhere in the
+     * board; a lectern is a notice board because it is standing inside a registered settlement, and
+     * everything on it is computed when it opens. So <b>the whole surface has to come back from a
+     * save that knows nothing about it</b>, out of a settlement table that has been on disk since
+     * schema 3 and rings that have been there since 6.
+     *
+     * <p>Two players, deliberately. The live one is whoever the dev client minted this launch and has
+     * done nothing here, so their board reads {@code DESIGN.md} §10 step 3's own words. The one whose
+     * history is checked is the UUID the <i>setup</i> phase recorded — a check keyed on the live
+     * player would read every board as empty and call that a pass, which is session 01's lesson about
+     * this exact file.
+     */
+    private static void checkTheBoardSurvivedReload(MinecraftServer server, ServerLevel level) {
+        checkTheBoard(server, level, homeBoard, "RELOAD", false);
+
+        UUID whoDidIt = residencyPlayer != null ? residencyPlayer
+                : BONDS.isEmpty() ? null : BONDS.get(0).about();
+        if (whoDidIt == null) {
+            Namesake.LOGGER.info("[harness] this save records no player, so there is no history to "
+                    + "hold the board to; skipping");
+            return;
+        }
+        Board board = NoticeBoard.boardAt(level, homeBoard, whoDidIt).orElse(null);
+        record(board != null && board.hasHistory(),
+                "BOARD RELOAD the board still holds what the player who wrote this save did: "
+                        + (board == null ? "no settlement" : board.witnessed().size()
+                        + " thing(s) seen, " + board.hearsay().size() + " heard about")
+                        + " — out of a save that stores nothing about a notice board");
     }
 
     /**

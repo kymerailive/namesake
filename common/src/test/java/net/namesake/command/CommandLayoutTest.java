@@ -1,5 +1,7 @@
 package net.namesake.command;
 
+import net.namesake.board.Board;
+import net.namesake.board.BoardText;
 import net.namesake.culture.Culture;
 import net.namesake.dialogue.Dialogue;
 import net.namesake.dialogue.Lines;
@@ -19,11 +21,14 @@ import net.namesake.social.Deed;
 import net.namesake.social.DeedType;
 import net.namesake.social.DialogueStats;
 import net.namesake.social.Memories;
+import net.namesake.social.Residency;
+import net.namesake.settlement.Settlement;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.List;
 import java.util.UUID;
@@ -478,6 +483,235 @@ class CommandLayoutTest {
 
     /** Sixteen characters, which is vanilla's cap and {@code GreetVerb}'s budget. */
     private static final String LONGEST_PLAYER_NAME = "Kymerailive_1234";
+
+    // --- session 11's Notice Board, and it is measured in a different unit ------------------------
+
+    /**
+     * <b>Every state the Notice Board has, held to a budget that is not this file's.</b>
+     *
+     * <p>{@code CHAT_WIDTH} is sixty <i>characters</i>, and both halves of that are wrong for a
+     * lectern GUI. A screen is not chat, and a character is not a unit of width — {@code Illinois}
+     * and {@code wwwwwwww} are eight characters and 32 against 48 pixels. So the board is held to
+     * {@code BoardText.TEXT_WIDTH}, which comes off {@code Window.calculateScale}'s 320×240 floor.
+     *
+     * <p><b>It is in this file rather than in a fifth guard of its own, and that is the point.</b>
+     * Session 07 shipped three over-wide lines past four existing width guards because every one of
+     * them measured a populated fixture and the absence branches were never rendered; session 09's
+     * instruction and session 11's are the same one — <i>add the states to the guard that enumerates,
+     * never write a new one that samples.</i>
+     */
+    private static List<Map.Entry<String, List<BoardText.Line>>> everyStateOfTheBoard() {
+        Settlement here = boardSettlement(0, new net.minecraft.core.BlockPos(0, 64, 0));
+        UUID viewer = UUID.fromString("0a0a0a0a-1111-2222-3333-444444444444");
+
+        NpcRegistry nowhere = new NpcRegistry();
+        nowhere.putSettlement(here);
+
+        NpcRegistry unmet = boardVillage(here, 9);
+        NpcRegistry known = boardVillage(here, 9);
+        // A village that has watched things happen, been told about others, and taken the player in.
+        for (int i = 0; i < 9; i++) {
+            known.putBond(boardResident(0, i), viewer, new Bond((byte) 30, (byte) 25, (byte) 0,
+                    (byte) 0, (short) 0, 40, (short) 0, (byte) 25));
+        }
+        Settlement neighbour = boardSettlement(1, new net.minecraft.core.BlockPos(-900, 64, -900));
+        known.putSettlement(neighbour);
+        known.put(Persona.create(boardResident(1, 0), 0L).placed(1, 0, Culture.KARSK.id()));
+        for (int i = 0; i < 9; i++) {
+            known.remember(boardResident(0, i), Deed.of(DeedType.FED_HUNGRY, viewer,
+                    boardResident(0, 0), 0, 30 + i, "minecraft:enchanted_golden_apple"));
+            known.remember(boardResident(0, i), Deed.of(DeedType.KILLED_RESIDENT, viewer,
+                    boardResident(1, 0), 1, 20 + i).retold());
+        }
+
+        return List.of(
+                Map.entry("board, a village nobody lives in",
+                        BoardText.of(Board.of(nowhere, here, viewer, 40))),
+                Map.entry("board, a village that has never seen you",
+                        BoardText.of(Board.of(unmet, here, viewer, 40))),
+                Map.entry("board, a village that knows you",
+                        BoardText.of(Board.of(known, here, viewer, 40))),
+                // The widest anything on this board can be, including combinations the mod cannot
+                // currently emit. Session 09's argument for the deed cell, applied in pixels.
+                Map.entry("board, everything at its widest", BoardText.of(widestBoard(false))),
+                Map.entry("board, everything at its widest, taken in by the band",
+                        BoardText.of(widestBoard(true))));
+    }
+
+    private static Settlement boardSettlement(int id, net.minecraft.core.BlockPos bell) {
+        return new Settlement(id, net.minecraft.resources.ResourceLocation.withDefaultNamespace(
+                "overworld"), bell, net.namesake.settlement.Specialty.FARMING.id(), (byte) 50,
+                new byte[net.namesake.settlement.Need.COUNT]);
+    }
+
+    private static UUID boardResident(int settlement, int index) {
+        return new UUID(0x11_0000L + settlement, index);
+    }
+
+    private static NpcRegistry boardVillage(Settlement here, int count) {
+        NpcRegistry registry = new NpcRegistry();
+        registry.putSettlement(here);
+        for (int i = 0; i < count; i++) {
+            registry.put(Persona.create(boardResident(here.id(), i), 0L)
+                    .placed(here.id(), i / 3, Culture.KARSK.id()));
+        }
+        return registry;
+    }
+
+    /**
+     * The board with every field at the widest the game can make it.
+     *
+     * <p>A twenty-seven character name is session 03's layout cap — fourteen given plus twelve family
+     * plus a space — and it is built out of {@code w}, which is the widest letter the grammars can
+     * produce, because a fixture that rolled short names is how the earn-rate row's cap went from
+     * eighteen to forty-eight without turning anything red. A place name is a one-syllable stem plus
+     * the longest place word any culture has. The counts are larger than a save can hold, the day is
+     * four digits, and the object is the longest id in vanilla.
+     */
+    private static Board widestBoard(boolean takenIn) {
+        List<Board.Neighbour> opinions = new ArrayList<>();
+        for (net.namesake.dialogue.Pool pool : net.namesake.dialogue.Pool.values()) {
+            opinions.add(new Board.Neighbour("w".repeat(14) + " " + "w".repeat(12), pool));
+        }
+        String longestPlace = "w".repeat(12);
+        List<Board.Memory> witnessed = new ArrayList<>();
+        List<Board.Memory> heard = new ArrayList<>();
+        for (DeedType type : DeedType.values()) {
+            for (Board.Origin origin : List.of(Board.Origin.HERE,
+                    new Board.Origin(false, longestPlace, "north-east"),
+                    new Board.Origin(false, "", "north-east"),
+                    new Board.Origin(false, "", ""))) {
+                witnessed.add(new Board.Memory(9999, type, "minecraft:enchanted_golden_apple",
+                        Memories.MAX_REPEATS, 999, Deed.FIRST_HAND, origin));
+                heard.add(new Board.Memory(9999, type, "minecraft:enchanted_golden_apple",
+                        Memories.MAX_REPEATS, 999, Deed.ATTRIBUTED, origin));
+            }
+        }
+        Residency.Verdict verdict = takenIn
+                ? new Residency.Verdict(Residency.Route.BAND, 999, 0, false)
+                : new Residency.Verdict(Residency.Route.NONE, 999, 999, false);
+        return new Board(longestPlace, "Meridian", 9999, 999, true, verdict,
+                opinions, 999, witnessed, heard);
+    }
+
+    @Test
+    @DisplayName("every row of the Notice Board fits the lectern's budget, in every state it has")
+    void theBoardFitsInEveryState() {
+        int[] widest = {0};
+        for (Map.Entry<String, List<BoardText.Line>> state : everyStateOfTheBoard()) {
+            assertFalse(state.getValue().isEmpty(),
+                    () -> state.getKey() + " drew nothing at all, which reads as a broken board");
+            for (BoardText.Line line : state.getValue()) {
+                assertTrue(line.cost() <= BoardText.TEXT_WIDTH,
+                        () -> "a row of '" + state.getKey() + "' is " + line.cost()
+                                + " pixels, over the " + BoardText.TEXT_WIDTH + "-pixel budget:\n"
+                                + line.flat());
+                widest[0] = Math.max(widest[0], line.cost());
+            }
+        }
+        // A guard whose worst case is nowhere near its threshold is a guard that is never reached,
+        // which this project has now written down three times. If the widest row the enumeration can
+        // build is comfortably narrow, the enumeration has stopped reaching the demanding states
+        // rather than the layout having become safe.
+        assertTrue(widest[0] > BoardText.TEXT_WIDTH / 2,
+                () -> "the widest row any state produced is " + widest[0] + " pixels against a "
+                        + BoardText.TEXT_WIDTH + "-pixel budget. The fixtures have stopped reaching "
+                        + "the states this measures.");
+    }
+
+    @Test
+    @DisplayName("no row of the Notice Board carries a line break or a glyph the font may not have")
+    void theBoardIsOneLinePerLineAndPlainAscii() {
+        for (Map.Entry<String, List<BoardText.Line>> state : everyStateOfTheBoard()) {
+            for (BoardText.Line line : state.getValue()) {
+                String flat = line.flat();
+                assertFalse(flat.contains("\r"),
+                        () -> "Minecraft draws a carriage return as a missing-glyph box: " + flat);
+                assertFalse(flat.contains("\n"),
+                        () -> "a board row must be one row: " + flat);
+                // width() refuses anything it has no advance for, so this is the ASCII guard as
+                // well as a measurement.
+                BoardText.width(line.left());
+                BoardText.width(line.right());
+            }
+        }
+    }
+
+    /**
+     * {@code DESIGN.md} §11's rule, on the one surface where it decides whether the mod is
+     * explicable at all.
+     *
+     * <p>This board is the entire onboarding surface — {@code DESIGN.md} rules there is no tutorial —
+     * so a player's <b>first</b> sight of it is every section empty at once. A board that prints
+     * nothing on an empty village teaches nothing and reads as broken, which is what a player will
+     * report instead of the thing that is actually wrong.
+     */
+    @Test
+    @DisplayName("a village that has never seen you says so in every section, in its own words")
+    void everySectionOfTheBoardPrintsItsOwnAbsence() {
+        Settlement here = boardSettlement(0, new net.minecraft.core.BlockPos(0, 64, 0));
+        UUID viewer = UUID.fromString("0a0a0a0a-1111-2222-3333-444444444444");
+        String board = String.join("\n", BoardText.of(Board.of(boardVillage(here, 9), here, viewer, 40))
+                .stream().map(BoardText.Line::flat).toList());
+
+        // DESIGN.md §5 and §10 step 3, in the letter as well as the spirit: "Board shows 'no
+        // history.'" Session 09's log records that this clause of step 3 was the one it could not
+        // meet, because this board did not exist.
+        assertTrue(board.contains("No history."), () -> "step 3's own words:\n" + board);
+        assertTrue(board.contains("Nobody here has an opinion of you yet."), () -> board);
+        assertTrue(board.contains("No word of you has come down the road."), () -> board);
+        assertTrue(board.contains("You are a guest here, not one of them."), () -> board);
+        // And the two routes out of it, which is the only place a player is ever told what the
+        // threshold is for.
+        assertTrue(board.contains("Residents who trust you enough"), () -> board);
+        assertTrue(board.contains("Hungry people you have fed"), () -> board);
+    }
+
+    /**
+     * The truncation, said out loud.
+     *
+     * <p>{@code WORKPLAN.md}'s rule about silent caps: a board that showed thirty-two of a hundred
+     * rows and mentioned nothing reads as "that is everything", on the one surface whose job is to
+     * tell a player what this mod keeps.
+     */
+    @Test
+    @DisplayName("a board that cannot show everything says how much it left off")
+    void theBoardSaysWhatItDidNotShow() {
+        List<Board.Memory> many = new ArrayList<>();
+        for (int i = 0; i < BoardText.MAX_ROWS + 7; i++) {
+            many.add(new Board.Memory(100 - i, DeedType.FED_HUNGRY, Deed.NO_ITEM, 1, 3,
+                    Deed.FIRST_HAND, Board.Origin.HERE));
+        }
+        Board board = new Board("Skovadn", "Karsk", 100, 9, true,
+                new Residency.Verdict(Residency.Route.DEED, 0, 3, false),
+                List.of(), 9, many, List.of());
+
+        String rendered = String.join("\n",
+                BoardText.of(board).stream().map(BoardText.Line::flat).toList());
+        assertTrue(rendered.contains("and 7 older, not shown here."), () -> rendered);
+    }
+
+    /**
+     * <b>The board rendered and read, which is what actually finds these.</b>
+     *
+     * <p>Session 09's last two defects and two of session 10's were correct string concatenation that
+     * passed every guard in this repository and were found by looking at the output — a tag question
+     * hung on an instruction, a villager with a stutter, an opener that ended in a comma. So the
+     * populated board is printed by the build, in full, and somebody reads it.
+     */
+    @Test
+    @DisplayName("the board, printed, so that somebody has to look at it")
+    void printTheBoard() {
+        Settlement here = boardSettlement(0, new net.minecraft.core.BlockPos(0, 64, 0));
+        UUID viewer = UUID.fromString("0a0a0a0a-1111-2222-3333-444444444444");
+        for (Map.Entry<String, List<BoardText.Line>> state : everyStateOfTheBoard()) {
+            System.out.println("\n--- " + state.getKey() + " ---");
+            for (BoardText.Line line : state.getValue()) {
+                System.out.println(line.flat());
+            }
+        }
+        assertFalse(BoardText.of(Board.of(boardVillage(here, 9), here, viewer, 40)).isEmpty());
+    }
 
     @Test
     @DisplayName("every row of both commands fits the chat width, in every state they can be in")

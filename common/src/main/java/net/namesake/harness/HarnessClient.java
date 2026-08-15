@@ -12,6 +12,11 @@ import net.minecraft.world.level.WorldDataConfiguration;
 import net.minecraft.world.level.levelgen.WorldOptions;
 import net.minecraft.world.level.levelgen.presets.WorldPresets;
 import net.namesake.Namesake;
+import net.namesake.board.BoardText;
+import net.namesake.client.NoticeBoardScreen;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Client half of the harnesses: gets into a world without anyone clicking anything.
@@ -65,6 +70,9 @@ public final class HarnessClient {
             }
             return;
         }
+        if (BoardProbe.isRequested()) {
+            answerTheBoardProbe(minecraft);
+        }
         if (entered) {
             return;
         }
@@ -110,6 +118,51 @@ public final class HarnessClient {
                     WorldPresets::createNormalWorldDimensions,
                     null);
         }
+    }
+
+    /**
+     * <b>What is actually on the screen, measured with the real font.</b> Session 11.
+     *
+     * <p>Two claims no unit test in {@code common} can make, and they are different claims. The first
+     * is that a lectern opened by a real player through the loader's own interaction hook puts a
+     * board on the screen at all — the packet crossed, the handler ran, the screen was set. The
+     * second is that {@code BoardText.ADVANCES} is <i>true</i>: it is a table of the default font's
+     * ASCII advances written down, and only a running client has a {@code Font} to hold it to.
+     *
+     * <p>Every printable character is checked rather than the ones the board happens to use, and each
+     * disagreement is reported with both numbers — because a run that says "the table is wrong"
+     * without saying where costs a second six-minute launch to act on.
+     */
+    private static void answerTheBoardProbe(Minecraft minecraft) {
+        if (!(minecraft.screen instanceof NoticeBoardScreen board)) {
+            return;
+        }
+        List<String> rows = new ArrayList<>();
+        List<String> disagreements = new ArrayList<>();
+        int widest = 0;
+        for (BoardText.Line line : board.lines()) {
+            rows.add(line.flat());
+            int drawn = line.indent() * BoardText.INDENT + minecraft.font.width(line.left());
+            if (!line.right().isEmpty()) {
+                drawn += BoardText.GAP + minecraft.font.width(line.right());
+            }
+            widest = Math.max(widest, drawn);
+            if (drawn != line.cost()) {
+                disagreements.add("row \"" + line.flat() + "\" draws at " + drawn
+                        + " and the table says " + line.cost());
+            }
+        }
+        for (char c = BoardText.FIRST_PRINTABLE; c <= BoardText.LAST_PRINTABLE; c++) {
+            int engine = minecraft.font.width(String.valueOf(c));
+            int table = BoardText.width(String.valueOf(c));
+            if (engine != table) {
+                disagreements.add("'" + c + "' (U+" + String.format("%04X", (int) c) + ") draws at "
+                        + engine + " and the table says " + table);
+            }
+        }
+        BoardProbe.answer(new BoardProbe.Answer(true, rows, widest, disagreements));
+        Namesake.LOGGER.info("[harness] notice board on screen: {} row(s), widest {}px, "
+                + "{} font disagreement(s)", rows.size(), widest, disagreements.size());
     }
 
     /**

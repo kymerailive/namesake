@@ -492,7 +492,15 @@ class SocialValueLedgerTest {
                     // naming a display; session 03 caught cultureId telling exactly that lie about
                     // the syllable grammar. Listing the package makes it a build failure rather than
                     // a thing somebody has to remember while under pressure to ship 160 lines.
-                    "net.namesake.dialogue");
+                    "net.namesake.dialogue",
+                    // Added at session 11, before a line of the Notice Board was written, for the
+                    // same reason and after the same reasoning. The board is the first surface in
+                    // this mod a player can read, so it is the most tempting reader in the codebase
+                    // for a field that has none — and Deed.item's exemption falls due at session 12
+                    // with the board already printing it. Listing the package means the board can
+                    // never be mistaken for the payment: it shows the object, and session 12 still
+                    // owes it a mechanic or a deletion.
+                    "net.namesake.board");
 
     private static final List<String> DISPLAY_SUFFIXES =
             List.of("Renderer", "Screen", "Hud", "Widget", "Commands", "Harness");

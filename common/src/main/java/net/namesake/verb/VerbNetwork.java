@@ -27,6 +27,11 @@ public final class VerbNetwork {
 
         transport.registerClientbound(InteractionOpenedPayload.TYPE, InteractionOpenedPayload.CODEC,
                 ClientInteractionState::onOpened);
+        // Session 11's Notice Board. The handler goes through a sink rather than naming the screen,
+        // because NeoForge registers a clientbound handler on the dedicated server too — see
+        // ClientScreenSink.
+        transport.registerClientbound(NoticeBoardPayload.TYPE, NoticeBoardPayload.CODEC,
+                ClientScreenSink::openNoticeBoard);
     }
 
     public static VerbRuntime runtime() {

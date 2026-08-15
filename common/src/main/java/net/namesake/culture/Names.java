@@ -67,6 +67,46 @@ public final class Names {
     }
 
     /**
+     * <b>A settlement's name — session 11, and it costs zero persisted bytes.</b>
+     *
+     * <p>{@code Settlement} is six fields and none of them is a name: session 03 deleted its culture
+     * for being derivable and would have deleted this for the same reason. So it is derived, exactly
+     * as a villager's is, and the two arguments for that are the same two. A stored name is a cache
+     * that can drift from the bell it was rolled against; and a persisted field whose only consumer
+     * is a display is the shape {@code DESIGN.md} §1 forbids — where a <i>derived</i> one has nothing
+     * to classify, which is the standing this class has held since session 03.
+     *
+     * <p><b>It reuses {@link #family} rather than {@link #given}, and that is the grammar being read
+     * rather than a shortcut.</b> Every culture's family suffixes are already place words — Vale's are
+     * literally {@code wood}, {@code field}, {@code ford}, {@code combe}, {@code mere}; Karsk's are
+     * {@code grad}, {@code vor}, {@code din} — because a family name and a place name are the same
+     * shape in every language this table was modelled on. A one-syllable stem plus one of those is a
+     * place; three syllables of given-name phonotactics is a person.
+     *
+     * <p><b>Seeded from the bell, so it is stable for the life of the settlement.</b> The id is not
+     * usable: it comes from a counter that increments in the order a player happens to visit, so two
+     * saves of one world seed would name the same village differently. The bell does not move, and it
+     * is what {@code Personas} already derives the settlement's culture from — so the name and the
+     * tongue it is in come from one point on the map.
+     *
+     * @param culture the culture at the bell, which every resident shares by construction — see
+     *                {@code Personas.generate}, which reads it at the settlement centre rather than
+     *                at the villager's feet for exactly that reason
+     */
+    public static String ofSettlement(Culture culture, int bellX, int bellZ) {
+        return family(culture, settlementSeed(bellX, bellZ));
+    }
+
+    /**
+     * The seed for a settlement's name. Both coordinates are folded through the mixer separately,
+     * because a village at {@code (x, z)} and one at {@code (z, x)} are different places and a plain
+     * exclusive-or would give them one name.
+     */
+    public static long settlementSeed(int bellX, int bellZ) {
+        return mix(bellX * 0x9E3779B97F4A7C15L) ^ mix(bellZ * 0xC2B2AE3D27D4EB4FL);
+    }
+
+    /**
      * The seed for a persona's given name. Folds both halves of the UUID, because two personas
      * minted in the same millisecond differ mostly in the low bits.
      */

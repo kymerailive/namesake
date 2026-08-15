@@ -180,8 +180,15 @@ public final class Dialogue {
         return heard && saw ? Register.ABOUT_YOU : Register.SMALL_TALK;
     }
 
-    /** Whether this ring holds anything this player did — attributed, since a blur names nobody. */
-    static boolean remembersThem(List<Deed> ring, UUID player) {
+    /**
+     * Whether this ring holds anything this player did — attributed, since a blur names nobody.
+     *
+     * <p>Public from session 11 so the Notice Board can call {@link #poolFor} with the same second
+     * argument {@link #speak} passes it. <b>The board and the villager have to agree about what a
+     * standing is, and the only way to guarantee that is for there to be one implementation</b>, not
+     * two that currently match.
+     */
+    public static boolean remembersThem(List<Deed> ring, UUID player) {
         for (Deed deed : ring) {
             if (player.equals(deed.actor())) {
                 return true;

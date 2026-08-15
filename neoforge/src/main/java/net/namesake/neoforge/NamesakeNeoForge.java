@@ -3,7 +3,9 @@ package net.namesake.neoforge;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.npc.Villager;
+import net.minecraft.world.level.block.state.BlockState;
 import net.namesake.Namesake;
+import net.namesake.board.NoticeBoard;
 import net.namesake.command.NamesakeCommands;
 import net.namesake.harness.AttachBetHarness;
 import net.namesake.harness.ProfilerHarness;
@@ -52,6 +54,7 @@ public final class NamesakeNeoForge {
         NeoForge.EVENT_BUS.addListener(NamesakeNeoForge::onConversion);
         NeoForge.EVENT_BUS.addListener(NamesakeNeoForge::onRegisterCommands);
         NeoForge.EVENT_BUS.addListener(NamesakeNeoForge::onEntityInteract);
+        NeoForge.EVENT_BUS.addListener(NamesakeNeoForge::onBlockInteract);
         // Session 05's other two deed doors. Post rather than Pre: the damage is already applied,
         // so a killing blow reads as dead and becomes KILLED_RESIDENT rather than both.
         NeoForge.EVENT_BUS.addListener(LivingDamageEvent.Post.class, NamesakeNeoForge::onDamaged);
@@ -125,6 +128,31 @@ public final class NamesakeNeoForge {
         }
         event.setCanceled(true);
         event.setCancellationResult(InteractionResult.CONSUME);
+    }
+
+    /**
+     * Session 11's Notice Board — the mirror of Fabric's {@code UseBlockCallback} registration.
+     *
+     * <p>An empty lectern in a registered settlement, right-clicked with an empty hand. Vanilla
+     * spends that gesture on nothing, so nothing vanilla does is taken away; and a lectern outside a
+     * village is left entirely alone, which is session 10's rule about a player's build applied to a
+     * gesture instead of to a block.
+     */
+    private static void onBlockInteract(PlayerInteractEvent.RightClickBlock event) {
+        BlockState state = event.getLevel().getBlockState(event.getPos());
+        if (!NoticeBoard.isBoardGesture(event.getEntity(), event.getHand(), state)) {
+            return;
+        }
+        if (event.getLevel().isClientSide()) {
+            // Not cancelled: the vanilla block-use packet has to reach the server, which is the only
+            // side that knows whether this lectern is in a settlement.
+            return;
+        }
+        if (event.getEntity() instanceof ServerPlayer player
+                && NoticeBoard.onServerGesture(player, event.getPos()).isPresent()) {
+            event.setCanceled(true);
+            event.setCancellationResult(InteractionResult.CONSUME);
+        }
     }
 
     private static void onDamaged(LivingDamageEvent.Post event) {

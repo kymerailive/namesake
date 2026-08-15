@@ -6,11 +6,14 @@ import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.npc.Villager;
+import net.minecraft.world.level.block.state.BlockState;
 import net.namesake.Namesake;
+import net.namesake.board.NoticeBoard;
 import net.namesake.command.NamesakeCommands;
 import net.namesake.harness.AttachBetHarness;
 import net.namesake.harness.ProfilerHarness;
@@ -69,6 +72,28 @@ public final class NamesakeFabric implements ModInitializer {
                 return InteractionResult.CONSUME;
             }
             return InteractionResult.PASS;
+        });
+
+        // Session 11's Notice Board: an empty lectern in a registered settlement, right-clicked with
+        // an empty hand. Vanilla spends that gesture on nothing — LecternBlock.useWithoutItem returns
+        // CONSUME and does nothing when there is no book — so reading, placing and taking a book are
+        // all untouched, and so is every lectern outside a village. There is no packet from the
+        // client here at all: the server sees an interaction it has already reach-checked and sends
+        // one player their own board.
+        UseBlockCallback.EVENT.register((player, level, hand, hit) -> {
+            BlockState state = level.getBlockState(hit.getBlockPos());
+            if (!NoticeBoard.isBoardGesture(player, hand, state)) {
+                return InteractionResult.PASS;
+            }
+            if (level.isClientSide()) {
+                // PASS so the vanilla block-use packet still reaches the server, which is the only
+                // thing that knows whether this lectern is in a settlement. Session 02's rule.
+                return InteractionResult.PASS;
+            }
+            return player instanceof ServerPlayer serverPlayer
+                    && NoticeBoard.onServerGesture(serverPlayer, hit.getBlockPos()).isPresent()
+                    ? InteractionResult.CONSUME
+                    : InteractionResult.PASS;
         });
 
         // The other three deed types. Both fire after the engine has already applied the damage, so
