@@ -14,8 +14,9 @@ Where any other document disagrees on sequence, this wins.
   than a copy of it, so §5's *"residency also grants the trusted price band"* is one constant
   instead of two that agree, and `RESENTED` at −20 is where one witnessed killing puts a person,
   halved. **`Dialogue.poolFor` was replaced and the board followed for free**, exactly as session 11
-  promised: pool selection is behaviourally identical, and the board additionally prints six phrases
-  where it printed four, with the owner's ruled four kept word for word.
+  promised: pool selection is behaviourally identical, and the board additionally names two bands it
+  could not before, with the owner's ruled phrases kept word for word. **Five of the six phrases are
+  reachable on a board row and four by any ordinary playthrough** — see the correction at the close.
   **The session's central ruling is a deletion.** The rule 5 ledger had said since session 05 that
   `Bond.respect`'s exemption would be paid by the trade price band, and the instrument session 07
   exists to prevent exactly this failure refused it: **observed maximum respect across a hundred
@@ -4598,6 +4599,17 @@ moved unchanged, which is why every dialogue and board test written against it s
 at 0 is session 09's hostile-pool boundary. And `RESENTED` at −20 is the only genuinely new number:
 it is **where one witnessed killing puts a person, halved.**
 
+**And a correction to how that reads, found while writing the playtest script rather than while
+writing the code.** The paragraph above describes `TRUSTED` as a rung you cross on day 28, and **you
+do not cross it on the way up at all.** `Standing.of` tests warmth before trust, and a player filling
+the daily allowance moves both axes together — 8/8, 16/15, 24/22 — so both thresholds are crossed on
+the *same gift* and `WARM` wins the ordering. `TRUSTED` is the state a relationship **falls back to**
+once warmth decays under twenty and trust does not: it is where you land three days after you stop
+visiting. That is the ruled design working exactly as the row above it says — *the discount you keep
+versus the discount you have to keep earning* — but it is the opposite shape from a ladder, and the
+day-28 figure is when a *village* reaches the residency band rather than when one villager is seen to
+enter this one. The mechanism is unchanged; only this description of it was wrong.
+
 | what a player does, once | trust to the subject | to each witness |
 |---|---|---|
 | a bare-handed punch | −1 | −1 |
@@ -4904,6 +4916,29 @@ warm today whatever they did this morning. Trust going negative is what says *an
 own `clamp(…, 1, maxStackSize)` would refuse it anyway. So the cheapest trades in the game are the
 same price to everybody. That is a real property of a band expressed as a fraction of a price, and it
 is in a test with its own name rather than left to be found.
+
+**7. Writing the playtest script found four things 437 unit tests and 140 harness legs did not, and
+that is a seventh instrument rather than an anecdote.** Every one of them is a *reachability* fact —
+true of the shipped code, invisible to any assertion, and only visible to somebody asking "what will
+a person actually see?"
+
+- **`TRUSTED` is never entered on the way up.** See the correction above. Nothing was wrong; the
+  ledger's description of it was.
+- **`has not met you` cannot appear on a board.** `Board.of` counts a stranger rather than naming
+  them, so that phrase reaches a person only through a unit test — which is exactly where it was
+  green.
+- **`will not forget` needs a killing.** Trust ≤ −20 is one witnessed murder or eight full-strength
+  blows; twenty bare-handed punches reach −19. A playtester who only shoves people never reads it.
+- **The teach is silent when the recipe is already known**, and in creative merely holding a book
+  unlocks the lectern recipe through vanilla's own advancement — so the most likely first experience
+  of this session's second consumer is *nothing happening*, with the price moving correctly beside
+  it. `AttachBetHarness` asserts `ALREADY_KNOWN` as its own branch and was green throughout.
+
+**The shape is session 11's lesson one turn further.** That session learned *the rows are not the
+screen* and started taking screenshots. This one learned that **the screen is not the playthrough**:
+a surface can render correctly, in a state no player will ever be in. The cheapest instrument for it
+turned out to be writing the instructions and then checking them against the source before handing
+them over.
 
 #### Rule 3: fourteen deliberate breakages, each watched to fail and then removed
 
