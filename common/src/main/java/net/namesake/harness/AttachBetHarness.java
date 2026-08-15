@@ -1558,7 +1558,7 @@ public final class AttachBetHarness {
                 }
                 checkTheBoard(server, level, awayBoard, "AWAY", true);
                 checkTheFarBoardNamesWhereItCameFrom(server, level);
-                checkASecondPlayerSeesTheirOwnBoard(server, level);
+                checkASecondPlayerSeesTheirOwnBoard(level, player(server).getUUID());
                 writeSubjects(level);
                 advance(server, 5);
             }
@@ -1646,20 +1646,25 @@ public final class AttachBetHarness {
             record(board.hasHistory(), "BOARD " + which
                     + " the board is showing a real save's history: " + board.witnessed().size()
                     + " thing(s) seen, " + board.hearsay().size() + " heard about");
-            // "No history." belongs to the section that has none, not to the board. The first
-            // version of this asserted it was absent whenever the board held anything at all, and
-            // the far village turned it red on the first run that reached it — correctly: it has
-            // heard six stories about the player and has watched them do nothing, so exactly one of
-            // its two sections should be saying so. Every section prints its own absence means
-            // every section, including while its neighbour is full.
-            record(board.witnessed().isEmpty() == rendered.contains("No history."), "BOARD " + which
-                    + " the section with nothing in it is the one printing its own absence");
-        } else {
-            // DESIGN.md §10 step 3, in the letter, in a running game: the player who is holding the
-            // mouse arrived after the save was written and has done nothing here.
-            record(rendered.contains("No history."), "BOARD " + which
-                    + " a player who has done nothing here reads \"No history.\" on the screen");
         }
+        // <b>"No history." belongs to the section that has none, not to the board</b>, and this
+        // assertion is stated against what the live player's board actually holds rather than
+        // against what the phase expects — twice over, because it was wrong both ways round first.
+        //
+        // The far village turned the first version red: it has heard six stories about the player
+        // and watched them do nothing, so exactly one of its two sections should be saying so.
+        // Then the verify phase turned the second version red on NeoForge only, and nothing was
+        // wrong with the board: <b>the two loaders' dev clients disagree about whether you are the
+        // same person in two launches.</b> Fabric mints PlayerNNN and therefore a fresh offline
+        // UUID every time, so the player who runs verify has done nothing; NeoForge is always Dev,
+        // so they are the player who wrote the save and their board is full. Both are correct, and
+        // a leg that assumed either one is a leg that measured the launcher. The fourth cross-loader
+        // asymmetry this project has been bitten by, and the same lesson each time: read what the
+        // two sides actually do rather than what one of them did.
+        record(board.witnessed().isEmpty() == rendered.contains("No history."), "BOARD " + which
+                + " the section with nothing in it is the one printing its own absence, for the "
+                + "player who is actually holding the mouse (" + board.witnessed().size()
+                + " thing(s) seen)");
         for (String row : seen.rows()) {
             if (!row.isBlank()) {
                 Namesake.LOGGER.info("[board {}] {}", which, row);
@@ -1696,11 +1701,16 @@ public final class AttachBetHarness {
      * available is the claim underneath it, which is that <b>nothing about a board is shared</b>:
      * nothing caches one, and the only input that decides its contents is the viewer handed in.
      */
-    private static void checkASecondPlayerSeesTheirOwnBoard(MinecraftServer server,
-                                                            ServerLevel level) {
+    /**
+     * @param whoDidIt the player whose history this world actually holds. <b>Passed in rather than
+     *                 read off the server</b>, because the two loaders' dev clients disagree about
+     *                 whether the player in the verify phase is the one who wrote the save — see
+     *                 {@link #checkTheBoard}.
+     */
+    private static void checkASecondPlayerSeesTheirOwnBoard(ServerLevel level, UUID whoDidIt) {
         UUID nobody = UUID.nameUUIDFromBytes("a second player who has done nothing".getBytes(
                 java.nio.charset.StandardCharsets.UTF_8));
-        Board mine = NoticeBoard.boardAt(level, homeBoard, player(server).getUUID()).orElseThrow();
+        Board mine = NoticeBoard.boardAt(level, homeBoard, whoDidIt).orElseThrow();
         Board theirs = NoticeBoard.boardAt(level, homeBoard, nobody).orElseThrow();
 
         record(mine.hasHistory() && !theirs.hasHistory(),
@@ -1712,6 +1722,13 @@ public final class AttachBetHarness {
                         + theirs.strangers() + " of " + theirs.residents() + ")");
         record(!theirs.residency().granted(),
                 "BOARD and the village has not taken them in either");
+        // DESIGN.md §10 step 3, in its own words, laid out rather than asserted about a record —
+        // and against a synthetic viewer rather than whoever the launcher happens to have minted,
+        // which is what makes it the same claim on both loaders.
+        String rendered = String.join("\n",
+                BoardText.of(theirs).stream().map(BoardText.Line::flat).toList());
+        record(rendered.contains("No history."),
+                "BOARD and a player who has done nothing here reads \"No history.\"");
     }
 
     /**
@@ -2365,6 +2382,7 @@ public final class AttachBetHarness {
                         + (board == null ? "no settlement" : board.witnessed().size()
                         + " thing(s) seen, " + board.hearsay().size() + " heard about")
                         + " — out of a save that stores nothing about a notice board");
+        checkASecondPlayerSeesTheirOwnBoard(level, whoDidIt);
     }
 
     /**

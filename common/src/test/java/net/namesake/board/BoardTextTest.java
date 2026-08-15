@@ -45,8 +45,13 @@ class BoardTextTest {
         assertEquals(BoardText.PANEL_WIDTH - 2 * BoardText.PADDING, BoardText.TEXT_WIDTH);
         assertTrue(BoardText.PANEL_WIDTH + 2 * BoardText.MARGIN <= BoardText.MINIMUM_SCREEN_WIDTH,
                 "the panel has to fit the smallest GUI the game can present, with its margin");
-        assertTrue(BoardText.MAX_PANEL_HEIGHT + 2 * BoardText.MARGIN
+        assertTrue(BoardText.MAX_PANEL_HEIGHT + 2 * BoardText.MARGIN_Y
                 <= BoardText.MINIMUM_SCREEN_HEIGHT);
+        // Twenty rows, and the number is asserted because it is what decides whether the first
+        // hearsay row is on the screen or one line under the fold. Read off a screenshot of a real
+        // far village's board, which is the only instrument that could have said so.
+        assertEquals(20, (BoardText.MAX_PANEL_HEIGHT - 2 * BoardText.PADDING)
+                / BoardText.LINE_HEIGHT);
     }
 
     @Test

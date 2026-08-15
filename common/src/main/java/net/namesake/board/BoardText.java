@@ -62,13 +62,19 @@ public final class BoardText {
     public static final int PANEL_WIDTH = MINIMUM_SCREEN_WIDTH - 2 * MARGIN;
 
     /**
-     * The tallest the panel may grow before the rows inside it start scrolling.
+     * The margin above and below the panel, and it is <b>half</b> the one at the sides.
      *
      * <p>Height is the forgiving direction — a board too tall scrolls, where a board too wide is a
      * row that reads as two — so this is a comfort bound rather than the budget {@link #TEXT_WIDTH}
-     * is. It comes off the same guarantee.
+     * is, and it is spent rather than matched. Reading a real far village's board on a screenshot is
+     * what decided the number: at the wider margin the fold landed on row nineteen and the <i>first
+     * hearsay row was row twenty</i>, so the one sentence the whole propagation thesis produces sat
+     * one line below the bottom of the panel.
      */
-    public static final int MAX_PANEL_HEIGHT = MINIMUM_SCREEN_HEIGHT - 2 * MARGIN;
+    public static final int MARGIN_Y = MARGIN / 2;
+
+    /** The tallest the panel may grow before the rows inside it start scrolling. */
+    public static final int MAX_PANEL_HEIGHT = MINIMUM_SCREEN_HEIGHT - 2 * MARGIN_Y;
 
     /** Panel border and breathing room, inside which nothing is drawn. */
     public static final int PADDING = 8;

@@ -1,7 +1,7 @@
 # DESIGN — Namesake
 
 What we are building and why. `WORKPLAN.md` owns *what happens next*; this owns *what it is*.
-66 decisions ruled, 0 open.
+71 decisions ruled, 0 open.
 
 **The thesis:** a deed witnessed by one villager changes what a different villager, in a different
 settlement, says to you later.
@@ -46,6 +46,7 @@ Enforce with a failing test, not intention.
 | Fail state | Always recoverable, slowly. Never permanent lockout. |
 | Onboarding | The Notice Board teaches everything. No tutorial. |
 | Settlements | Detected from vanilla POI clusters (bell + workstations). No player founding in v1. |
+| Settlement name | **Derived from the bell and the culture at it, never stored.** A place name and a family name are the same shape in every one of the six grammars — Vale's family suffixes are literally *wood*, *field*, *ford*, *combe*; Karsk's are *grad*, *vor*, *din* — so `Names.family` already **was** the place grammar and needed no second one. Seeded from the bell rather than from the settlement id, because an id comes from a counter that increments in the order a player happens to visit, and would name one world's villages differently on a second playthrough. Derived for §1's reason and for session 03's: a stored name is a cache that can drift from the bell it describes, and a persisted field whose only reader is a display is the shape this document forbids — where a derived one has nothing to classify, which is the standing `Names` has held since session 03. It costs zero bytes and zero schema, which is what made it available at all in a session that must not bump one. |
 | Player base | Registers only if villagers actually live there — same rule as everywhere |
 | Era scope | **Social institutions only.** No tech tree, no machines. |
 | Currency | Emeralds only |
@@ -103,6 +104,11 @@ Enforce with a failing test, not intention.
 | Art | Solo, no artist. ~25 greyscale textures + colormaps. Vanilla humanoid model. |
 | Prosperity display | Clothing tier + culture palette saturation |
 | Speech | Floating text above head for ambient; GUI for menus |
+| Notice Board | **A vanilla lectern standing in a registered settlement. No block entity, no registered block, nothing persisted.** §9 said *a lectern with a block entity*, and a block entity is a **second persisted store** — chunk data, with a schema of its own, outside `NpcSchema`, that hard rule 1's fixer ladder cannot see and a load test cannot cover. This project has ruled *one file, one version number that cannot disagree with itself* four times. What it would have held is the single fact that this lectern is a board, and that is derivable: a lectern inside a settlement's membership radius **is** the board, which is the road graph's argument at session 10 and the residency threshold's at 09. A block state or a data component is the same bytes needing a writer, where deriving needs none; a registered block costs a registry entry, an item, a recipe and two model files, is no longer zero art, and makes every lectern already standing in every existing world not a board. |
+| Board gesture | **The one vanilla spends on nothing: an empty lectern, right-clicked with an empty hand.** `LecternBlock.useWithoutItem` returns `CONSUME` and does nothing when there is no book; putting a book on one goes through `useItemOn`, and a lectern that has a book opens the book. So reading, placing and taking a book are untouched, and a lectern **outside** a village is left entirely alone — which is session 10's ruling that a player's build is invisible to the road materialiser, applied to a gesture instead of to a block. Only the server ever opens it, per this section's interactions row, and there is no serverbound packet at all: a reader of a notice board cannot ask it to do anything, so hard rule 6 costs the session nothing and no interaction token is minted. |
+| Board standing | **The dialogue pool's own answer, never a naming scheme of the board's.** The bond UI row rules bands and never raw integers, and the five bands are session 12's. The board calls `Dialogue.poolFor` — the same call that selects the villager's line — so the two agree **by construction** rather than by two implementations that happen to match. Session 12 replaces one method: its third ruled consumer *is* pool selection, and when that becomes a band lookup the board moves with it, because nothing on the board names a threshold or prints a number. The cost is stated rather than hidden: **two bands that share a pool look identical on this board**, so a player whose price has moved may see the board stand still. That is strictly better than the board and the villager giving different answers to *what is my standing*. |
+| Board provenance | **A hearsay row names the village a story came from and which way it is.** Both halves were already on disk — the deed carries where it happened, the settlement table carries where that is, the holder's persona carries where they live — which is why `Deed.UNKNOWN_ACTOR` has said since session 08 that *"from the north" needs no field*. The name and the bearing are both shown and the second is not a fallback for the first: a player who has never been to Skovadn cannot turn a noun into a direction. A place that has fallen out of the settlement table keeps the bearing and loses the name, which is this mod's one rule about detail arriving at a third site — **it degrades, it is never invented**. Session 11 is also where that rule bit a *layout*: sharing one line with the object let the clip meant for a modded registry id take the `-east` off a bearing, which is a different direction rather than a shorter fact. |
+| Board width | **Scaled pixels against 320×240, never characters.** `Window.calculateScale` raises the GUI scale only while the framebuffer divided by the next scale is still at least 320 by 240, so that is the smallest effective GUI the game will ever present — at any window size, at any scale setting, forced or automatic — and therefore the one budget that is a property of Minecraft rather than of somebody's monitor. The sixty-character chat width this repo already guards is wrong twice over here: a lectern is not chat, and a character is not a unit of width — *Illinois* and *wwwwwwww* are eight characters and 32 against 48 pixels. The ASCII advance table that makes the measurement pure is held to the engine's own `Font` by a harness leg, which found **five** of its numbers wrong on the first run it reached. |
 | Culture voice | Shared pools + per-culture tics and register tuning. Session 09 ships **160 lines** — four pools × five registers × eight — with six cultures' openers, tag questions, stranger address terms and formality biases over them. A formal culture opens and rarely tags; an informal one does the reverse, so the *rate* is a per-culture number rather than a per-culture string, and a test measures the realised rate rather than the table. |
 | Standing split | 80% personal / 20% shared, server-configurable |
 | Absent players | Footprint persists — stationed guards, offices, banners |
@@ -206,7 +212,10 @@ remembers that it worked.
    killed the smith has no reason to think worse of *you*. They still remember it, because it
    happened — session 06's asymmetry from the other side. "From the north" needs no field either:
    the direction is a function of where the deed happened, which the deed carries, and where the
-   holder lives, which their persona carries.
+   holder lives, which their persona carries. **Session 11 built it**, on the Notice Board's hearsay
+   rows, and found that the settlement table turns the same two fields into a *name* as well — so
+   what a board says is *from Skovadn, west*, and falls back to the bearing alone for a place that is
+   no longer in the table.
 
 Reputation travelling to the next settlement is not bolted onto this pipeline — **it is the pipeline,
 run one hop further.**
@@ -216,7 +225,11 @@ run one hop further.**
 ## 5. Residency — the first threshold
 
 Arrive as an outsider: every villager speaks from the **stranger pool**, which must explicitly say it
-does not know you. Prices 1.00. Board shows "no history."
+does not know you. Prices 1.00. Board shows "No history." — **in those words, from session 11**, and
+under a heading that says what the absence is an absence of. It is also where a player is told what
+the two routes below actually are: the board prints *residents who trust you enough* and *hungry
+people you have fed* against their thresholds, which is the only place in the mod either number is
+ever explained.
 
 Granted by the Elder at era ≥ 1, requiring either *known* band with ≥3 residents or one significant
 deed (`DEFENDED_RAID`, or `FED_HUNGRY` ×3).
@@ -393,7 +406,11 @@ the entity) · **one 2D colormap PNG replaces every skin tone** (sample `melanin
 | **Total** | **~25** *(MCA ships 1,312)* |
 
 Everything else is zero art: a Charter is a `written_book` with a data component; the Notice Board is
-a `lectern` with a block entity; GUIs use vanilla nine-slice backgrounds. Author in **Blockbench**
+a **vanilla `lectern` with no block entity at all** — session 11, and the reasoning is in §2's Notice
+Board row: a block entity is a second persisted store and what it would hold is derivable. Its panel
+is drawn from fills rather than a nine-slice sprite for the same reason one more time, which is that
+a sprite name that is wrong is a failure nothing catches until the screen is on somebody's monitor.
+Author in **Blockbench**
 skin-edit mode. Make skins datapack-loadable from v1 so community contributions cost only a merge.
 **Do not use MCA's PNGs** — GPL-3.0 and individually contributed.
 
