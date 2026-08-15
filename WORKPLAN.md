@@ -5360,15 +5360,24 @@ the marginal cost is **≈34 ns per loaded villager per tick at 96, and ≈55 ns
 | sixty to a hundred — what §8 designs against | 2–5 µs |
 | four hundred — §8's deliberately pessimistic figure | **23.6 µs, four times the budget** |
 
-**Two things follow and both are the owner's rather than mine.** The sweep's payload budget is
-untouched — `PersonaSweep.advance` reads 1.29 µs, exactly where session 04 left it, because the day
-plan is not in the sweep. But **the ~5.95 µs total is now genuinely tight**: at §8's own 96-loaded
-scenario the day plan spends four fifths of it and the sweep spends most of the rest. Session 04
-ruled that the budget is *"deliberately not raised to meet"* the 35 ms of real headroom, and that
-*"the discipline is the point — raise it when a payload has been priced and does not fit, never the
-first time it pinches."* **This is the first payload to be priced.** It fits at the population a real
-world produces and it does not fit at the population the architecture is sized against, and which of
-those two the number should be ruled against is a decision, not a measurement.
+**The sweep's payload budget is untouched** — `PersonaSweep.advance` reads 1.29 µs, exactly where
+session 04 left it, because the day plan is not in the sweep. But **the ~5.95 µs total is now
+genuinely tight**: at §8's own 96-loaded scenario the day plan spends four fifths of it and the sweep
+spends most of the rest.
+
+**Ruled by the owner at the close of session 13: the number is measured against ninety-six, the
+budget stays at ~5.95 µs, and session 14 pays.** Session 04 ruled that the budget is *"deliberately
+not raised to meet"* the 35 ms of real headroom, and that *"the discipline is the point — raise it
+when a payload has been priced and does not fit, never the first time it pinches."* This is the first
+payload to be priced, it does fit, and the ruling is that it fits **with nothing to spare**.
+
+**What that means for session 14, plainly, because it is the whole cost of the ruling.** `ERRAND` is
+a custom activity with its own behaviour list — a larger per-entity payload than a slot comparison —
+and it lands on top of a day plan already spending four fifths of the budget at the population the
+architecture is sized against. So session 14 has three ways to go and should pick one deliberately
+rather than discover it: make `ERRAND` cheaper than the standoff, find another 2.4 µs in the day plan
+the way this session found the first, or come back and re-rule the budget **with `ERRAND` priced
+beside this**. The one thing the ruling forbids is spending it without noticing.
 
 **Session 14 should read this before it writes `ERRAND`**, because an activity with its own behaviour
 list is a larger per-entity payload than a slot comparison, and it lands on top of this.
@@ -5428,8 +5437,42 @@ it withdrawn and is left to vanilla, because leaving an unreachable target of ou
 `tooLongUnreachableDuration` release their job site after 1,200 ticks — **costing that villager their
 profession because of a place we chose.**
 
-**What is honestly not delivered: the bug is diagnosed, not fixed, and not reproduced.** The next
-sighting is the owner's, and `/namesake debug dayplan` is what turns it into a fact.
+#### And then it was fixed, ruled by the owner at the close of the session
+
+The section above was written as *diagnosed, not fixed*, with the reasoning for stopping there. **The
+owner ruled the other way**, and the objection is recorded rather than quietly dropped: this changes
+vanilla state the mod does not own, on a diagnosis with a verified mechanism and **no reproduction**,
+and this project has refused that shape before.
+
+**What makes it defensible is that it invents no recovery.** `SetHiddenState`'s else-branch does
+three things — erase `HEARD_BELL_TIME`, erase `HIDING_PLACE`, call `updateActivityFromSchedule`.
+`Steering.unstickTheBellLock` does the first and the third. It does not do the second **because there
+is nothing to erase: the absent hiding place is the deadlock**, and it is precisely why
+`SetHiddenState` never runs. So the mod does not decide what a stuck villager does next; the schedule
+does, exactly as it would have. Erasing the memory is what makes it stick, because `ReactToBell` sits
+in CORE at priority 0 and re-asserts `HIDE` within a tick otherwise.
+
+**The patience is 1,200 ticks and it is argued rather than picked.** `SetHiddenState.HIDE_TIMEOUT` is
+**300** — vanilla's own view of when a villager should have finished hiding, and the comparison its
+own exit fires on — so waiting four times that means the repair only ever runs long after the engine
+would have run it itself. Twelve hundred is also `tooLongUnreachableDuration`, vanilla's own number
+for *this has gone on too long*. And the patience does real work rather than being caution: of the
+two deadlock shapes only one is permanent, and a villager whose `WALK_TARGET` merely happened to be
+occupied on the wrong ticks **rescues itself inside the window**, so the repair only ever touches the
+villagers vanilla has genuinely stranded.
+
+**It is behind the path gate**, at a seventh of the roster a tick, because a minute-scale problem
+does not need three memory reads per villager per tick — which is the cost that took this session
+over budget once already. It is counted in `Steering.describe` and logged at INFO with the villager
+and how long they were stuck: this is the mod reaching into state it does not own, and if it ever
+fires on somebody who was not stuck, the log is the only place that would say so.
+
+**What is still not delivered, and it is the honest half: there is no reproduction.** The mechanism
+is verified at source and the repair is vanilla's own code, but nothing in this repository has ever
+made a villager bell-lock on purpose. `SteeringTest.theBellLockRepairIsNarrow` holds the decision;
+it does not hold that the decision is ever reached in a running game. **Session 14 or 15 should build
+the leg** — ring a bell beside a bedless villager and assert the deadlock, then assert it opens —
+and until then the evidence that this fires at all is a log line nobody has seen.
 
 #### What the harness actually measured
 

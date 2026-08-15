@@ -106,6 +106,42 @@ class SteeringTest {
     }
 
     /**
+     * <b>The bell lock repair, and the three clauses that keep it off everybody else.</b>
+     *
+     * <p>Ruled by the owner at the close of session 13. It reaches into vanilla state the mod does
+     * not own, so what it does has to be exactly right: it runs {@code SetHiddenState}'s own exit at
+     * a villager {@code SetHiddenState} cannot reach, and it does that only for a villager who has
+     * been in {@code HIDE} with a bell memory and <b>no hiding place</b> for a full in-game minute.
+     * A villager who is merely hiding — which is what a bell is supposed to do — must be left alone.
+     */
+    @Test
+    @DisplayName("the bell lock repair fires on the deadlock and on nothing else")
+    void theBellLockRepairIsNarrow() {
+        long patient = Steering.BELL_LOCK_PATIENCE;
+
+        assertTrue(Steering.shouldUnstick(Activity.HIDE, true, false, patient),
+                "hiding, a bell memory, no hiding place, and a minute gone is the deadlock: "
+                        + "SetHiddenState needs HIDING_PLACE before it will erase HEARD_BELL_TIME, "
+                        + "and LocateHidingPlace is the only writer of one");
+
+        assertFalse(Steering.shouldUnstick(Activity.HIDE, true, true, patient),
+                "a villager WITH a hiding place is not stuck — SetHiddenState can run, and it will "
+                        + "time out on its own three hundred ticks after the bell. This is the "
+                        + "clause that keeps the repair off every villager who is simply hiding.");
+        assertFalse(Steering.shouldUnstick(Activity.HIDE, true, false, patient - 1),
+                "one tick short of the patience. Vanilla's own HIDE_TIMEOUT is 300 and this waits "
+                        + "four times that, so a villager whose WALK_TARGET merely happened to be "
+                        + "occupied gets every chance to acquire a hiding place first");
+        assertFalse(Steering.shouldUnstick(Activity.WORK, true, false, patient),
+                "not hiding at all — a stale bell memory on a working villager is harmless, because "
+                        + "ReactToBell only re-asserts HIDE, and something already took them out");
+        assertFalse(Steering.shouldUnstick(Activity.HIDE, false, false, patient),
+                "hiding with no bell memory is a raid, which has its own exit and is not ours");
+        assertFalse(Steering.shouldUnstick(null, true, false, patient),
+                "a brain with no non-core activity is not one to rewrite memories on");
+    }
+
+    /**
      * <b>The narrowing is what makes it safe, so removing any one clause has to be visible.</b>
      *
      * <p>This is the shape hard rule 3 asks for, written as a test rather than as a breakage pass:

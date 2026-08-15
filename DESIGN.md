@@ -518,13 +518,32 @@ memory never gets a hiding place; and a villager whose `WALK_TARGET` is never ab
 `LocateHidingPlace` runs never gets one either. Neither memory declares a codec, so neither is
 persisted — which is why the bug heals on a chunk unload and reads as intermittent.
 
-**The consequence for us is a rule, not a repair.** Anything that starves `WALK_TARGET` while a
-villager is indoors is this bug; and vanilla never clears its *own* walk target on an activity change,
-because `Villager.registerBrainGoals` uses `addActivity` rather than
-`addActivityAndRemoveMemoryWhenStopped` throughout. So the day plan **never writes a walk target to a
-villager who is not in `WORK`**, and **takes its own walk target back** when the slot ends. The state
-is named — `Steering.Posture.BELL_LOCKED`, three memory reads — and reported by
-`/namesake debug dayplan`, so the next sighting comes back as evidence rather than as a description.
+**First, a rule.** Anything that starves `WALK_TARGET` while a villager is indoors is this bug; and
+vanilla never clears its *own* walk target on an activity change, because `Villager.registerBrainGoals`
+uses `addActivity` rather than `addActivityAndRemoveMemoryWhenStopped` throughout. So the day plan
+**never writes a walk target to a villager outside `{WORK, IDLE}`**, and **takes its own walk target
+back** when the slot ends. The state is named — `Steering.Posture.BELL_LOCKED`, three memory reads —
+and reported by `/namesake debug dayplan`.
+
+**And then a repair, ruled at the close of session 13: after 1,200 ticks the plan runs vanilla's own
+exit for them.** The objection is recorded rather than buried, because it was raised and overruled:
+this changes vanilla state the mod does not own, on a diagnosis with a verified mechanism and no
+reproduction, and this document has refused that shape before.
+
+What makes it defensible is that **it invents no recovery.** `SetHiddenState`'s else-branch does
+three things — erase `HEARD_BELL_TIME`, erase `HIDING_PLACE`, call `updateActivityFromSchedule`.
+`Steering.unstickTheBellLock` does the first and the third. It does not do the second because there
+is nothing to erase: **the absent hiding place is the deadlock**, and it is exactly why
+`SetHiddenState` never runs. So the mod does not decide what a stuck villager does next — the
+schedule does, as it would have. Erasing the memory is what makes it stick, because `ReactToBell` is
+CORE priority 0 and would re-assert `HIDE` within a tick otherwise.
+
+**1,200 ticks is argued.** `SetHiddenState.HIDE_TIMEOUT` is **300** — vanilla's own view of when a
+villager should be finished hiding — so waiting four times that means the repair only ever fires long
+after the engine would have fired it, and 1,200 is the number vanilla itself uses for
+`tooLongUnreachableDuration`. The patience also does real work: of the two deadlock shapes only one
+is permanent, and a villager whose `WALK_TARGET` merely happened to be occupied rescues itself inside
+the window. Neither memory is persisted, so this reaches no save file and moves no schema.
 
 ---
 

@@ -238,12 +238,18 @@ public final class Steering {
          * thing known about it from the close-of-10 playtest: <i>I have seen it; I do not know how
          * often.</i>
          *
-         * <p><b>Reported rather than repaired.</b> Every repair available is a change to vanilla
-         * state we do not own — erasing somebody's bell memory, handing them a hiding place they did
-         * not choose — on a diagnosis with a verified mechanism and no reproduction. What session 13
-         * ships is the name, so the next sighting comes back as evidence instead of as a
-         * description. What it also ships is not causing it: see {@link #releaseStandoff} and the
-         * guard in {@code enterSlot}.
+         * <p><b>Reported, and after {@link #BELL_LOCK_PATIENCE} ticks, repaired.</b> The repair was
+         * ruled by the owner at the close of session 13 against the alternative of leaving it
+         * named — and the objection raised at the time is recorded rather than buried: this changes
+         * vanilla state the mod does not own, on a diagnosis with no reproduction. What makes it
+         * defensible is that it <b>invents nothing</b>. {@link #unstickTheBellLock} runs
+         * {@code SetHiddenState}'s own else-branch — erase the bell memory, kick the schedule — at a
+         * villager whose missing hiding place locks {@code SetHiddenState} out of running at all.
+         *
+         * <p>This posture is therefore a window rather than a permanent state: a villager reads
+         * {@code BELL_LOCKED} for up to a minute and is then let out. Seeing one in
+         * {@code /namesake debug dayplan} is still worth reporting, because the interesting number
+         * is how often it happens rather than whether anybody is stuck right now.
          */
         BELL_LOCKED
     }
@@ -285,6 +291,8 @@ public final class Steering {
         private int vetoes;
         private int steered;
         private int stuck;
+        /** How many villagers the plan has run vanilla's HIDE exit for. See unstickTheBellLock. */
+        private int unstuck;
     }
 
     private static final Map<ServerLevel, LevelState> STATE = new HashMap<>();
@@ -438,10 +446,15 @@ public final class Steering {
                     }
                 }
             }
-            if (slot != tracked.servedSlot && !tracked.queued
-                    && DayPlan.pathGateOpen(tracked.persona, gameTime)) {
-                levelState.waiting.addLast(tracked);
-                tracked.queued = true;
+            if (DayPlan.pathGateOpen(tracked.persona, gameTime)) {
+                // Behind the gate, because the bell lock is a minute-scale problem and three memory
+                // reads per villager per tick is the cost that took the day plan over budget once
+                // already. A seventh of the roster is ample for something measured in minutes.
+                unstickTheBellLock(level, tracked);
+                if (slot != tracked.servedSlot && !tracked.queued) {
+                    levelState.waiting.addLast(tracked);
+                    tracked.queued = true;
+                }
             }
         }
         if (gone != null) {
@@ -752,6 +765,81 @@ public final class Steering {
     }
 
     /**
+     * <b>How long a villager is left bell-locked before the plan runs vanilla's own exit for it.</b>
+     *
+     * <p>Twelve hundred ticks — a full in-game minute — and the number is argued rather than picked.
+     * {@code SetHiddenState.HIDE_TIMEOUT} is <b>300</b>: vanilla's own view is that a villager who
+     * heard a bell three hundred ticks ago should be finished hiding, and its exit fires on exactly
+     * that comparison. Waiting four times as long means the repair only ever runs long after the
+     * engine would have run it itself, and 1,200 is the same number vanilla uses for
+     * {@code tooLongUnreachableDuration} — its own idea of <i>this has gone on too long</i>.
+     *
+     * <p>The patience is not caution for its own sake. The deadlock has two shapes and only one is
+     * permanent: a villager with no bed within 32 blocks and no HOME memory can <b>never</b> acquire
+     * a hiding place, while one whose {@code WALK_TARGET} merely happened to be occupied might get
+     * one on any later tick. Waiting a minute lets the second kind rescue itself, so the repair only
+     * touches the villagers vanilla has genuinely stranded.
+     */
+    public static final int BELL_LOCK_PATIENCE = 1200;
+
+    /**
+     * <b>Whether to run vanilla's own way out of {@code HIDE} for a villager vanilla cannot.</b>
+     *
+     * <p>Ruled by the owner at the close of session 13, against the alternative of leaving it
+     * reported. The concern that was raised and overruled is recorded rather than buried: this
+     * changes vanilla state the mod does not own, on a diagnosis with a verified mechanism and no
+     * reproduction. What makes it defensible is that <b>it invents no recovery</b> — see
+     * {@link #unstickTheBellLock}.
+     *
+     * <p>Pure, so the decision is a unit test rather than a bell and a stopwatch.
+     */
+    static boolean shouldUnstick(Activity activity, boolean heardBell, boolean hasHidingPlace,
+                                 long ticksSinceBell) {
+        return activity == Activity.HIDE
+                && heardBell
+                && !hasHidingPlace
+                && ticksSinceBell >= BELL_LOCK_PATIENCE;
+    }
+
+    /**
+     * <b>The repair, and it is vanilla's own exit with the one condition it cannot meet removed.</b>
+     *
+     * <p>{@code SetHiddenState}'s else-branch does exactly three things: erase
+     * {@code HEARD_BELL_TIME}, erase {@code HIDING_PLACE}, and call
+     * {@code brain.updateActivityFromSchedule}. This does the first and the third. It does not do
+     * the second because there is nothing to erase — <b>the absent hiding place is the deadlock</b>,
+     * and it is the reason {@code SetHiddenState} never runs at all.
+     *
+     * <p>So the mod is not deciding what a stuck villager should do next. It is running the code
+     * vanilla wrote for this exact moment, at a villager vanilla's own preconditions locked out of
+     * it. The schedule decides what happens after, exactly as it would have.
+     *
+     * <p><b>Erasing the memory is what makes it stick.</b> {@code ReactToBell} sits in the CORE
+     * package at priority 0 and re-asserts {@code HIDE} on every tick {@code HEARD_BELL_TIME} is
+     * present, so kicking the schedule alone would be undone within a tick. Neither memory is
+     * persisted, so nothing about this reaches a save file and there is no schema to move.
+     */
+    private static void unstickTheBellLock(ServerLevel level, Tracked tracked) {
+        Brain<Villager> brain = tracked.villager.getBrain();
+        Long heard = brain.getMemory(MemoryModuleType.HEARD_BELL_TIME).orElse(null);
+        if (!shouldUnstick(brain.getActiveNonCoreActivity().orElse(null), heard != null,
+                brain.hasMemoryValue(MemoryModuleType.HIDING_PLACE),
+                heard == null ? 0L : level.getGameTime() - heard)) {
+            return;
+        }
+        brain.eraseMemory(MemoryModuleType.HEARD_BELL_TIME);
+        brain.updateActivityFromSchedule(level.getDayTime(), level.getGameTime());
+        tracked.servedSlot = null;
+        state(level).unstuck++;
+        // INFO rather than DEBUG, and deliberately. This is the mod reaching into vanilla state it
+        // does not own, on a bug with no reproduction; if it ever fires on a villager who was not
+        // stuck, the log is the only place that would say so.
+        Namesake.LOGGER.info("Persona {} had been hiding for {} ticks with no hiding place to go "
+                        + "to, which vanilla cannot exit. Ran SetHiddenState's own way out.",
+                tracked.persona.id(), level.getGameTime() - heard);
+    }
+
+    /**
      * The bell lock's signature, as three memory reads. See {@link Posture#BELL_LOCKED}.
      *
      * <p>All three clauses are needed and each rules something out. {@code HIDE} active alone is
@@ -792,6 +880,7 @@ public final class Steering {
         }
         return levelState.roster.size() + " tracked, " + levelState.steered + " steered, "
                 + levelState.vetoes + " job-site walk target(s) declined, "
+                + levelState.unstuck + " bell lock(s) opened, "
                 + levelState.waiting.size() + " waiting on the governor";
     }
 
