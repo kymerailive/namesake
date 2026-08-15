@@ -4518,13 +4518,13 @@ shape.
 
 ### Session 12 — 2026-08-15 — standing bands
 
-**Shipped.** `3a22d0c..e269b51` plus this ledger commit, pushed to `origin/main`. CI green on all
+**Shipped.** `3a22d0c..f88d267` plus this ledger commit, pushed to `origin/main`. CI green on all
 three jobs — build and test, and the attach-bet harness on each loader.
 
-**It was red twice on the way there and both defects were real**, in the leg that opens a trade
-window. Neither was reproducible on this machine and both are written up in finding 3, because the
-second one is the more useful: **it reported itself as a wrong price rather than as a failure.**
-`main` was red for about forty minutes across the two.
+**It was red three times on the way there, all in the one new harness leg, and none of it was
+reproducible on this machine.** Written up in finding 3 rather than glossed, because the interesting
+part is that **two of my three fixes were the wrong condition** and the thing that actually found it
+was an assertion, not a guess. `main` was red for roughly an hour and a quarter in total.
 
 **What a village thinks of you is now what it charges you.** A librarian who is warm to you sells a
 book for **fifteen emeralds** where a stranger pays twenty and somebody they have not forgiven pays
@@ -4855,33 +4855,38 @@ unrelated `verify` legs red. **A witness scan is a two-hundred-block problem whe
 testing is violence.** The counter now stands on empty ground two hundred blocks from anything, and
 the blow lands on a second villager so the ladder is measured on one nobody has touched.
 
-**3. CI found two defects that eight green local runs could not, and the second one is the
-instructive one.** Both were in the new band leg, both were environmental, and both are the same
-mistake in different clothes: **the leg asked the world for something and then assumed it.**
+**3. CI turned `main` red three times on one leg, and the useful part is the shape of the three
+attempts rather than the bug.** Every fix was "poll instead of assuming", every one of them was
+green here, and **the first two were the wrong condition.** The leg is the one that opens a real
+trade window; the defect was always that the right-click never reached the villager.
 
-**The first was a tick.** It spawned two villagers and read their personas *in the same tick*. A
-persona is minted by the entity-load hook, and a chunk that is *block*-loaded is not necessarily
-*entity*-ticking yet on a runner three to four times slower — so the spawn had happened and the mint
-had not. Red on both loaders at `BAND and a persona of their own, minted on sight`. The fix is
-session 01's rule for the sixth time: **poll for the condition you actually care about, with a
-deadline, never for a number of ticks and never for the tick after the thing you asked for.**
+**Red 1 — read in the tick it spawned.** The leg spawned two villagers and read their personas in the
+same tick. Red on both loaders at `BAND and a persona of their own, minted on sight`. Fixed by
+polling for the personas.
 
-**The second was a place, and it reported itself as a wrong answer rather than as a failure.** With
-the personas polled for, NeoForge went red again — this time with every band on the ladder charging
-the **base price**, which reads exactly like the multiplier not working. It was not: the right-click
-never reached the villager at all. `ServerGamePacketListenerImpl.handleInteract` resolves its target
-out of the level and **returns silently when it cannot find it**, so a trader that had not survived
-two hundred blocks of unknown terrain made every reading the untouched price. The tell was in a
-message written for something else: step 6 reported `+0 from vanilla's own gossip` where this machine
-reports `+2` — vanilla's own `updateSpecialPrices` had not run either, because no window had opened.
+**Red 2 — every band on the ladder charged the base price.** NeoForge only, and it reads exactly like
+the multiplier not working. It was not. `ServerGamePacketListenerImpl.handleInteract` resolves its
+target out of the level and **returns silently when it cannot find it**, so nothing happened at all —
+and the tell was a number in a message written for something else: step 6 reported `+0 from vanilla's
+own gossip` where this machine reports `+2`, so vanilla's `updateSpecialPrices` had not run either.
+**I guessed at the cause — the ground two hundred blocks from a village — and built a stone platform
+for it. That guess was wrong.** What actually helped was the two assertions added beside it: that the
+traders are *alive and findable by id*, and that the window *opened*.
 
-**Two things were wrong and both are now guarded rather than fixed.** The site is a proper stone
-platform with **three** blocks of clearance — this repository has already written down that *a
-villager is 1.95 blocks tall, so two blocks of air is not two blocks of clearance*, and the first
-attempt used two. And the leg now asserts what it was assuming: that both traders are **alive and
-findable by id**, which is what a click actually needs, and that the trade window **opened** — because
-a `NEUTRAL` band and an interaction that never happened produce the same number, and only one of
-those is a pass.
+**Red 3 — the assertion named it in one line.** `both still alive and findable by id` **failed**
+while `a persona of their own` **passed**, on the same tick, which says the two conditions are not
+the same one. They are not. A villager is minted a persona from `onTrackingStart`, which vanilla
+fires while the entity is being added to its section; `level.getEntity(id)` reads the **visible**
+storage, which is populated only once that chunk's entity status reaches `TICKING`. So there is a
+window — one tick here, wider on a runner — in which a villager has a persona and cannot be found by
+id. The poll now waits for **findable by id**, which is the condition a right-click actually needs.
+
+**The lesson is not "poll rather than sleep", which this project learned at session 01 and I did on
+the first attempt.** It is the next one along: **poll for the condition the thing you are about to do
+actually needs.** A persona and a lookup id are both "the villager is there" and only one of them is
+what `handleInteract` asks. And the reason it took three goes rather than four is the assertion, not
+the guess: **the platform is still in the code and was never the fix.** What paid was writing down
+what the leg had been assuming, in a message that could fail on its own.
 
 **4. A village that already trusts you does not gouge you over one shove, and that is correct.** One
 blow into a village at 30–100 trust moves the struck villager by two points and changes nobody's
@@ -4934,13 +4939,14 @@ name them, and the second of the three is `BAND STEP 7`.
 - `$env:JAVA_HOME` still must be pinned to JDK 21. Kill the dev client between runs, and delete
   `<loader>/run/saves/namesake_attachbet` before a `setup`. A watchdog exit still makes Gradle report
   a failure over a PASS verdict — **read the verdict file**, which happened once this session.
-- **A new harness leg's first draft will assume a tick that has not happened.** Session 13 adds legs
-  about villagers walking to workstations, which is the most timing-dependent thing this harness has
-  ever asserted. This session shipped a leg that spawned a villager and read its persona in the same
-  tick — green here four times, red on both loaders in CI, because a chunk that is block-loaded is
-  not necessarily entity-ticking on a runner three to four times slower. **Poll for the condition,
-  with a deadline. Never for a number of ticks, and never for "the tick after the thing I asked
-  for."**
+- **A new harness leg's first draft will assume a tick that has not happened, and its second draft
+  will poll for the wrong thing.** Session 13 adds legs about villagers walking to workstations,
+  which is the most timing-dependent thing this harness has ever asserted. This session cost three
+  red `main`s on one leg, every one of them green locally, and only the last fix was the right
+  condition. **Poll for the condition the thing you are about to do actually needs** — `getEntity(id)`
+  and "has a persona" are both "the villager is there", they are populated at different moments, and
+  only one of them is what a right-click asks. And when a leg reads a plausible wrong *answer*, the
+  thing that finds it is an assertion on what the leg was assuming, not a guess at the cause.
 - **The schema-7 archives are at `C:\MCA Reborn Rework\.archives\schema7-1770423`**, with their
   subjects files, for both loaders — and they were used: the load test above is them. **And a
   schema-8 pair is already waiting at `C:\MCA Reborn Rework\.archives\schema8-session12`**, taken
