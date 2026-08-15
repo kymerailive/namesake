@@ -4005,7 +4005,7 @@ the forcing function was not what kept rule 5 honest. No changes to the 16-sessi
 
 ### Session 11 — 2026-08-15 — the Notice Board
 
-**Shipped.** `RANGE_PLACEHOLDER` plus this ledger commit, pushed to `origin/main`. CI green on all
+**Shipped.** `732ae63..3d8e376` plus these ledger commits, pushed to `origin/main`. CI green on all
 three jobs — build and test, and the attach-bet harness on each loader.
 
 **A player can read what a village knows about them without typing a command, and nothing on disk
