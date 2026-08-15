@@ -467,6 +467,10 @@ public final class Steering {
      * behaviour left that can reach a correctly-chosen standoff point.
      */
     private static void declineTheJobSite(LevelState levelState, Tracked tracked, DaySlot slot) {
+        // Deliberately duplicated from declines() below rather than left to it. This runs for every
+        // steered villager on every tick and the two brain lookups underneath it are the expensive
+        // part; an enum comparison that ends the call before them is worth the repetition, and the
+        // repetition is safe because declines() is the one that decides.
         if (!slot.isLabour()) {
             return;
         }
@@ -483,24 +487,17 @@ public final class Steering {
         if (target.isEmpty()) {
             return;
         }
-        // Panic, raids, hiding and sleeping are all activity changes, so one test covers them —
-        // but it has to be the allowlist rather than "is WORK active", because a villager idling
-        // through a labour slot is exactly who the standoff is for. See STEERABLE.
-        if (!isSteerable(brain)) {
-            return;
-        }
-        if (villager.getTradingPlayer() != null
-                || brain.hasMemoryValue(MemoryModuleType.HURT_BY_ENTITY)
-                || brain.hasMemoryValue(MemoryModuleType.NEAREST_HOSTILE)) {
-            return;
-        }
         BlockPos jobSite = jobSiteOf(villager);
         if (jobSite == null) {
             return;
         }
-        BlockPos going = target.get().getTarget().currentBlockPosition();
-        if (going.distManhattan(jobSite) > VETO_WITHIN) {
-            // Somewhere else entirely — a stroll, a dropped loaf, a bed. Not ours to refuse.
+        if (!declines(slot,
+                brain.getActiveNonCoreActivity().orElse(null),
+                villager.getTradingPlayer() != null,
+                brain.hasMemoryValue(MemoryModuleType.HURT_BY_ENTITY)
+                        || brain.hasMemoryValue(MemoryModuleType.NEAREST_HOSTILE),
+                target.get().getTarget().currentBlockPosition(),
+                jobSite)) {
             return;
         }
         brain.eraseMemory(MemoryModuleType.WALK_TARGET);
@@ -508,6 +505,44 @@ public final class Steering {
         if (Profiling.ENABLED) {
             Meters.count("Steering.declineTheJobSite erasures");
         }
+    }
+
+    /**
+     * <b>Whether the plan refuses this walk target — the five narrowing clauses, as one pure
+     * function.</b>
+     *
+     * <p>Split out from {@link #declineTheJobSite} for one reason: <b>these are the riskiest lines
+     * in the session and every other version of them is untestable.</b> Erasing {@code WALK_TARGET}
+     * is how a villager stops being able to move, which is the bug session 13 inherited, and a wrong
+     * clause here would produce it rather than diagnose it. Taking a brain, a level and an entity
+     * makes that a harness leg costing six minutes a case; taking six values makes it a unit test
+     * costing ten milliseconds, and {@code SteeringTest.theVetoIsNarrow} walks all five.
+     *
+     * <p>Each clause and what it protects:
+     *
+     * <ol>
+     *   <li><b>a labour slot</b> — outside {@link DaySlot#LABOUR_I} and {@link DaySlot#LABOUR_II}
+     *       the plan has no opinion at all;</li>
+     *   <li><b>a {@link #STEERABLE} activity</b> — {@code HIDE} because {@code LocateHidingPlace}
+     *       needs {@code WALK_TARGET} absent and is the only way out of the bell lock, {@code REST}
+     *       because somebody is going to bed, {@code PANIC} and the raids because they are fleeing.
+     *       An allowlist, so a new vanilla activity is refused by default;</li>
+     *   <li><b>not trading</b> — {@code LookAndFollowTradingPlayerSink} writes a walk target every
+     *       tick while a player has the counter open, and cancelling it would drag the villager out
+     *       from under their own trade screen;</li>
+     *   <li><b>not threatened</b> — belt and braces over clause 2, because {@code HURT_BY_ENTITY}
+     *       and {@code NEAREST_HOSTILE} are set the tick <i>before</i> the activity changes;</li>
+     *   <li><b>the target is the job site</b> — a stroll, a dropped loaf, a bed and a hiding place
+     *       are all somewhere else and none of them is ours to refuse.</li>
+     * </ol>
+     */
+    static boolean declines(DaySlot slot, Activity activity, boolean trading, boolean threatened,
+                            BlockPos walkTarget, BlockPos jobSite) {
+        return slot != null && slot.isLabour()
+                && activity != null && STEERABLE.contains(activity)
+                && !trading
+                && !threatened
+                && walkTarget.distManhattan(jobSite) <= VETO_WITHIN;
     }
 
     /**
@@ -747,12 +782,6 @@ public final class Steering {
     public static int vetoCount(ServerLevel level) {
         LevelState levelState = STATE.get(level);
         return levelState == null ? 0 : levelState.vetoes;
-    }
-
-    /** How many villagers have been sent to a standoff in this level since the server started. */
-    public static int steeredCount(ServerLevel level) {
-        LevelState levelState = STATE.get(level);
-        return levelState == null ? 0 : levelState.steered;
     }
 
     /** Counts since the server started, for the debug command and the harness. */

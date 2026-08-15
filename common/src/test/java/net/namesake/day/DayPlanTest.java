@@ -293,6 +293,50 @@ class DayPlanTest {
      * <b>1.803</b> from the centre — outside 1.73 and inside 2.0. It is also a real position, which
      * is why it is the one chosen: a villager standing on a block above their workstation.
      */
+    /**
+     * <b>The session's central finding, held as arithmetic instead of as a paragraph.</b>
+     *
+     * <p>{@code DESIGN.md} §7 assumed there was somewhere a lazy villager could stand that every
+     * vanilla behaviour would leave alone. There is not: {@code SetWalkTargetFromBlockMemory} walks
+     * them back from beyond Manhattan 9, and {@code StrollToPoi} walks them back from inside
+     * Euclidean 10 — and <b>Manhattan ≤ 9 implies Euclidean ≤ 9.87</b>, so the two windows overlap
+     * with nothing between them. That is why the standoff is a veto rather than a position.
+     *
+     * <p>It is worth a test rather than a comment because the tempting future change is to widen the
+     * band and stop vetoing — and that change would look correct, would pass every other test here,
+     * and would produce villagers who walk back to their workstations four seconds later.
+     */
+    @Test
+    @DisplayName("there is no position vanilla leaves alone — every standoff is inside StrollToPoi")
+    void thereIsNoGapToStandIn() {
+        BlockPos job = new BlockPos(0, 64, 0);
+        int checked = 0;
+        for (int x = -16; x <= 16; x++) {
+            for (int z = -16; z <= 16; z++) {
+                for (int y = -2; y <= 2; y++) {
+                    final int dx = x;
+                    final int dy = y;
+                    final int dz = z;
+                    BlockPos where = job.offset(dx, dy, dz);
+                    if (!DayPlan.isAStandoff(job, where)) {
+                        continue;
+                    }
+                    checked++;
+                    final double reach = Math.sqrt(dx * dx + (dy - 0.5) * (dy - 0.5) + dz * dz);
+                    assertTrue(reach < DayPlan.STROLL_TO_POI_REACH, () -> "a standoff at " + dx + ","
+                            + dy + "," + dz + " is " + reach + " from the workstation, which is "
+                            + "outside StrollToPoi's " + DayPlan.STROLL_TO_POI_REACH + ". If that "
+                            + "were reachable the standoff could be a position rather than a veto — "
+                            + "and it is not, because Manhattan <= "
+                            + DayPlan.VANILLA_JOB_SITE_TOLERANCE + " bounds the Euclidean distance "
+                            + "below ten. Something has widened the band past what vanilla tolerates.");
+                }
+            }
+        }
+        assertTrue(checked > 100, "only " + checked + " standoff positions were found, so this test "
+                + "swept almost nothing and proves almost nothing");
+    }
+
     @Test
     @DisplayName("arm's reach is WorkAtPoi's own 1.73, and a round 2.0 would not do")
     void armsReachIsTheEnginesNumber() {
