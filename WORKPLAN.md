@@ -504,8 +504,50 @@ is why it belongs beside `-Dnamesake.roads=off` and the "gentle" preset rather t
 **Note.** Art is genuinely deferrable to here — a dividend of the attach architecture. Everything
 through session 14 is playable and testable with vanilla villager appearance.
 
-**Exit.** A stranger plays 45 minutes and can describe, unprompted, something a villager remembered
-about them.
+**Exit — rewritten at the open of session 15, before a line was written, for the reason sessions 12
+and 14 rewrote theirs.** It said:
+
+> *A stranger plays 45 minutes and can describe, unprompted, something a villager remembered about
+> them.*
+
+It appears four times in this ledger and is never once elaborated, and it is not one test. **It is
+five jobs folded onto one sitting**, and one sitting can carry one of them. The four that have been
+folded in are: standing risk 2's *playtester who was not told it was coming*, folded here at session
+10 because the owner wrote that brief and could not be surprised by it; **standing risk 3's cultures
+re-test, ordered here by name at line 585**; this session's art; and this session's config — with
+the five feel questions sessions 13 and 14 left open arriving beside them. So the criterion proper
+is stated first and the other four are each given an instrument or an honest absence.
+
+> **The reader is a stranger — somebody who has not been told what this mod does. The sitting is one
+> unbroken 45 minutes. The observable is a sentence they say without being asked a question that
+> contains its answer: that a villager knew something about them which they had not told that
+> villager.**
+
+**And the route is named, because the arithmetic forbids the other one.** Forty-five minutes is
+about **2.25 in-game days**, against a median of **four** days to residency once
+`Residency.TRUST_THRESHOLD` is 28. **A stranger will not reach residency inside the sitting**, so
+§5's name swap — which is the pitch — cannot be the thing that carries this criterion. What can is
+the **Notice Board**, which reads a bond of zero and needs no threshold at all, and the
+**second-hand line**, which needs one in-game day. `DESIGN.md` §5 rules the board is the entire
+onboarding surface and that there is no tutorial, so a stranger has to be able to *find* one without
+being told where it is. **That is what makes "does a village come with a board already standing"
+load-bearing on this criterion rather than adjacent to it**, and it is why that ruling is taken
+first this session rather than last.
+
+| the job folded in | who reads it | the instrument, or the absence |
+|---|---|---|
+| **1. A stranger says it, unprompted, in one 45-minute sitting** — the criterion proper, and standing risk 2's *not told it was coming* is the same job rather than a second one, so risk 2 retires with this or not at all | **the owner's, and arranging a genuine stranger is theirs.** Neither the author of this session nor the owner may stand in for the reader: the whole content of the clause is that the reader does not already know what is supposed to happen | **the availability half is machine-checked and the reaction half cannot be.** A harness leg asserts the sentence is *reachable inside the sitting's own budget* — a deed, one in-game day, and a board row naming it, inside **54,000 ticks** — counted in server ticks rather than wall clock, per this ledger's rule that no CI assertion compares against a clock. What no test can have an opinion about is whether a person says anything |
+| **2. Standing risk 3 — cultures still feel foreign at the far end of a session** (line 585) | the owner's | **not measured this session, and the reason is that the two numbers are not the same number.** The risk names the failure at **hour 45**; this criterion offers **minute 45**. They share a numeral and nothing else, and a 45-minute sitting cannot fail a 45-hour failure mode. **This has no scheduled home** — the slice ends at 15 and the grievance engine at 16–20 is a different block — so it is carried as an unscheduled read rather than parked against a session that does not exist. What *is* newly machine-checked is a distinguisher risk 3 did not have when its first read passed: the culture palette now reaches the screen, so *no two cultures render the same clothing tint* is a property with a test |
+| **3. The art** | **the owner's, on whether it looks right** | **machine-checked: that it is there and correct, not that it is good.** Every appearance the seed can produce resolves to a texture that exists; the model keeps vanilla's 0.9375 scale and its baby proportions; the renderer registers on both loaders; and a village is photographed under the harness. The photographs are the instrument this ledger added at session 11 — *the rows are not the screen* — and they are worthless unless CI can hand them back, so the upload path moves with them |
+| **4. The config** | — | **not the stranger's at all: a stranger does not read a config file.** Machine-checked in full — a missing key takes its default, an unknown key is ignored, a malformed value warns and defaults, `gentle` gates exactly what it is documented to gate, every gate defaults **on** so no rule 5 consumer is unreachable out of the box, and no config key can reach a never-cut wall |
+| **5. The five feel questions from 13 and 14** | **the owner's, and unchanged** | **not the stranger's:** every one of them needs `/time set` and `/namesake debug dayplan`, which is a person who knows the mod. Both scripts are already in the ledger, in the sessions that wrote them |
+
+**What this criterion is not, stated so it cannot be quietly met.** It is not met by the author of
+this session playing it, and it is not met by the owner playing it — the owner has now played
+sessions 09, 10, 11 and 12 and is the person the *machinery* half has already been ruled by. It is
+also not met by a stranger who is handed a script. If no stranger is available, the honest close is
+that the machine-checked half passed and the criterion is **outstanding**, which is what session 08
+did when it shipped without a playtest.
 
 ---
 
