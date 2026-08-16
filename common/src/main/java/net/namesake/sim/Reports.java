@@ -484,9 +484,72 @@ public final class Reports {
         lines.add(header.toString());
         lines.add(axisRow(outcome, "warmth", Simulation.History::warmthByDay));
         lines.add(axisRow(outcome, "trust", Simulation.History::trustByDay));
+        // The live threshold gets its own row rather than a mark on the ladder above, and that is a
+        // ruling made at session 15 rather than a formatting choice. See dayTheThirdResidentCrossed.
+        int residents = outcome.histories().size();
+        lines.add(String.format(Locale.ROOT,
+                "    trust, at the live Residency.TRUST_THRESHOLD of %d: first %s, third %s, all %d %s",
+                Residency.TRUST_THRESHOLD,
+                dayNthCrossed(outcome, Residency.TRUST_THRESHOLD, 1),
+                dayNthCrossed(outcome, Residency.TRUST_THRESHOLD, Residency.RESIDENTS_REQUIRED),
+                residents, dayNthCrossed(outcome, Residency.TRUST_THRESHOLD, residents)));
         lines.add("  'never' means no three residents reached it in " + outcome.plan().days()
                 + " days at this model.");
         return lines;
+    }
+
+    /**
+     * <b>The in-game day a third resident first held {@code trustMark} at once — at any mark, not
+     * only a mark on the ladder.</b> {@code -1} for never.
+     *
+     * <p>Added at session 15, and the reason is a ruling rather than a convenience.
+     * {@link DialogueStats#LADDER} is {@code {20, 40, 60, 80, 100}} and
+     * {@link Residency#TRUST_THRESHOLD} left it when it became 28. <b>The ladder did not move with
+     * it, deliberately</b>: it is the <i>instrument's</i> scale, and a ruler that follows the thing
+     * it measures makes every table sessions 07 through 14 produced describe a different world from
+     * the next one. Its own javadoc already ruled the way out — <i>"a threshold set anywhere can be
+     * read off the table by interpolation"</i> — but nothing public could actually ask.
+     *
+     * <p>So the instrument gains the ability to answer at an arbitrary mark, the fixed ladder stays
+     * fixed, and {@link #residencyThreshold} prints the live threshold's own row beside it. That
+     * keeps the report right the next time the threshold moves, which is the failure this replaces:
+     * {@code DESIGN.md} §5's <i>"the third resident crosses 20 on day 28"</i> was a figure nothing
+     * could re-derive once the number under it changed.
+     *
+     * <p><b>Reads trust and only trust</b>, because that is the axis §5's band reads — ruled at the
+     * close of session 08 against session 07's table. Deliberately <i>not</i>
+     * {@link #residencyDay}, which answers a different question: that one returns whichever of §5's
+     * two routes fired first, and every {@code PlayerModel} emits {@code FED_HUNGRY}, so the deed
+     * route always wins and the band's own day is never visible in it.
+     */
+    public static int dayTheThirdResidentCrossed(Simulation.Outcome outcome, int trustMark) {
+        return dayNth(outcome, trustMark, Residency.RESIDENTS_REQUIRED);
+    }
+
+    /** {@link #dayNth} as the report prints it — {@code day N} or {@code never}. */
+    private static String dayNthCrossed(Simulation.Outcome outcome, int trustMark, int nth) {
+        int day = dayNth(outcome, trustMark, nth);
+        return day < 0 ? "never" : "day " + day;
+    }
+
+    /**
+     * The in-game day the {@code nth} resident first held {@code trustMark}, or {@code -1}.
+     *
+     * <p>Three of these make the sentence {@code Standing.TRUSTED}'s javadoc is built out of — when
+     * the first villager arrives, when the third does and residency is granted, and whether the
+     * whole village gets there at all inside the run.
+     */
+    private static int dayNth(Simulation.Outcome outcome, int trustMark, int nth) {
+        for (int day = 0; day < outcome.plan().days(); day++) {
+            int at = day;
+            long held = outcome.histories().values().stream()
+                    .filter(history -> history.trustByDay()[at] >= trustMark)
+                    .count();
+            if (held >= nth) {
+                return day;
+            }
+        }
+        return -1;
     }
 
     /** One axis's row: the day a third resident first held each mark at once. */

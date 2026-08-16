@@ -44,10 +44,11 @@ class ResidencyTest {
      * Puts {@code trust} on the bond {@code index} holds about the player.
      *
      * <p>Built directly rather than through {@code Bond.apply}, which clamps its allowance to what
-     * the four-bit {@code gainedToday} counters can hold — so a fixture asking for twenty trust in
-     * one call quietly gets fifteen, and would be testing a threshold it never reaches. Twenty trust
-     * is a real state a bond reaches on day 28 of one deed a day; this constructs the end of that
-     * rather than simulating the days.
+     * the four-bit {@code gainedToday} counters can hold — so a fixture asking for the threshold in
+     * one call quietly gets fifteen, and would be testing a threshold it never reaches. That gap
+     * widened at session 15 rather than closing: the threshold is 28 now and the clamp is still 15.
+     * {@link Residency#TRUST_THRESHOLD} trust is a real state a bond reaches on day 41 of one deed
+     * a day, measured; this constructs the end of that rather than simulating the days.
      */
     private static void trusts(NpcRegistry registry, int index, int trust) {
         registry.putBond(new UUID(77, index), PLAYER, new Bond((byte) trust, (byte) 0,

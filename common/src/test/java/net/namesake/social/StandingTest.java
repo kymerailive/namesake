@@ -351,4 +351,82 @@ class StandingTest {
         assertNotEquals(1, reached.size(),
                 () -> "a village that is all one band is not banded: " + reached);
     }
+
+    /**
+     * <b>Which bands a real player actually walks through, in order, day by day.</b>
+     *
+     * <p>Added at session 15, and it exists because {@link #theBandsArePopulated} above cannot see
+     * the thing this session broke. That test asks whether each band is <i>reachable</i> and joins
+     * its two halves with an {@code ||}, so a run in which <b>no villager is ever {@code TRUSTED}</b>
+     * passes it comfortably. A band nobody passes through is {@code Bond.respect}'s failure wearing
+     * a price tag, and the instrument that exists to catch that was looking one question to the left.
+     *
+     * <p>The question this asks instead is the ladder's own: <b>a villager's band over a hundred
+     * days is a sequence, not a value.</b> {@link Standing#of} tests {@code warmth} before
+     * {@code trust} — ruled at session 12, because when both cross on the same gift the better band
+     * is the honest answer — so which rungs a player sees depends on the <i>gap</i> between
+     * {@link Standing#TRUSTED_TRUST} and {@link Standing#WARM_WARMTH}, and those two stopped being
+     * the same number at this session. That is not a defect and it is not free: it is the shape of
+     * the ladder, and it belongs in a table rather than in somebody's head.
+     *
+     * <p>Reported rather than asserted for the table itself, for
+     * {@code PersonalityDistributionTest}'s reason — the numbers are what a threshold is chosen
+     * <i>against</i>, and an assertion on them would be this session grading its own homework. What
+     * <b>is</b> asserted is the one claim a price ladder cannot survive losing: that every band with
+     * a discount on it is somewhere a player actually stands.
+     */
+    @Test
+    @DisplayName("the bands a hundred days of daily kindness walks through, in order")
+    void theBandLadderIsWalked() {
+        StringBuilder report = new StringBuilder("\n=== bands walked over a hundred in-game days ===\n")
+                .append(String.format(java.util.Locale.ROOT,
+                        "  TRUSTED_TRUST is %d, WARM_WARMTH is %d, and Standing.of tests warmth "
+                                + "first%n", Standing.TRUSTED_TRUST, Standing.WARM_WARMTH))
+                .append("  model              residents  bands walked\n");
+
+        Set<Standing> everywhere = new LinkedHashSet<>();
+        for (net.namesake.sim.PlayerModel model : net.namesake.sim.PlayerModel.values()) {
+            net.namesake.sim.Simulation.Outcome outcome = net.namesake.sim.Simulation.run(
+                    net.namesake.sim.Simulation.Plan.standard(20260815L, 100, model));
+
+            java.util.Map<List<Standing>, Integer> walks = new java.util.LinkedHashMap<>();
+            for (net.namesake.sim.Simulation.History history : outcome.histories().values()) {
+                List<Standing> walk = new java.util.ArrayList<>();
+                for (int day = 0; day < history.trustByDay().length; day++) {
+                    // Standing.of reads two bytes and nothing else, so the day's sampled trust and
+                    // warmth ARE the bond as far as banding is concerned. No decay to re-apply:
+                    // the history is already what the record layer held at the close of that day.
+                    Standing band = Standing.of(
+                            bond(history.trustByDay()[day], history.warmthByDay()[day]));
+                    if (walk.isEmpty() || walk.get(walk.size() - 1) != band) {
+                        walk.add(band);
+                    }
+                }
+                walks.merge(walk, 1, Integer::sum);
+                everywhere.addAll(walk);
+            }
+            for (java.util.Map.Entry<List<Standing>, Integer> walk : walks.entrySet()) {
+                report.append(String.format(java.util.Locale.ROOT, "  %-18s %9d  %s%n",
+                        model.name(), walk.getValue(), walk.getKey()));
+            }
+        }
+        report.append("  every band any villager stood in: ").append(everywhere).append('\n');
+        System.out.println(report);
+
+        for (Standing band : Standing.values()) {
+            if (band == Standing.RESENTED || band == Standing.WARY) {
+                // Both are earned by violence and no PlayerModel above strikes anybody except
+                // CARELESS, which does so rarely. Their reachability is theBottomBandIsWhereA-
+                // KillingPutsYou's job, off the deed table rather than off a hundred days.
+                continue;
+            }
+            assertTrue(everywhere.contains(band), () ->
+                    "no villager in any player model ever stands in " + band + " — it has a price "
+                            + "multiplier of " + band.priceMultiplier() + " that nothing can reach. "
+                            + "Bands walked: " + everywhere + ". TRUSTED_TRUST is "
+                            + Standing.TRUSTED_TRUST + " and WARM_WARMTH is " + Standing.WARM_WARMTH
+                            + "; Standing.of tests warmth first, so a TRUSTED_TRUST far above "
+                            + "WARM_WARMTH makes the middle rung unreachable on the way up.");
+        }
+    }
 }

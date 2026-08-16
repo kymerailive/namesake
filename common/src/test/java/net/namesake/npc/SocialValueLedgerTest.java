@@ -392,11 +392,12 @@ class SocialValueLedgerTest {
             Entry.consumedBy(Bond.class, "trust", List.of("trust", "axis"),
                     Residency.class, "verdict",
                     "Residency.verdict counts the residents holding TRUST_THRESHOLD or more and "
-                            + "grants DESIGN.md §5's band at three of them. The third resident "
-                            + "crosses 20 on day 28, measured. Trust does not decay, so residency "
-                            + "is earned by consistency rather than by intensity. Session 12 added "
-                            + "Standing.of, which reads the same axis at the same mark for the "
-                            + "trade price band."),
+                            + "grants DESIGN.md §5's band at three of them. The threshold rose from "
+                            + "20 to 28 at session 15 and the third resident crosses it on day 41, "
+                            + "re-measured there. Trust does not decay, so residency is earned by "
+                            + "consistency rather than by intensity. Session 12 added Standing.of, "
+                            + "which reads the same axis at the same mark for the trade price "
+                            + "band."),
 
             // Paid off in session 09, and NOT by what its own exemption predicted — the second time
             // this mechanism has caught a consumer that was named in good faith and was not one.

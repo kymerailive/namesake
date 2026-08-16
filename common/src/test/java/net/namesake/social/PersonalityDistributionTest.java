@@ -309,14 +309,26 @@ class PersonalityDistributionTest {
      * 12, because {@code Standing.TRUSTED_TRUST} <i>is</i> that constant rather than a copy. Moving
      * it moves what every villager in the world charges <i>and</i> when a village takes you in.
      *
-     * <p>So whoever moves it should pick from this table rather than from a feeling about the
-     * number. Trust does not decay and a day is worth at most one personality-scaled
+     * <p><b>Session 15 moved it, from 20 to 28, and this is the table it was picked off.</b> The
+     * deciding row is the median rather than the share: 24 leaves the median at three days and moves
+     * only the tail, so 24 is not a compromise, it is a no-op on the complaint. Twenty-eight is the
+     * smallest candidate that takes the median to four. The table is kept rather than deleted so
+     * the next move is made against data too.
+     *
+     * <p>Whoever moves it should pick from this table rather than from a feeling about the number.
+     * Trust does not decay and a day is worth at most one personality-scaled
      * {@code Bond.DAILY_CAP}, so days-to-threshold is {@code ceil(threshold / allowance)} and the
      * spread across a real population is the spread of the allowance — measured 4 to 12, commonest
      * 8 and 9.
      *
      * <p>The row for 20 is the one to read the others against: it reproduces session 12's measured
      * <b>77% inside three days</b>, which is what says this arithmetic agrees with the instrument.
+     *
+     * <p><b>And this table is the optimistic bound, which is the one caveat worth carrying.</b> It
+     * assumes the allowance is filled every day. The instrument that does not assume that is
+     * {@code Reports.residencyThreshold}, and on one kindness a day it reads day 41 for the third
+     * resident at 28 where this arithmetic reads four — the difference between a player who
+     * saturates one villager and a player who spreads a deed across a village.
      */
     @Test
     @DisplayName("what each candidate trust threshold would cost in in-game days")

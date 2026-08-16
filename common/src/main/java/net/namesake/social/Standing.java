@@ -66,9 +66,10 @@ package net.namesake.social;
  *       <td>session 09's hostile-pool boundary, unchanged</td></tr>
  *   <tr><td>{@link #NEUTRAL}</td><td>—</td><td>×1.00</td>
  *       <td>{@code DESIGN.md} §10 step 1 pins a stranger's price at 1.00</td></tr>
- *   <tr><td>{@link #TRUSTED}</td><td>trust ≥ 20</td><td>×0.90</td>
- *       <td>{@code DialogueStats.LADDER}'s first mark and §5's residency mark: the third resident
- *           crosses it on day 28, none of nine before day 20, all nine by day 100</td></tr>
+ *   <tr><td>{@link #TRUSTED}</td><td>trust ≥ 28</td><td>×0.90</td>
+ *       <td>§5's residency mark, raised from 20 at session 15 and re-measured there: the first
+ *           resident crosses on day 15, the third on day 41 — which is the day residency is
+ *           granted — and all nine <b>never</b> do inside a hundred days</td></tr>
  *   <tr><td>{@link #WARM}</td><td>warmth ≥ 20</td><td>×0.75</td>
  *       <td>session 09's {@code WARM_WARMTH}, unchanged: 1–3 residents of nine at a hundred days,
  *           against a village median of 0–3</td></tr>
@@ -83,9 +84,30 @@ package net.namesake.social;
  * the argument session 09 chose warmth for the gift gate on, arriving in a price.
  *
  * <p><b>{@link #TRUSTED} is literally §5's "trusted price band".</b> Residency counts three
- * residents at twenty trust; this band is one resident at twenty trust. So the sentence
- * <i>"residency also grants the trusted price band"</i> is now true by construction rather than by
- * two thresholds that happen to agree, and moving one moves the other.
+ * residents at {@link Residency#TRUST_THRESHOLD} trust; this band is one resident at it. So the
+ * sentence <i>"residency also grants the trusted price band"</i> is true by construction rather than
+ * by two thresholds that happen to agree, and moving one moves the other. <b>Session 15 moved it —
+ * 20 to 28 — and this file is where that arrived without a single test going red</b>, which is why
+ * the numbers in the table above are dates rather than values now.
+ *
+ * <h2>The two thresholds stopped being the same number, and it changes the ladder's shape</h2>
+ *
+ * <p>{@link #TRUSTED_TRUST} was 20 and {@link #WARM_WARMTH} is 20, so until session 15 the two
+ * discounts sat on the same mark of two different axes. They are now eight points apart, and
+ * {@link #of} tests warmth <i>first</i> — ruled at session 12, because when both cross on the same
+ * gift the better band is the honest answer. So a player who fills their daily allowance every day
+ * reaches {@code WARM} before they ever reach {@code TRUSTED}, and skips the middle rung.
+ *
+ * <p><b>Measured rather than reasoned, because the arithmetic predicted worse than the instrument
+ * found.</b> On paper every gifting player skips {@code TRUSTED}; measured over the five player
+ * models by {@code StandingTest.theBandLadderIsWalked}, only the one who <i>saturates</i> does.
+ * A villager treated to one kindness a day still walks {@code NEUTRAL → TRUSTED} nine times in nine,
+ * exactly as at 20; it is the twelve-gifts-a-day model that goes straight to {@code WARM}, seven of
+ * nine where it was two of nine. That reads as the design rather than against it — <i>somebody
+ * dumping a dozen gifts in an afternoon is buying warmth, and warmth is the discount that lapses.</i>
+ * The one place it genuinely costs is the far end: the once-a-week player reached {@code TRUSTED} on
+ * one villager of nine at 20 and reaches it on none at 28, which is what <i>"three in-game days to a
+ * discount is too fast"</i> was asking to be made to cost.
  *
  * <h2>What it does not read, and why the list is short</h2>
  *
@@ -141,9 +163,15 @@ public enum Standing {
      * They would rely on you. {@code DESIGN.md} §5's <i>trusted price band</i>, at §5's own number.
      *
      * <p>Reached by consistency rather than intensity, because trust is the axis that does not
-     * decay: none of nine residents is here before about day 20 of one kindness a day, the third
-     * crosses on day 28 — which is the day residency is granted — and all nine are here by day 100.
-     * A player doing one deed a week gets one villager of nine here in a hundred days.
+     * decay. <b>Re-measured at session 15, when the mark went from 20 to 28</b>, over one kindness a
+     * day for a hundred in-game days: the first resident of nine crosses on <b>day 15</b>, the third
+     * on <b>day 41</b> — which is the day residency is granted — and <b>all nine never do</b>.
+     * At 20 the same run put the third on day 28 and the whole village here by day 100, so what the
+     * raise bought is the far end of the curve rather than the near one.
+     *
+     * <p>A player doing one deed a week now gets <b>nobody</b> here in a hundred days, where at 20
+     * they got one villager of nine. That is the sharpest single consequence of the change and it is
+     * the one the owner asked for: turning up occasionally no longer earns a discount at all.
      */
     TRUSTED(0.90F),
 
@@ -166,8 +194,14 @@ public enum Standing {
     public static final int RESENTED_TRUST = -20;
 
     /**
-     * The trust {@link #TRUSTED} begins at — {@code DialogueStats.LADDER}'s first mark, and the
-     * number {@link Residency#TRUST_THRESHOLD} counts three residents of.
+     * The trust {@link #TRUSTED} begins at — the number {@link Residency#TRUST_THRESHOLD} counts
+     * three residents of.
+     *
+     * <p><b>It was {@code DialogueStats.LADDER}'s first mark until session 15 and is not on the
+     * ladder any more.</b> That is deliberate and it is ruled in {@code Residency}: the ladder is
+     * the <i>instrument's</i> scale, and a ruler that follows the thing it measures makes every
+     * table in this ledger describe a different world from the one before it.
+     * {@code Reports.dayTheThirdResidentCrossed} is what reads the threshold's own mark instead.
      *
      * <p><b>It is that constant rather than a copy of its value</b>, for session 11's reason one
      * layer down: {@code DESIGN.md} §5's sentence <i>"residency also grants the trusted price

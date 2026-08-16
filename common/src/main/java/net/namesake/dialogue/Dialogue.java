@@ -94,7 +94,10 @@ public final class Dialogue {
      * <b>The name swap.</b> A stranger word before residency, the player's own name after it.
      *
      * <p>Read through {@link Residency}, which reads {@code trust} — session 08's ruling, measured
-     * rather than chosen: warmth can never reach a threshold and trust crosses 20 on day 28.
+     * rather than chosen: warmth can never reach a threshold at any mark, and trust does. Since
+     * session 15 the mark is 28 and a third resident reaches it on day 41; the numbers live on
+     * {@link Residency#TRUST_THRESHOLD} rather than being copied here, because this is a display
+     * package and a copy here is a copy that goes stale silently.
      */
     public static String addressFor(NpcRegistry registry, Persona speaker, UUID player,
                                     String playerName, int day, Voice voice) {

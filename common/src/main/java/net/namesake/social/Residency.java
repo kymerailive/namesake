@@ -20,14 +20,22 @@ import java.util.UUID;
  * of a gift is one point and warmth decays one point an in-game day, so the two cancel exactly and
  * <b>no three residents ever reach 20 warmth, at any mark, ever</b>. Session 08 closed off the
  * plausible fix by measuring it — gossip moves the village's median warmth from 0 to 1 and its
- * maximum from 56 to 60, and leaves every warmth mark reading {@code never}.
+ * maximum from 56 to 60, and leaves every warmth mark reading {@code never}. That is still true at
+ * this session's higher threshold, and more so.
  *
  * <p><b>That is LNK's failure caught two sessions before it would have shipped.</b> LNK set skill
  * gates from 35 to 205 against an observed maximum affinity of 32; zero players ever reached the
  * lowest one and nobody noticed for months, because nothing in that codebase could answer "what do
  * players actually earn". The owner ruled the axis at the close of session 08 against the table:
- * <b>trust</b>, which does not decay, so it only ever climbs. The third resident crosses 20 on day
- * <b>28</b>.
+ * <b>trust</b>, which does not decay, so it only ever climbs.
+ *
+ * <p><b>The third resident crosses on day 41 — re-measured at session 15, when the threshold rose
+ * from 20 to 28.</b> The figure this file carried was <i>day 28 at trust 20</i>, taken on the same
+ * plan, and it was a figure nothing could re-derive once the number under it moved. It can now:
+ * {@code Reports.dayTheThirdResidentCrossed} answers at any mark rather than only at a mark on
+ * {@code DialogueStats.LADDER}. On one kindness a day over a hundred in-game days the first
+ * resident of nine arrives on day 15, the third on day 41, and <b>the whole village never does</b>
+ * — where at 20 all nine were there by day 100.
  *
  * <p>What that means for how residency <i>feels</i> is the part worth keeping: it is earned by
  * consistency rather than by intensity. You cannot buy your way in over an afternoon, because
@@ -60,12 +68,34 @@ public final class Residency {
     /**
      * How much trust one resident must hold. {@code DESIGN.md} §5's <i>known</i> band.
      *
-     * <p>Twenty, which is the first mark on {@link DialogueStats#LADDER} and therefore the number
-     * every report session 07 and 08 produced has already been read against. A threshold this file
-     * invented would be a threshold nobody had measured; this one has a day attached to it — 28,
-     * one deed a day, nine residents, thirty-five percent witnessing.
+     * <h3>It was twenty until session 15, and the provenance changed with the value</h3>
+     *
+     * <p>Twenty was <i>the first mark on {@link DialogueStats#LADDER}</i>, which is why every report
+     * sessions 07 and 08 produced had already been read against it. <b>That argument is void at
+     * twenty-eight and is not merely reworded</b>: 28 is not on the ladder and never will be, because
+     * {@code LADDER} is the instrument's scale rather than the mechanic's — see its own javadoc. A
+     * threshold that moved the ruler with it would make every table in this ledger describe a
+     * different world from the one before it.
+     *
+     * <p>So the provenance is a different measurement, and it is the one the owner asked for at the
+     * close of session 13: <b>three in-game days to a discount is too fast.</b> Days to this
+     * threshold are {@code ceil(threshold / allowance)} — trust does not decay, and one day is worth
+     * at most one personality-scaled {@link Bond#DAILY_CAP} —
+     * and {@code PersonalityDistributionTest.whatEachTrustThresholdCosts} sweeps that over the real
+     * generator: <b>20 gives a median of 3 days and 24 also gives 3</b>, so twenty-four moves only
+     * the tail and is a no-op on the complaint. <b>Twenty-eight is the smallest candidate that moves
+     * the median to four</b>, and it takes <i>inside three days</i> from 80.6% of a population to
+     * 23.6%.
+     *
+     * <p><b>And it costs something, measured rather than argued.</b> {@link Standing#of} tests
+     * warmth before trust, and {@link Standing#WARM_WARMTH} did not move — so past this session the
+     * two thresholds are eight points apart and a player who fills the allowance every day reaches
+     * {@code WARM} before {@code TRUSTED}. {@code StandingTest.theBandLadderIsWalked} is the table
+     * that says what that does, and the {@code TRUSTED} constant's own javadoc carries the reading.
+     * Do not move this number without re-running that test: it is the only thing in the build that
+     * can see the ladder change shape.
      */
-    public static final int TRUST_THRESHOLD = 20;
+    public static final int TRUST_THRESHOLD = 28;
 
     /** How many residents have to hold it. {@code DESIGN.md} §5's "≥3 residents". */
     public static final int RESIDENTS_REQUIRED = 3;

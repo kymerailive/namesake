@@ -112,9 +112,12 @@ public enum Errand {
     /**
      * <b>18:00 to dawn — the watch.</b> {@code DESIGN.md} §7 slots 6b and 7.
      *
-     * <p>The one errand that is <i>not</i> everybody: {@link DayPlan#standsWatch} selects about one
-     * villager in five off {@code boldness}, so a village of nine keeps two people out after the
-     * rest have gone in. The window opens on vanilla's own 12000 keyframe — the tick
+     * <p>The one errand that is <i>not</i> everybody: {@link DayPlan#standsWatch} selects
+     * <b>one villager in four</b> off {@code boldness} — {@code BOLDNESS_TO_WATCH = 20} measures
+     * 25.0% over 4,536 real personas — so a village of nine keeps 2.2 people out after the rest
+     * have gone in, against §7's ruled two. <i>(This said "one in five" until session 15. The
+     * comment moved, not the constant: the number is measured and both {@code DESIGN.md} and
+     * {@code /namesake debug dayplan} already said one in four.)</i> The window opens on vanilla's own 12000 keyframe — the tick
      * {@code VILLAGER_DEFAULT} turns {@code IDLE} into {@code REST} — which is the boundary §7 calls
      * the 6a/6b line, and it runs to the end of the day.
      *

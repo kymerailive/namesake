@@ -44,7 +44,7 @@ import java.util.Set;
  *   <caption>what each mechanic costs a loaded villager, per tick</caption>
  *   <tr><th></th><th>the standoff (13)</th><th>an errand (14)</th></tr>
  *   <tr><td>who</td><td>one villager in four, in two slots</td>
- *       <td>everybody in two slots; one in five after dark</td></tr>
+ *       <td>everybody in two slots; one in four after dark</td></tr>
  *   <tr><td>held by</td><td>a <b>veto</b> — a memory read every tick and an erase every eighty</td>
  *       <td>an <b>activity swap</b> — vanilla's WORK package is not running, so nothing contests
  *           and there is nothing to decline</td></tr>
