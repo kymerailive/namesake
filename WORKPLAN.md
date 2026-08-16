@@ -32,6 +32,11 @@ Where any other document disagrees on sequence, this wins.
   **Twenty-five deliberate breakages, twenty-one red, and four found a guard that was not real** —
   including session 13's own guard on the residency alias, which this session's threshold move had
   quietly stopped making true. **Schema 8, unchanged for the fourth session running.**
+  **And the owner played it: *"Everything looks good on the playtest!"*** — which closes **nine feel
+  questions across three sessions in one sitting**, the largest single answer this project has had,
+  and turns `INDUSTRY_TO_WORK`, `BOLDNESS_TO_WATCH` and `TRUST_THRESHOLD` from measured into ruled.
+  **The exit criterion is still outstanding and deliberately so**: it names a stranger, and says the
+  owner may not stand in for one.
   Before that: session 14, **and a village now has a day rather than a morning.** At eleven
   o'clock six villagers who were ten blocks apart at six workstations are standing together at the
   bell — **47 blocks apart when the hour began and 15 when it was measured**; at noon each of them is
@@ -656,6 +661,17 @@ generations and keeps latency out of the interaction path entirely.
    distinguishes two settlements *of the same culture* beyond their survey and a ±10 jitter.
    Playtest again at session 15, and again before era 4–5, specifically for whether it is still
    working at the far end of a session rather than at the start of one.
+
+   **The second read passed — ruled by the owner, 2026-08-16 — and the risk still does not retire.**
+   Session 15 gave it a distinguisher the first read did not have: a villager's clothing is tinted by
+   their culture's palette, so **a second village now differs in what a player sees from thirty
+   blocks away** rather than only in what its residents are called and how they speak. That is
+   machine-checked besides — `AppearanceTest.everyCultureLooksDifferent` fails the build if two
+   cultures ever render the same colour, and the ungenerated neutral is held distinct from all six.
+   **What is still unmeasured is the only thing this risk is actually about: the failure is at hour
+   45 and both reads took minutes.** The slice ends at 15, so there is no session left to schedule it
+   against — it is carried as an unscheduled read rather than parked against a number that does not
+   exist.
 4. ~~**Traits have no consumer yet.**~~ **Retired 2026-08-14 — the weight table landed.**
    `Personality.scale` reads all eight axes and multiplies what a deed is worth by them; the same
    loaf is +2 warmth to a suspicious smith and +5 to a warm innkeeper, and `PersonalityTest` fails
@@ -6934,8 +6950,16 @@ whether that reads as *earned* or as *grindy*** — and if it is grindy, 24 is t
   it worse**: three feedings against forty-one in-game days, where it was three against twenty-eight.
 - **Standing risk 3 is not measured this session and has no scheduled home.** Its failure is at hour
   45 and nothing in a sixteen-session slice reaches hour 45.
-- **The exit criterion is outstanding.** The machine-checked half passed; arranging a stranger is the
-  owner's, and neither the author of this session nor the owner may stand in for one.
+- **The exit criterion is outstanding, and the owner's playtest did not close it.** The
+  machine-checked half passed and the owner ruled all nine feel questions good — but the criterion
+  names **a stranger**, and says in as many words that neither the author of this session nor the
+  owner may stand in for one. What is closed is the half that was always the owner's; what is open is
+  the half that was always the point.
+- **Nine feel questions are closed and the constants behind them are ruled rather than measured.**
+  `INDUSTRY_TO_WORK = 12`, `BOLDNESS_TO_WATCH = 20`, `Residency.TRUST_THRESHOLD = 28`, the standoff
+  offsets, the culture palettes, the eight clothing shapes and the 0.9375 scale. **A future session
+  that wants to move one of those is changing something a person has read back**, which is a
+  different act from changing a number nobody has seen. See the playtest section above.
 - **The board probe will not answer twice about the same screen, and the reason is worth carrying
   rather than the fix.** A race that had been won since session 11 was lost the first time the client
   got slower — four render passes per villager was enough. Session 13 ruled that a slow machine is a
@@ -6944,6 +6968,51 @@ whether that reads as *earned* or as *grindy*** — and if it is grindy, 24 is t
   `BoardProbe.answer().isPresent()` call sites were repaired by that one change rather than by three.
 - `DeedBus.witnessScan`, `DeedBus.emit` and `Gossip.drain` **still have meters pointed at nothing**,
   unchanged and for the unchanged reasons.
+
+#### The playtest — and nine feel questions closed in one sitting
+
+**The owner played it at the close of the session and ruled: *"Everything looks good on the
+playtest!"*** That is the largest single answer this project has had. Nine questions were open across
+three sessions and all nine are closed, in the affirmative, and the constants behind them stop being
+provisional:
+
+| open since | question | ruled | the constant it was gating |
+|---|---|---|---|
+| 13 | does five to eight blocks read as *standing about* rather than *lost*? | **yes** | `DayPlan.STANDOFF_OFFSETS` |
+| 13 | is one villager in four the right number of idlers? | **yes** | `INDUSTRY_TO_WORK = 12` |
+| 14 | does a village converging on its bell at eleven read as a market? | **yes** | `HAUL`'s destination |
+| 14 | does one in four reading `ON_WATCH` look like a watch? | **yes** | `BOLDNESS_TO_WATCH = 20` |
+| 14 | is the watch standing in the right place — the bell, not §7's perimeter? | **yes** | the post, and §7's refusal stands |
+| 15 | are villagers vanilla-sized? | **yes** | `VANILLA_SCALE = 0.9375` |
+| 15 | can you tell who works at what without a trade window? | **yes** | the eight clothing shapes |
+| 15 | does the culture tint make a second village read as somewhere else? | **yes** | `Culture.palette()` |
+| 15 | is the Notice Board findable without being told? | **yes** | `BoardSiting`, and §5's *no tutorial* |
+| 15 | does four in-game days to a discount read as *earned* rather than *grindy*? | **yes** | `Residency.TRUST_THRESHOLD = 28` |
+
+**Every one of those numbers came off an instrument rather than out of somebody's head**, and this is
+the first time the whole set has been read back by a person. `INDUSTRY_TO_WORK` is a population's
+p25; `BOLDNESS_TO_WATCH` is the mark that leaves two of nine out; `TRUST_THRESHOLD` is the smallest
+candidate that moved the median. **None of them moves.** The three of them a future session might be
+tempted to tune are now ruled rather than merely measured.
+
+**And two rulings that were refusals are confirmed rather than merely unchallenged.** §7 says the
+watch stands on the perimeter and session 14 refused it, because the edge of a village after dark is
+where the mobs are; it stands at the meeting point and it reads as a watch. §9's colormap ships as a
+CPU tint rather than a per-fragment lookup, and shadowed skin darkens without shifting hue; it reads
+as people.
+
+**What this does not close, and it is the whole of what session 15's criterion was rewritten to keep
+honest.** The owner is not the reader the exit criterion names. It says *a stranger* — somebody who
+has not been told what the mod does — and it says in as many words that neither the author of this
+session nor the owner may stand in for one. **The exit criterion remains outstanding**, and what has
+been ruled is the half that was always the owner's: that the thing feels right to somebody who knows
+what they are looking at.
+
+**Standing risk 3 gains a second read and is still not retired.** Its first was at session 03; this
+is the second, and it passed with a distinguisher the first did not have, because a second village
+now differs in what a player sees from thirty blocks away rather than only in what its villagers are
+called. **The failure it names still happens at hour 45**, and nothing in a sixteen-session slice
+reaches hour 45.
 
 #### The commit range
 
