@@ -40,8 +40,8 @@ Where any other document disagrees on sequence, this wins.
   **16,665 offset hashes and 2,382 governor calls** in a twelve-hundred-tick window and took the
   meter from 14.89 µs to 32.16, which is session 13's own regression re-introduced and caught by the
   instrument session 13 left pointed at it. **The breakage pass found three guards that were not
-  real** and two were mine. **478 unit tests, 186 harness assertions in `setup` and 41 in `verify`**,
-  and **schema 8, unchanged for the fourth session running.** The tavern is struck from §7 and parked
+  real** and two were mine. **478 unit tests, 185 harness assertions in `setup` and 41 in `verify`**,
+  and **schema 8, unchanged since session 12.** The tavern is struck from §7 and parked
   with the era ladder; the watch stands at the bell rather than on the perimeter, because the edge of
   a village after dark is where the mobs are.
   Before that: session 13, **and you can tell who works by looking.** At nine in the morning
@@ -6098,7 +6098,15 @@ category.
 
 #### The schema did not move
 
-**Schema 8, unchanged, for the fourth session running.** An activity is behaviour rather than state:
+**Schema 8, unchanged since session 12** — and it is written as a date rather than as an ordinal
+because the ordinal had already drifted and this session made it worse. Schema 7 landed at 09 and
+session 10 called itself the first unchanged session; schema 8 landed at 12, so 13 is the first and
+14 is the second. Session 13's log says *"the second session running"* and its own status line says
+*"third"*; this session first wrote *"fourth"*. **Two corrections to what was pushed an hour ago:
+that ordinal, and the setup phase's assertion count, which is 185 rather than 186** — the verdict
+file has 186 lines and the first of them is the `RESULT` header, which is exactly the kind of
+off-by-one that comes of counting a file instead of counting the thing. An activity is behaviour
+rather than state:
 the roster is rebuilt from the entity-load hook, the destination is a vanilla memory, and who stands
 watch is one comparison on a trait already on disk. `DayPlanTest.theDayPlanIsDerived` fails the build
 if anything in `net.namesake.day` ever declares a codec, and nothing added this session does. The
