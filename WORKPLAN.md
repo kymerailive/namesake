@@ -3,7 +3,48 @@
 **The ledger.** What happens next, in order, with exit criteria. Read first, update last.
 Where any other document disagrees on sequence, this wins.
 
-- **Status:** session 13 complete, **and you can tell who works by looking.** At nine in the morning
+- **Status:** session 14 complete, **and a village now has a day rather than a morning.** At eleven
+  o'clock six villagers who were ten blocks apart at six workstations are standing together at the
+  bell — **47 blocks apart when the hour began and 15 when it was measured**; at noon each of them is
+  at their own hearth and none is asleep in it; at one o'clock they are all back in vanilla's `WORK`;
+  and at six, when the schedule sends the village to bed, **one villager in four does not go**, and
+  the other four are asleep in their own beds. **The highest-risk session in the plan cost the budget
+  nothing.** An errand hour measures 15.68 µs against a labour hour's 15.56 and a night's 14.81, so
+  **the peak did not move** — and the *engine's* own cost falls by 0.56 ms of whole tick, because a
+  villager in `ERRAND` runs three behaviours where a villager in `WORK` runs eleven. **The parachute
+  was on the table and was not taken**, because the risk class turned out cheaper than the thing it
+  protects: an errand costs the plan *nothing* per tick after the tick it begins, where the veto that
+  would replace it costs a write and an erase per villager per tick beyond Manhattan nine.
+  **`addActivitySafely` finally has a reason written down, and it is not tidiness.**
+  `Villager.refreshBrain` replaces the whole `Brain` with `copyWithoutBehaviors()` — every activity
+  registration gone — and one of its five callers is **every load from disk**. So the activity is
+  re-established **on demand**, and the wipe is detected by effect rather than remembered by a flag:
+  `setActiveActivityIfPossible` consults exactly the map the wipe drops, so *the activation failing
+  is the wipe*. Zero per-tick cost, and it covers the four callers that fire no event. **And vanilla
+  will not let a mod make an `Activity` at all** — the constructor is private and public only under
+  NeoForge's own access transformer — which turns out not to matter: across all 6,316 source files of
+  1.21.1, `BuiltInRegistries.ACTIVITY` is mentioned **twice** and `Brain.getActiveActivities()` has
+  **no callers**, so an activity is a map key whose name nothing reads, and `ERRAND` borrows one of
+  the seventeen a villager brain never claims. **`DESIGN.md` did not say what the deactivation
+  watchdog is for, and now it does: an `ERRAND` with no schedule exit is a second bell lock, and it
+  would have been ours.** Four layers, and the one that matters does not depend on the plan's own
+  bookkeeping being right — a villager running `ERRAND` that the plan cannot account for is put back
+  on vanilla's schedule without being asked how they got there. **The harness plants a stray errand
+  behind the plan's back and watches that layer end it**, and it also **reproduces the bell lock at
+  last** — six villagers, a rung bell, no bed within thirty-two blocks, all six deadlocked and all
+  six released a minute later, which is session 13's owed leg paid on its first run. **Three defects
+  the leg found, and the first would have shipped**: an errand window could be marked served by a
+  villager who was never given one, because the point of interest it walks to is absent for a few
+  ticks after a chunk load — five villagers of six lost a whole hour with every precondition true.
+  **And the profiler found a fourth**, which was the fix for the third: an unbounded retry cost
+  **16,665 offset hashes and 2,382 governor calls** in a twelve-hundred-tick window and took the
+  meter from 14.89 µs to 32.16, which is session 13's own regression re-introduced and caught by the
+  instrument session 13 left pointed at it. **The breakage pass found three guards that were not
+  real** and two were mine. **478 unit tests, 186 harness assertions in `setup` and 41 in `verify`**,
+  and **schema 8, unchanged for the fourth session running.** The tavern is struck from §7 and parked
+  with the era ladder; the watch stands at the bell rather than on the perimeter, because the edge of
+  a village after dark is where the mobs are.
+  Before that: session 13, **and you can tell who works by looking.** At nine in the morning
   three villagers of six are at their lecterns, working audibly and restocking their counters, and
   the other three are standing five to eight blocks away doing nothing at all — **not one of them
   reached `WorkAtPoi.start`, and not one of their counters restocked**, measured after every
@@ -6171,3 +6212,212 @@ workstations, and a run on one read 13.76 ms of whole tick against this run's 5.
 
 **The budget therefore stands at ~5.95 µs, unspent by this session, and session 15 does not inherit a
 debt.** What it does inherit is a number that has not been taken on a quiet machine since session 13.
+
+#### Rule 3: eighteen deliberate breakages, and three of them found a guard that was not real
+
+Sessions 09 through 13's discipline kept — the failing test's **name** captured rather than the
+build's exit status, a row whose edit matched nothing **refused**, and only the one file each row
+broke restored, never `git checkout -- .`.
+
+| Breakage | Result |
+|---|---|
+| the borrowed activity key changed to one the villager brain does register | **3 red**, including *the activity key ERRAND borrows is one a villager brain never registers* |
+| `UpdateActivityFromSchedule` put back into the `ERRAND` package | **NOTHING FAILED** — see below |
+| a job-site behaviour put into the `ERRAND` package | **NOTHING FAILED** — see below |
+| the look behaviour taken out, so an errand is worse than vanilla | **Red.** Same test, after the repair |
+| `addActivitySafely` registers on every entry instead of once per brain | **Red.** *addActivitySafely survives the wipe that every chunk load performs* |
+| `addActivitySafely` stops registering, so the wipe is never repaired | **Red.** Same test, other end |
+| the watch threshold raised past the observed maximum | **Red.** *the boldness distribution, and the share each candidate threshold sends on watch* |
+| the watch threshold dropped until half the village is out at midnight | **Red.** Same test, other end |
+| the errand gate stops checking for a bell memory | **2 red**, including *an errand is only ever begun from somewhere it is safe to leave* |
+| the errand gate stops checking whether they are asleep | **2 red.** Same pair |
+| the errand gate lets a villager be taken out of any activity at all | **2 red.** Same pair |
+| the watch window opened at 6a instead of on vanilla's 12000 keyframe | **Red.** *the errand table* |
+| a labour slot handed an errand, so both mechanics steer one villager | **Red.** *no slot is both a labour slot and an errand slot* |
+| the vigil moved off vanilla's own keyframe | **Red.** *the vigil is vanilla's 12000 keyframe* |
+| `HAUL` no longer needs a workstation | **Red.** *the errand table* |
+| the errand table stops being read at all | **Red.** *the errand table* |
+| **the errand retry left unbounded** | **NOTHING FAILED** — see below |
+| the retry bound set to zero, so a late point of interest costs the window | **Red**, after the repair |
+| a nitwit at eleven o'clock retried instead of served | **NOTHING FAILED**, and correctly — see below |
+
+**Fifteen red, three `NOTHING FAILED`, no refusals, and the tree clean at the end. Two of the three
+were repaired and the third is honest.**
+
+1. **The `ERRAND` package test read runtime class names, and they are the wrong thing to read.** Most
+   of vanilla's behaviours are built by `BehaviorBuilder.create(...)`, which returns an anonymous
+   `OneShot` — so `UpdateActivityFromSchedule.create()` and `StrollToPoi.create()` produce objects
+   whose class is **neither of those names**, and which are indistinguishable from each other. Both
+   rows put a forbidden behaviour into the package and both stayed green. The test now reads the
+   method's **compiled body** with `MethodBody`, which is where the claim actually lives, and it also
+   asserts the three behaviours the package must keep — so the negatives cannot pass over an empty
+   method. This repository already reads bytecode to hold two invariants it could not otherwise
+   reach; this is the third.
+2. **Nothing at all held the retry bound**, which is the number the profiler had just spent an hour
+   pricing. Removing it entirely was green, because the only instrument that can see it is
+   deliberately not in CI. It is `Steering.keepAsking` now, and its ceiling is a **literal** rather
+   than `ERRAND_ATTEMPTS` — session 13's patience test read the constant it was testing and a
+   patience of zero passed it.
+3. **And the third is a `NOTHING FAILED` that should stay one.** Serving a nitwit's window rather
+   than retrying it is an optimisation once the bound exists — it saves seven villagers eight
+   governor calls each per window and changes nothing a player or a test can see. It is kept for the
+   saving and recorded as not load-bearing, rather than dressed up in a guard that would only be
+   testing that the line is still there.
+
+**And the pass itself cost something worth writing down.** The script restores each row with
+`git checkout -- <file>`, which restores from **HEAD** — so the first row silently discarded an
+uncommitted repair made two minutes earlier, and the two rows after it reported `COMPILE` against a
+file that had been rolled back under them. *"Commit before you break things"* has been in this
+ledger since session 09; this is the first time it has been the breakage script rather than the
+change that ate the work.
+
+#### What the exit criterion actually showed — and which clause is whose
+
+The brief asked for this table specifically, the way sessions 09, 12 and 13's logs did. The criterion
+as **rewritten at the open of this session** — see the session 14 block above for why the clause it
+replaced measured the wrong thing — is *"the at-a-glance test passes, minus the tavern, and the
+profiler at ninety-six loaded shows the mod inside its budget at every hour the plan does work in."*
+That is seven clauses and they do not all belong to the same instrument.
+
+| clause | machine-checked? | whose |
+|---|---|---|
+| **09:00 — everyone at a workstation except those eight blocks away** | **yes, and unchanged.** Session 13's leg still runs first in the same fixture and still passes: three of three industrious villagers reached `WorkAtPoi.start`, none of three lazy ones did, and the restock is measured off the offer use counts. Session 14 does not touch a labour slot, and `DaySlotTest.theTwoMechanicsDoNotOverlap` is what says it cannot start to. | the feel of it is still session 13's two open questions, below |
+| **11:00 — roads fill with sacks moving one direction** | **yes, and the assertion is the crowd rather than a radius.** The six stood **47 blocks apart when the slot began and 15 when it was measured**; all six were running `ERRAND`; not one was within `WorkAtPoi`'s 1.73 m of their own workstation. The *sack* is `ShowTradesToPlayer`, which is vanilla's and needs a player watching. | **whether a village converging on its bell reads as a market is the owner's** |
+| **12:00 — hearths fill** | **yes, and against each villager's own `HOME` rather than against the bed this leg placed** — which bed a villager claims is vanilla's decision. Six of six at their own hearth, none asleep in it. | — |
+| **15:00 — a ring at the bell** | **the half that is ours, yes; the ring itself is vanilla's and untouched.** What is checked is that the plan *has no opinion* there: `COMMONS` is not in `DaySlot.mayCarryAnErrand` and not in `isLabour`, and a unit test holds that the two sets are disjoint and that they are §7's own four rows. Nothing in this session can reach that hour. | — |
+| **17:00 — the tavern lights up** | **not built, and ruled rather than dropped.** Struck from §7 and deferred to the era ladder at 24–27. See the ruling below. | **the owner's, if they want it back sooner** |
+| **20:00 — streets empty but for the watch** | **yes, and it is a pair of claims rather than one.** Two of two bold villagers on watch, awake, at the post — *and the other four asleep in their own beds*, because two villagers out is only a watch if the rest of the village is in. The **perimeter** half is not built and is ruled below. | **whether two people at a bell at midnight reads as a watch is the owner's** |
+| **and the mod is inside its budget at every hour the plan works in** | **yes, measured, and it is the clause the session was rewritten around.** See the profiler section: the peak did not move. | — |
+
+**And two clauses that are not in the criterion but would have made it meaningless if they were
+false**, both machine-checked and both new: **the watchdog closes every errand at the slot boundary
+and hands the villager back to vanilla's own schedule**, and **an errand begins again on a brain that
+a reload has wiped** — six of six, on a save written by a previous launch, which is the only place
+the `refreshBrain` claim can be tested at all.
+
+#### The owner's questions, and what is put back to them
+
+Everything below is a judgement about how a village *reads*, which no assertion in this repository can
+have an opinion about. It is put back rather than decided, in the order it will be seen.
+
+1. **Does a village converging on its bell at eleven o'clock read as a market?** The mechanic is that
+   everybody with a workstation walks to the meeting point and stands there for an hour. It is
+   deliberately the same destination vanilla uses at fifteen o'clock, two hours later, so the two
+   gatherings are told apart by what happens after them rather than by where they are. If that reads
+   as one long gathering rather than as two, the fix is `HAUL`'s destination and nothing else.
+2. **Does one villager in four reading `ON_WATCH` look like a watch or like a village that would not
+   go to bed?** Twenty is the measured mark for §7's *two of nine*; twenty-five gives 1.8 and thirty
+   gives 1.3.
+3. **Is the watch standing in the right place?** §7 says *the perimeter*; it stands at the meeting
+   point, and the reason is refused rather than forgotten — see the ruling below.
+4. **And session 13's two are still outstanding and are unchanged by this session**: whether five to
+   eight blocks reads as *over there*, and whether one villager in four is the right number of
+   idlers. The script is in the session 13 log. This session's playtest script is below and can be
+   run in the same sitting.
+
+#### The playtest script, checked against the source before it was written down
+
+**Launch:** `.\gradlew.bat :fabric:runClient` from `C:\MCA Reborn Rework`, no `-Pharness`. A plain
+`runClient` is **not muted**. Creative, and find a village with a bell, beds and villagers who have
+jobs.
+
+**Eleven o'clock.** `/time set 5000`, then stand where you can see two or three workshops and the
+bell. Wait a few seconds and `/namesake debug dayplan`. The `posture` column reads `HAULING` for
+everybody with a workstation. **The question is whether the village emptying into its middle reads as
+a market.**
+
+**Noon.** `/time set 6000`. `AT_HEARTH`, and they go to the bed vanilla gave them. **The question is
+whether the houses filling reads as lunch rather than as bedtime** — nobody sleeps, deliberately.
+
+**One o'clock.** `/time set 7000`. Everybody goes back to work, which is the watchdog. If anybody is
+still standing in the square, that is the bug this session was most afraid of and is worth telling me
+about.
+
+**Six o'clock.** `/time set 12000` and wait a minute of real time. Most of the village goes indoors;
+one in four does not. `/namesake debug dayplan` reads `ON_WATCH` for them. **The question is whether
+two people at the bell at midnight reads as a watch.**
+
+**Four things that will look like bugs and are not.**
+
+- **`NO_JOB` at eleven o'clock.** *You carry what you made*, so a nitwit and an unemployed villager
+  have nothing to haul and are left to vanilla. They still go home at noon.
+- **A villager who does not move at eleven o'clock.** Check `/namesake debug dayplan` — if the row
+  reads `HAULING` they are on their way; the walk is slow on purpose.
+- **Nobody holding anything.** `ShowTradesToPlayer` is what puts goods in a villager's hand and it
+  only fires when a player is close and looking. It is also invisible until session 15 swaps the
+  renderer.
+- **Do not ring the bell**, for session 13's reason. The plan now refuses to begin an errand for
+  anybody carrying a bell memory, so a rung bell makes the whole village stand still until the
+  minute-long repair opens it.
+
+#### The three rulings this session owed, and what each one costs
+
+**1. The parachute was not taken, and the reason is that the risk class turned out to be cheaper than
+the thing it protects.** The ledger has offered since session 00 to merge slots 2+3 and delete this
+activity, *"at the cost of the midday economy being invisible and the village going quiet at
+18:00"*, and the owner's instruction was to take it if `addActivitySafely` and the watchdog cost more
+than that. **They cost less than the alternative did.** `addActivitySafely` is nine lines and runs
+only at a slot crossing; the watchdog's expensive layers are behind a path gate that already existed;
+and the activity is what makes an errand cost *nothing* per tick, where the veto that would replace
+it costs a write and an erase per villager per tick beyond Manhattan nine. **Deleting the activity
+would not have removed a cost — it would have moved one onto the tick loop and lost two hours of the
+day with it.** The one thing the parachute would genuinely have avoided is the class of bug this
+session found three of, and all three were found by a leg rather than by a player.
+
+**2. The tavern is struck from §7's at-a-glance test and deferred to the era ladder.** There is no
+tavern in this mod: no building types, no interiors, no institutions, and the era ladder is sessions
+24–27, outside the sixteen-session slice. 17:00 is `HEARTH`'s first hour — slot 6a — whose steering
+is *none*, **so striking it costs no mechanic and no code**; what it costs is a line of the at-a-glance
+test, and that is the point of ruling it out loud. The alternative was to build something and call it
+a tavern, which is the shape both reference codebases died of. `WORKPLAN.md`'s after-the-slice table
+carries it against 24–27 so it comes back with the buildings rather than being forgotten.
+
+**3. And 20:00's *two torches on the perimeter* is built as two people, not as two torches, and not
+on the perimeter.** The torch is a block this mod does not place — session 10 put every block it lays
+behind a switch and this one would light a village it has no business lighting. **The perimeter is
+refused for a stronger reason: the edge of a village after dark is where the mobs are.** Standing
+somebody's villagers out there to satisfy a legibility law is this mod spending a player's village on
+a picture, and a watchman who is killed by a zombie because of a place we chose is session 13's
+*"costing that villager their profession because of a place we chose"* with a worse ending. The post
+is the meeting point — inside, lit, where the golem walks. Two consequences are named rather than
+discovered: a villager who never sleeps stops contributing to iron golem spawning, which needs
+`LAST_SLEPT` inside a day, and a village of nine loses two of its contributors; and the watch is the
+one part of the day plan that keeps a villager out of bed, so a player who wants them all indoors
+turns it off by lowering nothing — there is no config yet, and session 15 owns the config.
+
+#### Carried into session 15
+
+- `$env:JAVA_HOME` still must be pinned to JDK 21. Kill the dev client between runs, and delete
+  `<loader>/run/saves/namesake_attachbet` before a `setup`. Read the verdict file rather than
+  Gradle's exit status. **And delete `<loader>/run/saves/namesake_profiler` before a profiler run** —
+  a reused profiler world costs its villagers their workstations, and one read 13.76 ms of whole tick
+  against a fresh world's 5.13 for the same cell.
+- **The absolute budget number has not been taken on a quiet machine since session 13.** The
+  comparison between hours is sound and says the peak did not move; the absolute on this session's
+  runs is three times session 13's for strictly less work, and the instrument's own floor moved with
+  it. `.\gradlew.bat :fabric:runClient -Pprofile=hours` is sixteen minutes and four cells.
+- **`PersonaService.personaOf` runs per villager per seven ticks for anybody not yet generated**, and
+  it is a registry lookup. It is session 13's code and it is the most likely candidate for the gap
+  between that session's 4.78 µs and this session's 15.56 µs at the same cell — the profiler's
+  fixture villagers are ungenerated for the first few thousand ticks of a run, and a real save's are
+  too, for a few seconds after a chunk load. Worth a counter before it is worth a fix.
+- **The watch keeps one villager in four out of bed all night, and two consequences are named rather
+  than measured.** A villager who never sleeps stops contributing to iron golem spawning, which needs
+  `LAST_SLEPT` inside a day; and there is no way to turn the watch off, because there is no config
+  yet. **Session 15 owns the config** and this belongs in it beside the standing split and
+  `Residency.TRUST_THRESHOLD`.
+- **`Errand.ACTIVITY` borrows a vanilla activity key rather than registering one**, and the whole
+  argument is in that field's javadoc. If a future session ever does need a real registry entry — an
+  addon wanting to add its own errand, say — it costs an access transformer for `:common`, an access
+  widener for `:fabric`, and nothing on NeoForge, which already ships one.
+- **The two feel questions session 13 left are still open and are unchanged by this session**, and
+  three more are opened above. All five can be run in one sitting; both scripts are in the logs.
+- **`DESIGN.md` §7's *17:00, the tavern lights up* is struck and parked against sessions 24–27.** It
+  is in the after-the-slice table so it comes back with the buildings rather than being forgotten.
+- `DeedBus.witnessScan`, `DeedBus.emit` and `Gossip.drain` **still have meters pointed at nothing**,
+  unchanged and for the unchanged reasons. `Steering.onServerTick` has one that is pointed at
+  something, and it earned its keep twice this session.
+- **`DESIGN.md` §5's second route being much the cheaper of the two** is still open and still not
+  this session's.
+- **Session 15 also owes `Residency.TRUST_THRESHOLD` rising to 28 and the standing split**, both
+  ruled earlier and both unchanged by this session. See the session 13 log for the measured table.

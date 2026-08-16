@@ -732,6 +732,16 @@ same four hundred people all loaded. A virtual record is **~10,000× cheaper** t
 villager, not the ~100× this section guessed; that margin is headroom for a payload, not licence to
 spend it.
 
+**A per-tick budget is a claim about the most expensive HOUR — added at session 14.** A tick happens
+at one time of day, and the day plan does entirely different work at nine in the morning (one
+villager in four vetoed at a workstation) than at eleven (everybody on an errand). Session 13 froze
+the profiler's clock at 09:00 for every cell and would therefore have priced session 14 at zero, with
+perfect confidence. The `hours` phase measures one population at three hours and nothing else, and
+what it found is that **the peak does not move**: an errand hour costs the same as a labour hour on
+our own meter, because an errand costs *nothing* per tick after the tick it begins. The **engine's**
+cost falls by about half a millisecond over the same three cells, which is a thousand times the whole
+budget — a villager in `ERRAND` runs three behaviours where a villager in `WORK` runs eleven.
+
 **400 is a record count, not an entity count.** Seven real generated villages produced 52 personas,
 a median of nine each, and nowhere were more than **eleven** villagers loaded at once — so 400
 records is the state of a save after roughly fifty villages. It stays as the record target and as
