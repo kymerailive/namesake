@@ -257,6 +257,22 @@ public final class ProfilerHarness {
             // answers it in five minutes.
             return List.of(new Cell("400 loaded, MC profiler recording", 16, 25, 0, false, true));
         }
+        if ("hours".equals(PHASE)) {
+            // ONE POPULATION, THREE HOURS, and nothing else. Session 14's whole budget question is
+            // whether the *peak* moved, which is a comparison between hours at one population — and
+            // the eleven-cell run that answered it first took forty minutes, during which this
+            // machine was also building and testing. Two cells of that run executed the same
+            // do-nothing path and read 1.65 µs and 0.735 µs, which is a 2.2x spread on identical
+            // work and is the instrument saying its own floor had moved. `sections` exists for the
+            // same reason one question at a time deserves its own phase.
+            return List.of(
+                    new Cell("idle, no villagers", 0, 0, 0, false, false),
+                    new Cell("96 loaded + 304 records at 09:00 (LABOUR_I)", 8, 12, 304, true, false),
+                    new Cell("96 loaded + 304 records at 11:00 (HAUL)",
+                            8, 12, 304, true, false, ERRAND_MIDDAY),
+                    new Cell("96 loaded + 304 records at 21:00 (NIGHT)",
+                            8, 12, 304, true, false, ERRAND_NIGHT));
+        }
         if ("vanilla".equals(PHASE)) {
             return List.of(
                     new Cell("idle, no villagers", 0, 0, 0, false, false),
@@ -311,12 +327,12 @@ public final class ProfilerHarness {
             }
             if ("world".equals(PHASE)) {
                 runPopulation(server);
-            } else if ("vanilla".equals(PHASE) || "namesake".equals(PHASE)
+            } else if ("vanilla".equals(PHASE) || "namesake".equals(PHASE) || "hours".equals(PHASE)
                     || PHASE.startsWith("sections")) {
                 runMeasurement(server);
             } else {
                 Namesake.LOGGER.error("[profile] unknown phase '{}'; expected vanilla, namesake, "
-                        + "sections, sections-live or world", PHASE);
+                        + "sections, sections-live, hours or world", PHASE);
                 record(false, "unknown phase '" + PHASE + "'");
                 finish(server, false);
             }
@@ -418,9 +434,16 @@ public final class ProfilerHarness {
                 await(3000);
             }
             case 5 -> {
-                if (waiting(server, () -> settled(server), "the villagers to load and take jobs")) {
+                if (waiting(server, () -> settled(server),
+                        "the villagers to load, take jobs and find the bell")) {
                     return;
                 }
+                // AND ONLY NOW THE HOUR THIS CELL IS ABOUT. See populate() for why they settle at
+                // mid-morning first whatever hour is being measured.
+                level.setDayTime(cell.dayTime());
+                record(settled(server), "SETTLED '" + cell.name() + "': the villagers were employed "
+                        + "and holding a meeting point before the clock was moved to "
+                        + cell.dayTime());
                 windowStartTick = server.getTickCount() + WARM_UP_TICKS;
                 await(WARM_UP_TICKS + 400);
             }
@@ -524,9 +547,16 @@ public final class ProfilerHarness {
 
     /** Rebuilds the world to match a cell: this many villagers at these sites, these records. */
     private static void populate(MinecraftServer server, ServerLevel level, Cell target) {
-        // Before the villagers, so the ones spawned into this cell resolve their first activity
-        // against the hour being measured rather than against the previous cell's.
-        level.setDayTime(target.dayTime());
+        // MID-MORNING WHILE THEY SETTLE, WHATEVER HOUR THE CELL MEASURES — and the reason is
+        // session 13's frozen clock arriving from the other side. A villager spawned at 21:00
+        // resolves to REST on its first brain tick, and `Activity.WORK` is registered with
+        // `JOB_SITE VALUE_PRESENT` while `GoToPotentialJobSite` refuses to run outside IDLE, WORK
+        // and PLAY — so it can never take a job, never acquire a meeting point, and the cell
+        // measures a village of unemployed sleepers with perfect confidence. The first run of the
+        // `hours` phase did exactly that: 0 of 96 employed at night and 89 of 96 OFF_DUTY at eleven
+        // o'clock, in a cell whose whole purpose is the mechanic those villagers were not running.
+        // The clock is moved to the cell's own hour in stage 5, once they have settled.
+        level.setDayTime(LABOUR_MORNING);
         // Every mob, not just the villagers. Villagers with beds and jobs spawn iron golems, and a
         // teardown that only removed villagers left the golems behind — so each cell inherited
         // every golem the cells before it had produced, and the second launch inherited the first
@@ -1129,7 +1159,16 @@ public final class ProfilerHarness {
         long employed = SUBJECTS.stream()
                 .filter(v -> v.getVillagerData().getProfession() != VillagerProfession.NONE)
                 .count();
-        return employed >= SUBJECTS.size() * 80 / 100;
+        // AND A MEETING POINT, added at session 14. Two of the three errands walk to the bell, and
+        // `AcquirePoi` writes that memory on its own schedule — so a cell that began measuring
+        // before it arrived would report an errand mechanic that never fired, which is the most
+        // confident wrong number this instrument can produce. Session 04's own rule: a measurement
+        // is not evidence until the thing being measured has been shown to be running.
+        long haveTheBell = SUBJECTS.stream()
+                .filter(v -> v.getBrain().hasMemoryValue(MemoryModuleType.MEETING_POINT))
+                .count();
+        return employed >= SUBJECTS.size() * 80 / 100
+                && haveTheBell >= SUBJECTS.size() * 80 / 100;
     }
 
     private static void configure(MinecraftServer server, ServerLevel level, ServerPlayer player) {

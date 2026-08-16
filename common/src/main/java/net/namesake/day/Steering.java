@@ -336,6 +336,11 @@ public final class Steering {
         private BlockPos errandTarget;
         /** Cached with the persona: does this villager stand watch. See {@link DayPlan#standsWatch}. */
         private boolean watches;
+        /** The window the retries below are counted against, so they reset when it changes. */
+        private DaySlot attemptedSlot;
+        private boolean attemptedVigil;
+        /** How many times the plan has tried and failed to begin an errand in that window. */
+        private int attempts;
         /**
          * Cached with the persona: this villager's own crossing of {@link DaySlot#VIGIL_BEGINS_AT}.
          *
@@ -507,9 +512,20 @@ public final class Steering {
             // so the hash is skipped. In steady state that is every villager on every tick, and
             // the offset is paid only inside the sixty-four ticks after a boundary where it means
             // anything.
-            DaySlot slot = tracked.servedSlot == clockSlot
-                    ? clockSlot
-                    : DayPlan.slotFor(tracked.persona, dayTime);
+            DaySlot slot;
+            if (tracked.servedSlot == clockSlot) {
+                slot = clockSlot;
+            } else {
+                slot = DayPlan.slotFor(tracked.persona, dayTime);
+                if (Profiling.ENABLED) {
+                    // The one number that says whether the short-circuit above is still doing its
+                    // job. It should be a handful a tick inside a spread and ZERO the rest of the
+                    // day; a villager who is never marked served pays this hash on every tick for
+                    // ever, which is the 2.4 µs session 13 found and the shape session 14 nearly
+                    // reintroduced by leaving a window unserved.
+                    Meters.count("Steering.slotFor recomputed (the offset hash)");
+                }
+            }
 
             // The second half of the served state, and it costs a boolean field read for the four
             // villagers in five who never stand watch and for the twenty hours a day that are not
@@ -683,6 +699,12 @@ public final class Steering {
      */
     private static void enterSlot(ServerLevel level, LevelState levelState, Tracked tracked,
                                   DaySlot slot, boolean vigil) {
+        if (Profiling.ENABLED) {
+            // Behind the governor, so at most eight a tick — but a window left unserved is retried
+            // every time the villager's path gate opens, and each retry is a registry lookup. This
+            // is what says whether the retry is a trickle or a treadmill.
+            Meters.count("Steering.enterSlot calls");
+        }
         // The one place the cached persona is refreshed. See Tracked.
         PersonaService.personaOf(tracked.villager)
                 .filter(Persona::isGenerated)
@@ -719,6 +741,16 @@ public final class Steering {
         Errand errand = slot.mayCarryAnErrand()
                 ? DayPlan.errandFor(tracked.persona, slot, vigil)
                 : null;
+        if (errand != null && errand.needsAJob() && jobSiteOf(tracked.villager) == null) {
+            // NOTHING TO CARRY, AND IT IS PERMANENT FOR THIS WINDOW — which is the distinction the
+            // profiler had to make for us. A nitwit at eleven o'clock will not acquire a workstation
+            // and haul from it inside the same hour, so this is *served*: the plan has looked and has
+            // nothing to say, exactly as it has nothing to say about a diligent villager. Treating it
+            // as "not yet" instead cost 16,665 offset hashes and 2,382 governor calls in a
+            // twelve-hundred-tick window, because seven villagers of ninety-six were asked again
+            // every seven ticks for an hour.
+            errand = null;
+        }
         if (errand != null && !mayEnter(errand, tracked.villager)) {
             // NOT MARKED SERVED, for session 13's own reason one slot along. A villager who is
             // hiding, asleep, trading or a tick short of the activity switch is not a villager who
@@ -732,7 +764,24 @@ public final class Steering {
         tracked.standoff = null;
         tracked.gaveUp = false;
 
+        if (slot != tracked.attemptedSlot || vigil != tracked.attemptedVigil) {
+            tracked.attemptedSlot = slot;
+            tracked.attemptedVigil = vigil;
+            tracked.attempts = 0;
+        }
+
         if (errand != null) {
+            if (++tracked.attempts > ERRAND_ATTEMPTS) {
+                // ASKED EIGHT TIMES OVER THREE SECONDS AND THERE IS STILL NOWHERE TO SEND THEM.
+                // The window is marked served and the villager is left to vanilla for the rest of
+                // it. Without this bound the retry below is not a retry, it is a treadmill: the
+                // profiler measured the unbounded version at 32.16 µs against a ~5.95 µs budget,
+                // and every microsecond of the difference was villagers being asked a question that
+                // was never going to have a different answer.
+                tracked.servedSlot = slot;
+                tracked.servedVigil = vigil;
+                return;
+            }
             if (!beginErrand(level, levelState, tracked, errand)) {
                 // NOT MARKED SERVED, and this is session 13's own guard arriving at the next
                 // mechanic — found the same way, by a harness leg reading a number nobody could
@@ -799,6 +848,27 @@ public final class Steering {
      */
     private static final Set<Activity> ERRAND_FROM =
             Set.of(Activity.WORK, Activity.IDLE, Activity.REST);
+
+    /**
+     * <b>How many times the plan will ask before it accepts that a villager has nowhere to go this
+     * window.</b>
+     *
+     * <p>An errand needs a point of interest vanilla wrote, and after a chunk load that memory can
+     * be absent for a few ticks — {@code ValidateNearbyPoi} erases a point of interest whose chunk
+     * the POI manager has not caught up with and {@code AcquirePoi} puts it back. So a refusal is
+     * <i>not yet</i> rather than <i>never</i>, and the villager is left unserved and asked again the
+     * next time their own path gate opens.
+     *
+     * <p><b>Eight, because an unbounded retry is not a retry.</b> The first version of this had no
+     * bound at all, and the profiler priced it: thirteen villagers of ninety-six with nowhere to go
+     * cost <b>16,665 offset hashes and 2,382 governor calls</b> in a twelve-hundred-tick window, and
+     * took {@code Steering.onServerTick} from 14.89 µs to 32.16 µs — which is session 13's own 2.4 µs
+     * regression, re-introduced by the fix for a different defect and caught by the instrument
+     * session 13 left pointed at exactly this. Eight attempts through the path gate is about three
+     * seconds of grace, which is far longer than a point of interest takes to come back, and after
+     * it the window is served and the villager is left to vanilla.
+     */
+    private static final int ERRAND_ATTEMPTS = 8;
 
     /**
      * <b>Whether it is safe to put this villager on an errand right now — six clauses, as one pure

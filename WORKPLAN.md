@@ -6063,3 +6063,111 @@ watch is one comparison on a trait already on disk. `DayPlanTest.theDayPlanIsDer
 if anything in `net.namesake.day` ever declares a codec, and nothing added this session does. The
 schema-8 archives at `C:\MCA Reborn Rework\.archives\schema8-session12` were not needed and are
 untouched. **Two exemptions remain — `fear` and `debt`, both at 16 — and no new one was opened.**
+
+#### What the harness leg found that nobody asked it — and one of the three would have shipped
+
+Three defects, all found by the same leg on its first three runs, and the first is the one that
+matters.
+
+**1. An errand window could be marked served by a villager who was never given one.** The reload leg
+read *one of six villagers was sent on an errand*, and every precondition printed beside it was true:
+generated persona, right slot, right errand, `may begin true`, destination present, job site present.
+Nothing in the mod could say why — which is why `Steering.trackedState` exists now.
+
+The cause is **session 13's own guard arriving at the next mechanic**. An errand needs two brain
+memories vanilla supplies, and **both can be absent for a few ticks after a chunk load**:
+`ValidateNearbyPoi` (CORE, priority 0) erases a point of interest whose chunk the POI manager has not
+caught up with, and `AcquirePoi` puts it back a moment later. `enterSlot` marked the window served
+anyway, so `crossed` was false for ever after and those villagers lost **the whole window**, silently.
+`beginErrand` now returns whether it began, and a window that did not begin is left unserved so the
+villager is asked again the next time their own path gate opens.
+
+**It would have shipped**, and it would have been invisible: a player walking into a village at
+eleven o'clock would see most of it go to the market and two or three villagers stand at their
+benches, which is indistinguishable from the mechanic working on a village with two nitwits in it.
+Session 13's version of this cost the most industrious of the lazy villagers their standoff for one
+tick; this one cost five villagers of six an hour, and both were found by a leg reading a number
+nobody could explain rather than by a review.
+
+**2. An errand issued one walk target and never re-issued it.** `MoveToTargetSink` erases
+`WALK_TARGET` the moment it decides it has arrived, and villagers push each other — so a run had two
+villagers standing on the same block three blocks short of their beds for the rest of the hour, which
+from outside is §7's *one intent, one place* failing quietly. `Steering.nudgeTheErrand` re-issues,
+behind the path gate, **only while the walk target is absent** — so whatever a villager is walking to
+right now is theirs and this only speaks when nothing is — and it gives up on vanilla's own
+`CANT_REACH_WALK_TARGET_SINCE`, for session 13's reason: a villager asked for ever to reach somewhere
+they cannot eventually loses their job site to `tooLongUnreachableDuration`.
+
+**3. The watch poll asserted where they were standing before they had finished getting there.** The
+first version waited for the watch to be *in* `ERRAND` and for everybody else to be asleep — both
+true within a couple of hundred ticks, because the activity switches instantly and the sleepers walk
+six blocks to a bed while the watch walks twenty-five. So the leg read a mechanic that was working as
+one that had not moved. Session 13's lesson, one session later and in the same words: **poll for the
+condition the thing you are about to assert actually needs.**
+
+**And a fourth that is about the assertion rather than the code, kept because it took three
+attempts.** *"All six inside twelve blocks of the bell"* is an arrival radius somebody picked, and six
+villagers converging on one block push each other — one run had the sixth thirteen blocks out and
+still walking. *"Nearer the bell than their own workstation"* is scale-free but the fixture puts two
+of the six benches eleven blocks from the bell, so for those two it is a coin about which side of the
+crowd they ended on. What is neither is **how far apart the six of them are**: they stood **47 blocks
+apart when the slot began and 15 when it was measured**. That is §7's *the crowd is the message* as an
+assertion, it needs no radius, and a village standing where it started cannot satisfy it.
+
+#### The budget, and the ruling session 13 handed this session
+
+Session 13 ruled that *"the number is measured against ninety-six, the budget stays at ~5.95 µs, and
+session 14 pays"*, and offered three ways to pay: make `ERRAND` cheaper than the standoff, find
+another 2.4 µs, or come back and re-rule the budget with `ERRAND` priced beside it. **The first one
+happened, and it happened by construction rather than by tuning** — but the number that says so is a
+comparison between hours rather than an absolute, and the reason is worth stating before the table.
+
+**The exit criterion was rewritten before anything was built against it**, because *"a 400-record
+harness run"* measures the sweep, and the sweep is not where the day plan runs. And the profiler's
+`Cell` gained a **day time**, because *a per-tick budget is a claim about the most expensive hour*:
+session 13 froze the clock at 09:00 for every cell, where `ERRAND` does nothing at all, and one
+frozen hour would have priced this session at zero and been perfectly confident about it. A new
+`hours` phase runs one population at three hours and nothing else.
+
+**Fabric, `-Dnamesake.profile=hours`, AMD Ryzen 5 9600X, 1,200-tick windows after a 400-tick warm-up,
+96 loaded villagers + 304 swept records, on a machine that was also running this session's own
+tooling.**
+
+| cell | `Steering.onServerTick` | whole server tick | what the plan was doing |
+|---|---|---|---|
+| idle, no villagers | 2.34 µs | 1.95 ms | nothing — the instrument's floor |
+| **09:00 (`LABOUR_I`)** | **15.56 µs** | **5.13 ms** | 86 `WORKING` |
+| **11:00 (`HAUL`)** | **15.68 µs** | **4.57 ms** | **74 `HAULING`** |
+| **21:00 (`NIGHT`)** | **14.81 µs** | **4.26 ms** | **20 `ON_WATCH`** |
+
+**The peak did not move, and that is the whole answer.** An errand hour costs the same as a labour
+hour on our meter — 15.68 against 15.56, well inside the run's own noise — and *less* at night. It
+was never going to be otherwise once the activity was the mechanism: **an errand costs the plan
+nothing per tick after the tick it begins**, where a standoff pays a memory read on every tick of
+every steered villager.
+
+**And the engine's own cost goes down.** 5.13 → 4.57 → 4.26 ms of whole server tick, at the same
+population in the same world minutes apart: a villager in `ERRAND` runs three behaviours where a
+villager in `WORK` runs eleven, and **that 0.56 ms is a thousand times the entire budget this session
+was worried about spending.** The mod's whole per-tick cost is three hundredths of what the errand
+saves the engine.
+
+**What this run is not, stated plainly.** It is **not** a re-measurement of the absolute budget
+number, and the instrument says so itself: the idle floor read **2.34 µs where session 13's read
+1.47**, and a do-nothing tick in that same cell spiked to **84 µs**. Session 13's identical
+96-loaded cell read **4.78 µs** where this one reads 15.56 for strictly less work — the standoff
+never fired in this fixture at all. The three hour-cells agree with each other to within 6%, minutes
+apart, in one world, on one JIT; they do not agree with a run taken on a quiet machine a day earlier.
+**So this is a comparison between hours and it is a good one; the absolute is the owner's to re-take
+on a quiet machine**, with:
+
+```
+.\gradlew.bat :fabric:runClient -Pprofile=hours
+```
+
+— sixteen minutes, four cells, and `namesake-profile-report.txt` in `fabric/run/`. **Delete
+`fabric/run/saves/namesake_profiler` first**: a reused profiler world costs its villagers their
+workstations, and a run on one read 13.76 ms of whole tick against this run's 5.13 for the same cell.
+
+**The budget therefore stands at ~5.95 µs, unspent by this session, and session 15 does not inherit a
+debt.** What it does inherit is a number that has not been taken on a quiet machine since session 13.
