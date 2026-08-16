@@ -114,9 +114,24 @@ public final class RoadNetwork {
     private RoadNetwork() {
     }
 
-    /** Whether roads are laid as blocks at all. The graph does not care; see the class note. */
+    /**
+     * Whether roads are laid as blocks at all. The graph does not care; see the class note.
+     *
+     * <p><b>The config is the answer and the system property is an override, in that order</b> —
+     * session 15, which turned this switch into a setting a server operator can find. The property
+     * stays because it is what somebody types when a road has just appeared through their base and
+     * they want it stopped <i>now</i>, without a restart to write a file; it is deliberately the
+     * thing that can only say {@code off}, so a stale {@code -Dnamesake.roads=on} in somebody's
+     * launcher cannot silently overrule a config that says no.
+     *
+     * <p>Still read fresh on every call rather than snapshotted, which is what lets both of those be
+     * true at one read site.
+     */
     public static boolean materialises() {
-        return !"off".equalsIgnoreCase(System.getProperty(SWITCH, "on"));
+        if ("off".equalsIgnoreCase(System.getProperty(SWITCH, ""))) {
+            return false;
+        }
+        return net.namesake.config.Config.get().roads();
     }
 
     /**

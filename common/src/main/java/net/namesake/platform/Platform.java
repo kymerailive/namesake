@@ -21,6 +21,20 @@ public interface Platform {
     /** True in a development environment — used to gate expensive assertions and debug commands. */
     boolean isDevelopmentEnvironment();
 
+    /**
+     * Where the server operator's config file lives. Added at session 15, and it is the third method
+     * on this interface in fifteen sessions.
+     *
+     * <p>It earns a seam because the two loaders genuinely disagree and vanilla does not answer:
+     * {@code FabricLoader.getInstance().getConfigDir()} against {@code FMLPaths.CONFIGDIR.get()}.
+     * There is no vanilla path that means "the place mods put their config", which is the test the
+     * comment below sets.
+     *
+     * <p>The directory is <b>not</b> created here. A caller that needs it to exist creates it, so
+     * that a build which only ever <i>reads</i> a config never touches the disk.
+     */
+    java.nio.file.Path configDir();
+
     // Deliberately NOT here: the Minecraft version. It is available from vanilla via
     // SharedConstants.getCurrentVersion(), so putting it on this interface would mean writing and
     // maintaining the same answer twice for no benefit. Before adding a method here, check whether

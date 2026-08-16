@@ -550,6 +550,32 @@ class SocialValueLedgerTest {
                     // owes it a mechanic or a deletion.
                     "net.namesake.board");
 
+    /**
+     * <b>A consumer in one of these is not a consumer either, and the reason is different enough
+     * that folding it into {@link #DISPLAY_PACKAGES} would make that set's own javadoc false.</b>
+     *
+     * <p>Added at session 15, before a line of the config was written, following the precedent
+     * {@code net.namesake.dialogue} set at 09 and {@code net.namesake.board} at 11 — and then
+     * departing from it, because the objection is not the same objection.
+     *
+     * <p>A display package terminates a value in <i>something that shows it to a person</i>. A
+     * config file shows nothing to anybody; it is read, never written to. What disqualifies it is
+     * one level down: <b>a config value is never the subject of the comparison, it is the
+     * operand.</b> Rule 5 asks which {@code if} statement a field feeds. In
+     * {@code if (bond.trust() >= Residency.TRUST_THRESHOLD)}, trust's consumer is the method holding
+     * that {@code if}; the threshold is the constant on the right of it. Swapping a literal for a
+     * config lookup changes which number is compared and nothing whatever about what is doing the
+     * comparing — so a config method can never pay an exemption, and it cannot for a reason that has
+     * nothing to do with displays.
+     *
+     * <p>Saying that out loud costs one extra set and buys the thing session 03's {@code cultureId}
+     * lie is the reason for: an entry that is refused names <i>why</i> it was refused, and the two
+     * why's do not read the same. See {@code net.namesake.config.Config}'s javadoc for the full
+     * ruling, and {@code NeverCutTest.theConfigReadsNoRecord} for the half of it that has to be
+     * enforced from the other direction — the config must not read a record either.
+     */
+    private static final Set<String> OPERAND_PACKAGES = Set.of("net.namesake.config");
+
     private static final List<String> DISPLAY_SUFFIXES =
             List.of("Renderer", "Screen", "Hud", "Widget", "Commands", "Harness");
 
@@ -653,6 +679,12 @@ class SocialValueLedgerTest {
             assertFalse(DISPLAY_SUFFIXES.stream().anyMatch(consumerName::endsWith),
                     () -> entry.describe() + " names " + consumerName + ", which is a display "
                             + "class by its own name. DESIGN.md §1.");
+            assertFalse(OPERAND_PACKAGES.contains(entry.consumerClass().getPackageName()),
+                    () -> entry.describe() + " names " + consumerName + " as its consumer, but that "
+                            + "package supplies the OPERAND of a comparison rather than being its "
+                            + "subject. Rule 5 asks which `if` statement reads the field; a config "
+                            + "value is the constant on the right of one. Name the method holding "
+                            + "the `if` instead. See OPERAND_PACKAGES.");
 
             // MethodBody throws if the method has been renamed away, which is the point: a ledger
             // that drifts from the code is worse than no ledger.

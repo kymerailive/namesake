@@ -148,7 +148,7 @@ public final class Trading {
      * everything below it is arithmetic that should not need a server to check.
      */
     public static Applied applyTo(Villager villager, Standing standing) {
-        float multiplier = standing.priceMultiplier();
+        float multiplier = multiplierFor(standing);
         int moved = 0;
         int total = 0;
         for (MerchantOffer offer : villager.getOffers()) {
@@ -163,6 +163,28 @@ public final class Trading {
             }
         }
         return new Applied(standing, multiplier, moved, total, true);
+    }
+
+    /**
+     * The band's multiplier, or {@code 1.00} when it is a markup and the config has turned markups
+     * off. {@code DESIGN.md} §2's <i>gentle</i> preset, session 15.
+     *
+     * <p><b>A clamp rather than a scale, and the difference is the point.</b> Softening the ladder
+     * — say halving every deviation from 1.00 — would make the five ruled multipliers five different
+     * numbers on a gentle server, and every table in this ledger is written against the ruled ones.
+     * Clamping instead leaves {@code TRUSTED} at 0.90 and {@code WARM} at 0.75 exactly and takes
+     * {@code RESENTED} and {@code WARY} to 1.00: <b>you can still earn a discount and you can no
+     * longer be charged more.</b> The band itself is untouched, so the villager still says the
+     * hostile line and the board still says <i>will not forget</i> — what changes is the till.
+     *
+     * <p>{@link Standing#isAgainstYou()} is the test, which is the method session 12 wrote for
+     * exactly this question and left with one caller.
+     */
+    public static float multiplierFor(Standing standing) {
+        if (standing.isAgainstYou() && !net.namesake.config.Config.get().priceMarkup()) {
+            return Standing.NEUTRAL.priceMultiplier();
+        }
+        return standing.priceMultiplier();
     }
 
     /**

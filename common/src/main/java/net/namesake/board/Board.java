@@ -47,9 +47,11 @@ import java.util.UUID;
  * <i>is</i> the board. See {@link NoticeBoard} for the rest of that argument.
  *
  * <p>This object is built on GUI open, sent once, and dropped. It is never ticked, never cached and
- * never shared between two players, which is also the whole of how {@code DESIGN.md} §2's 80/20
- * personal split is honoured: <b>there is nowhere for one player's board to be stored, so there is
- * nowhere for another player to read it from.</b>
+ * never shared between two players, which is what makes {@code DESIGN.md} §10 step 7 structural
+ * rather than careful: <b>there is nowhere for one player's board to be stored, so there is
+ * nowhere for another player to read it from.</b> <i>(This cited §2's 80/20 standing split until
+ * session 15, which struck that row. The property was never the split's: a board is entirely
+ * personal because it is derived per viewer, and a blended shared term would have made it less so.)</i>
  *
  * <h2>What a village remembers, rather than what nine villagers each remember</h2>
  *

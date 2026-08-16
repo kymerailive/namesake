@@ -15,4 +15,9 @@ public final class FabricPlatform implements Platform {
     public boolean isDevelopmentEnvironment() {
         return FabricLoader.getInstance().isDevelopmentEnvironment();
     }
+
+    @Override
+    public java.nio.file.Path configDir() {
+        return FabricLoader.getInstance().getConfigDir();
+    }
 }

@@ -28,8 +28,9 @@ import java.util.List;
  * <p><b>Two players opening one lectern do not see each other's history</b>, and it is structural
  * rather than checked. {@code Board.of} takes the viewer's own UUID, nothing caches the result, and
  * this payload goes to one player through {@code VerbTransport.sendTo}. There is nowhere for a board
- * to be stored, so there is nowhere for the wrong person to read one from. {@code DESIGN.md} §2's
- * 80/20 personal split and session 12's step 7 both rest on that being true by construction.
+ * to be stored, so there is nowhere for the wrong person to read one from. {@code DESIGN.md} §10
+ * step 7 rests on that being true by construction. <i>(It also cited §2's 80/20 standing split
+ * until session 15, which struck that row rather than shipping it.)</i>
  */
 public record NoticeBoardPayload(List<BoardText.Line> lines) implements ClientboundPayload {
 

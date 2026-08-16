@@ -33,6 +33,11 @@ public final class Namesake {
                 SharedConstants.getCurrentVersion().getName(),
                 Platform.get().isDevelopmentEnvironment() ? ", dev" : "");
 
+        // Before anything reads a switch. It never throws: an unreadable config is defaults and a
+        // log line, because a mod that refuses to start over a text file is worse than one running
+        // on the settings it was designed against. See Config for why this is not a save.
+        net.namesake.config.Config.load();
+
         // Force the loader's persona attachment to register NOW, during mod init. Both loaders
         // discard attachment data whose id is unknown at the moment entity NBT is read, so leaving
         // this to a lazy ServiceLoader lookup on first use would drop every persona link on the

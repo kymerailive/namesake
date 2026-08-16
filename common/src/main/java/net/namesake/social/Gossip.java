@@ -324,6 +324,32 @@ public final class Gossip {
     }
 
     /**
+     * <b>Whether this story may leave the village it happened in.</b> Session 15's {@code gentle}
+     * preset, and the only place in the pipeline the config touches.
+     *
+     * <p>Always true by default. When {@code social.harmTravels} is off a harmful deed stops at the
+     * border: the village you hurt still remembers it in full, at full confidence, and moves its
+     * bonds exactly as it does today — <b>nothing about the deed is softened, only its reach.</b>
+     * That is deliberate. Softening the deed would mean two servers disagreeing about what
+     * {@code DeedType.KILLED_RESIDENT} is worth, and every number sessions 05 through 12 measured is
+     * written against one answer.
+     *
+     * <p>Kindness crosses either way, which is what keeps the thesis and §10's acceptance script
+     * intact on a gentle server: step 5 is one gift, and a gift is not harmful. What a gentle server
+     * loses is the other half of the same sentence — <i>a deed witnessed by one villager changes
+     * what a different villager says to you later</i> is still true, and it is now only ever true in
+     * your favour. That is a real reduction and it is what the setting is for.
+     *
+     * <p>Placed at the <i>border</i> rather than at the emit or the drain on purpose. Emitting less
+     * would change what the village that watched you holds; draining less would change what its own
+     * neighbours hear from each other about deeds we had nothing to do with. The border is the one
+     * edge where "how far did this travel" is the whole question.
+     */
+    public static boolean mayCrossABorder(Deed deed) {
+        return !deed.type().isHarmful() || net.namesake.config.Config.get().harmTravels();
+    }
+
+    /**
      * Whether a story is here yet. <b>The whole of session 10's delay, as one comparison.</b>
      *
      * <p>A story from elsewhere is a person on a road, and they arrive once the day has turned. That
@@ -426,7 +452,7 @@ public final class Gossip {
         // Only from home, which is what stops an undegraded copy setting out again from every
         // village it reaches. Both halves are argued in the class note.
         int crossed = 0;
-        if (home) {
+        if (home && mayCrossABorder(carried)) {
             for (int neighbour : Roads.neighboursOf(registry.settlements(), settlementId)) {
                 if (gossip.enqueue(neighbour, carried)) {
                     crossed++;

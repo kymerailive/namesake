@@ -15,4 +15,9 @@ public final class NeoForgePlatform implements Platform {
     public boolean isDevelopmentEnvironment() {
         return !FMLLoader.isProduction();
     }
+
+    @Override
+    public java.nio.file.Path configDir() {
+        return net.neoforged.fml.loading.FMLPaths.CONFIGDIR.get();
+    }
 }

@@ -127,6 +127,7 @@ public final class NamesakeFabric implements ModInitializer {
             SettlementRegistrar.onServerStopping();
             RoadNetwork.onServerStopping();
             Steering.onServerStopping();
+            net.namesake.board.BoardSiting.onServerStopping();
         });
 
         // Spends whatever settlement survey a villager's arrival asked for, a few chunks at a
@@ -139,6 +140,9 @@ public final class NamesakeFabric implements ModInitializer {
             SettlementRegistrar.onServerTick(server);
             Gossip.onServerTick(server);
             RoadNetwork.onServerTick(server);
+            // Session 15. Reads an int and returns on every tick but the handful where a player has
+            // just walked into a village that has no lectern in it. See BoardSiting.
+            net.namesake.board.BoardSiting.onServerTick(server);
             // Session 13. Deliberately at the END of the tick, and it is the whole mechanism: the
             // brain runs during the entity tick, so a walk target written by a vanilla behaviour
             // this tick is not acted on by MoveToTargetSink until the next one. This hook is the

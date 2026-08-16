@@ -198,6 +198,7 @@ public final class NamesakeNeoForge {
         SettlementRegistrar.onServerStopping();
         RoadNetwork.onServerStopping();
         Steering.onServerStopping();
+        net.namesake.board.BoardSiting.onServerStopping();
     }
 
     /**
@@ -212,6 +213,8 @@ public final class NamesakeNeoForge {
         SettlementRegistrar.onServerTick(event.getServer());
         Gossip.onServerTick(event.getServer());
         RoadNetwork.onServerTick(event.getServer());
+        // Session 15. See NamesakeFabric and BoardSiting.
+        net.namesake.board.BoardSiting.onServerTick(event.getServer());
         // Session 13, at the END of the tick — see NamesakeFabric for why that is the mechanism.
         Steering.onServerTick(event.getServer());
         AttachBetHarness.onServerTick(event.getServer());

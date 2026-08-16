@@ -259,7 +259,13 @@ public final class DayPlan {
      * argument for {@link #isDiligent}, at the other end of the day.
      */
     public static boolean standsWatch(Persona persona) {
-        return persona.trait(Persona.BOLDNESS) >= BOLDNESS_TO_WATCH;
+        // The config gate is on the WHOLE MECHANIC and never on the threshold, which is the line
+        // session 15 drew and the reason BOLDNESS_TO_WATCH is still a compile-time constant this
+        // file's own wall test can hold. An operator can say "everybody sleeps"; nobody can say
+        // "one villager in three", because that number was measured against the real generator and
+        // two servers disagreeing about it would make DESIGN.md §7's table describe neither.
+        return net.namesake.config.Config.get().nightWatch()
+                && persona.trait(Persona.BOLDNESS) >= BOLDNESS_TO_WATCH;
     }
 
     /**
