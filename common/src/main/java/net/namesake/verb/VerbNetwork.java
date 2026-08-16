@@ -32,6 +32,10 @@ public final class VerbNetwork {
         // ClientScreenSink.
         transport.registerClientbound(NoticeBoardPayload.TYPE, NoticeBoardPayload.CODEC,
                 ClientScreenSink::openNoticeBoard);
+        // Session 15's renderer swap. Same shape and the same reason: a dedicated server registers
+        // this handler too, so it must not name a client class. See ClientAppearanceSink.
+        transport.registerClientbound(AppearancePayload.TYPE, AppearancePayload.CODEC,
+                ClientAppearanceSink::accept);
     }
 
     public static VerbRuntime runtime() {

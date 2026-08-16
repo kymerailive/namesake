@@ -18,7 +18,14 @@ public final class NamesakeNeoForgeClient {
     private NamesakeNeoForgeClient() {
     }
 
-    static void register() {
+    /**
+     * @param modBus session 15's renderer swap needs it and nothing before session 15 did.
+     *               {@code EntityRenderersEvent.RegisterRenderers} and
+     *               {@code RegisterLayerDefinitions} are {@code IModBusEvent}s — <b>registering
+     *               them on the game bus fails silently</b>, which is a swap that compiles, runs,
+     *               logs nothing and draws vanilla villagers.
+     */
+    static void register(net.neoforged.bus.api.IEventBus modBus) {
         // Shared code sends packets through this sink so it never names a loader's client API.
         ClientPacketSink.install(PacketDistributor::sendToServer);
         // And opens screens through this one. It matters more here than on Fabric: NeoForge
@@ -26,6 +33,29 @@ public final class NamesakeNeoForgeClient {
         // named the screen directly would resolve a net.minecraft.client type on a machine that has
         // none. See ClientScreenSink.
         ClientScreenSink.installNoticeBoard(NoticeBoardScreen::open);
+        // Session 15's appearance packet, through the same kind of seam and for the same reason.
+        net.namesake.verb.ClientAppearanceSink.install(net.namesake.client.Appearances::accept);
+
+        // Session 15: DESIGN.md §9's renderer swap. On the MOD bus, deliberately — see this
+        // method's own parameter note.
+        modBus.addListener(net.neoforged.neoforge.client.event.EntityRenderersEvent
+                .RegisterLayerDefinitions.class, event -> {
+            event.registerLayerDefinition(net.namesake.client.VillagerLookModel.WIDE,
+                    () -> net.namesake.client.VillagerLookModel.mesh(false));
+            event.registerLayerDefinition(net.namesake.client.VillagerLookModel.SLIM,
+                    () -> net.namesake.client.VillagerLookModel.mesh(true));
+        });
+        modBus.addListener(net.neoforged.neoforge.client.event.EntityRenderersEvent
+                .RegisterRenderers.class, event ->
+                event.registerEntityRenderer(net.minecraft.world.entity.EntityType.VILLAGER,
+                        net.namesake.client.VillagerLookRenderer::new));
+
+        // The variant manifest and the two colormaps, re-read on every resource reload.
+        modBus.addListener(
+                net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent.class,
+                event -> event.registerReloadListener(
+                        (net.minecraft.server.packs.resources.ResourceManagerReloadListener)
+                                net.namesake.client.Appearances::reload));
 
         // Either scripted run needs a client that walks itself into a world. Registering this for
         // only one of them is how the profiler sat at the title screen saying nothing.

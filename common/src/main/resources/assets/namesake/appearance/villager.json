@@ -1,0 +1,44 @@
+{
+  "_comment": [
+    "DESIGN.md section 9: make skins datapack-loadable from v1 so community contributions cost",
+    "only a merge. This file is that promise. Adding a hair is one PNG under",
+    "assets/namesake/textures/entity/villager/hair/ and one line here - no Java change at all.",
+    "",
+    "Order does not matter, and appending does not reshuffle anybody. Selection is rendezvous",
+    "hashing over each id, so adding a variant moves about one villager in n onto it and leaves",
+    "every other villager in the world exactly as they were. A modulus would have repainted the",
+    "neighbour a player knew by her hair, because somebody's pull request was merged.",
+    "",
+    "A resource pack may override this file entirely. If it lists nothing usable, the mod's own",
+    "built-in set is used instead - a broken pack costs a player their variety, not their",
+    "villagers. See net.namesake.client.Appearances.Manifest.",
+    "",
+    "Clothing is deliberately NOT here: a clothing shape is chosen by profession rather than by",
+    "seed, because it is what re-earns vanilla's profession overlay after the renderer swap",
+    "deletes it. See Appearance.Clothing."
+  ],
+
+  "bodies": [
+    "wide",
+    "slim"
+  ],
+
+  "hair": [
+    "hair_1",
+    "hair_2",
+    "hair_3",
+    "hair_4",
+    "hair_5",
+    "hair_6"
+  ],
+
+  "faces": [
+    "face_1",
+    "face_2",
+    "face_3",
+    "face_4",
+    "face_5",
+    "face_6",
+    "face_7"
+  ]
+}

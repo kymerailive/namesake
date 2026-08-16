@@ -46,6 +46,13 @@ public final class NamesakeFabric implements ModInitializer {
         });
         ServerEntityEvents.ENTITY_UNLOAD.register((entity, level) -> Steering.onVillagerUnloaded(entity));
 
+        // Session 15. Nine bytes, once, at the moment a player starts watching a villager — which
+        // is the only tick on which the client needs to know and the loader has already worked out
+        // who is watching. Zero per-tick cost; see Appearances and DESIGN.md §9's ruling 7.
+        net.fabricmc.fabric.api.networking.v1.EntityTrackingEvents.START_TRACKING.register(
+                (trackedEntity, player) ->
+                        net.namesake.npc.Appearances.tell(player, trackedEntity));
+
         // Fires inside Mob.convertTo, before the new entity is added to the level. Covers both
         // villager -> zombie villager and the cure back, since both go through convertTo.
         ServerLivingEntityEvents.MOB_CONVERSION.register(

@@ -65,11 +65,19 @@ public final class NamesakeNeoForge {
         NeoForge.EVENT_BUS.addListener(LivingDeathEvent.class, NamesakeNeoForge::onDeath);
         NeoForge.EVENT_BUS.addListener(NamesakeNeoForge::onServerStopping);
         NeoForge.EVENT_BUS.addListener(ServerTickEvent.Post.class, NamesakeNeoForge::onServerTick);
+        // Session 15. See NamesakeFabric and DESIGN.md §9's ruling 7.
+        NeoForge.EVENT_BUS.addListener(
+                net.neoforged.neoforge.event.entity.player.PlayerEvent.StartTracking.class,
+                event -> {
+                    if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
+                        net.namesake.npc.Appearances.tell(player, event.getTarget());
+                    }
+                });
 
         if (FMLEnvironment.dist.isClient()) {
             // The class is only touched inside this branch, so a dedicated server never loads it
             // and never has to resolve net.minecraft.client.Minecraft.
-            NamesakeNeoForgeClient.register();
+            NamesakeNeoForgeClient.register(modBus);
         }
     }
 

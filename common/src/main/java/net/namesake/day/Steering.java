@@ -494,8 +494,15 @@ public final class Steering {
                 // vanilla until the settlement survey that was asked for on their arrival finishes.
                 // Behind the path gate so the lookup is a seventh of a villager a tick, not one.
                 if (DayPlan.pathGateOpen(tracked.persona, gameTime)) {
-                    PersonaService.personaOf(tracked.villager)
-                            .ifPresent(fresh -> tracked.persona = fresh);
+                    PersonaService.personaOf(tracked.villager).ifPresent(fresh -> {
+                        tracked.persona = fresh;
+                        // Session 15, and it costs nothing: this branch already exists, already runs
+                        // only for a villager that has not been generated, and stops running the
+                        // moment one has been. So the appearance packet goes out on exactly the tick
+                        // a villager stops being nobody, once, to whoever is watching. See
+                        // Appearances.announce for why the alternative was a per-tick sweep.
+                        net.namesake.npc.Appearances.announce(level, tracked.villager, fresh);
+                    });
                 }
                 continue;
             }
