@@ -628,7 +628,9 @@ the bell. 20:00 — streets empty but for the watch.
   and standing somebody's villagers out there to satisfy a legibility law is this mod spending a
   player's village on a picture. The watch stands at the meeting point — inside, lit, where the golem
   walks. What carries the line is the count and the contrast: at midnight these are the only two
-  people out, which no other hour of the day looks like.
+  people out, which no other hour of the day looks like. **Confirmed by the owner at the close of
+  session 15**, which is when overruling this document stopped being a judgement and became a
+  reading: two people at a bell at midnight reads as a watch.
 
 ### The transition wave
 

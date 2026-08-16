@@ -6885,7 +6885,7 @@ The criterion as **rewritten at the open of this session**. Five jobs, five inst
 | **2. Standing risk 3 — cultures at hour 45** | **no, and it is not measured this session.** The risk names **hour 45**; the criterion offers **minute 45**. They share a numeral and nothing else. **It has no scheduled home** — the slice ends here. What *is* newly machine-checked is a distinguisher it did not have: `everyCultureLooksDifferent` holds that no two cultures render the same clothing tint | **the owner's, unscheduled** |
 | **3. The art** | **that it is there and correct, yes; that it is good, no.** 4,096 personas × 7 cultures resolve to textures that exist; the manifest and the jar agree in both directions; every variant is reachable and none takes the village; the three proportion hooks are held; a village is photographed under the harness | **the owner's, on whether it looks right** |
 | **4. The config** | **yes, in full.** Missing key defaults, unknown key ignored, malformed value warns and defaults, `gentle` gates exactly what it documents and nothing else, every gate defaults on, no config key can reach a never-cut wall, and the schema layer cannot see the config at all | — |
-| **5. The five feel questions from 13 and 14** | **no, and not the stranger's:** every one needs `/time set` and `/namesake debug dayplan` | **the owner's, unchanged.** Both scripts are in the logs |
+| **5. The five feel questions from 13 and 14** | **no, and not the stranger's:** every one needs `/time set` and `/namesake debug dayplan` | **the owner's — and answered at the close, along with this session's own four.** All nine ruled good; see the playtest section below |
 
 **And two clauses that are not in the criterion but would have made it meaningless if false**, both
 machine-checked and both new: **the appearance packet reaches a real client through a real socket** —
@@ -7016,7 +7016,8 @@ reaches hour 45.
 
 #### The commit range
 
-`363192f..33745fe` plus this ledger commit, on `origin/main`. Six commits:
+`363192f..d9015fc` on `origin/main`. **Eight commits**, and the last two are after the close rather
+than part of it — which is why this table is written out rather than left as a range:
 
 | commit | what |
 |---|---|
@@ -7026,6 +7027,8 @@ reaches hour 45.
 | `e847ee6` | the renderer swap, twenty-five textures, and the colormap bug the colormap's own test found |
 | `43f9d6a` | the breakage pass, and the four guards that were not real |
 | `33745fe` | the four defects the leg found by being run, three of them in the instrument |
+| `2989b10` | a screenshot abandoned after five runs, and a coin found in session 14 by running the leg six times |
+| `d9015fc` | the owner's playtest: nine feel questions closed, three measured numbers become ruled ones |
 
 **One push went out red and is recorded rather than tidied away.** `43f9d6a` turned both harness
 jobs red on CI — the board-probe race above — and `33745fe` is the repair. The build-and-test job
