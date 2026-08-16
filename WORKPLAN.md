@@ -6421,3 +6421,16 @@ turns it off by lowering nothing — there is no config yet, and session 15 owns
   this session's.
 - **Session 15 also owes `Residency.TRUST_THRESHOLD` rising to 28 and the standing split**, both
   ruled earlier and both unchanged by this session. See the session 13 log for the measured table.
+
+#### The commit range
+
+`0c411b6..e305caf` plus this line, on `origin/main`. Six commits and one ledger commit:
+
+| commit | what |
+|---|---|
+| `0c411b6` | `ERRAND`, `addActivitySafely`, and the watchdog built before either |
+| `0ee8f31` | the errand day, the bell lock reproduced, and a profiler cell for each hour that costs |
+| `8861a1a` | the reload leg read one of six, and the reason was session 13's guard again |
+| `b413703` | the profiler priced an unbounded retry at 32 µs, which is session 13's own bug |
+| `e6a3316` | the breakage pass found two guards that were not real, and both were mine |
+| `e305caf` | `DESIGN.md` §7 and §8, and the tavern struck |
