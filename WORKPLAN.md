@@ -6816,13 +6816,38 @@ twice**, because they sat in front of a `stillWaiting` that returns early on its
 *an assertion before a poll is an assertion made once per poll.* The step is split so each has one
 poll at its top.
 
-**4. And the screenshot was theatre — twice.** `namesake-villagers-setup.png` was **the night sky
-above an empty village**, because a scripted client points wherever the last step left it, which was
-the far bell at midnight. The first repair — daylight, three blocks back, facing the villager — was
-still not enough: **a shot is grabbed on the client's next tick, and a teleport and a day-time change
-are packets**, so it photographed the frame before either arrived. It takes its own step now. This
-session put `run/screenshots/` on CI's upload path in the same commit; an empty picture that CI can
-hand you is worse than one it cannot.
+**4. And the dedicated villager screenshot was abandoned after five runs, which is the honest
+close rather than the tidy one.** `namesake-villagers-setup.png` came out as **the sky**, five times.
+Three real causes were found and fixed on the way — the shot was grabbed before the teleport packet
+arrived, then before the day-time packet arrived, then with the camera at the villager's feet plus
+0.6 against a player's 1.62 eye height, so aimed over their head. What is left after all three is a
+client that has just been sprinted sixty ticks and has not drawn the frame the server thinks it is
+in, and **chasing that is chasing the harness rather than the mod.**
+
+**It was removed rather than shipped**, because a picture of the sky filed under a villager's name is
+worse than no picture: it is precisely the theatre this session put `run/screenshots/` on CI's upload
+path to stop, and it would have been the first artifact anybody looked at. The visual evidence for
+the renderer swap already exists and already frames correctly — `namesake-errand-noon-setup.png` and
+its two siblings photograph six villagers on the swapped model, and they work because they are taken
+after a real wait rather than after a sprint. **A future session that wants a close-up should take it
+that way.**
+
+**5. And running the leg six times found a coin in session 14's own errand check.** The sixth run
+went red on `HAUL and 4 of 6 are closer to the bell than they were when the slot began` — an
+assertion of `moved >= size - 1` over six villagers pathing to one block, which had passed on the
+five runs before it and on both loaders in CI in between.
+
+**Its own failure message admits the exception it cannot bound** — *the one that may not be is
+whoever started nearest it* — and there can be two of those. Session 14 recorded the finding that
+kills it, three lines above it in the same method: <i>six villagers converging on one block push each
+other</i>, which is why the `arrived` count beside it is **logged rather than asserted**. This line
+had the same defect in a different form and kept its assertion.
+
+It is logged now, on that precedent. **What the criterion rests on is untouched**: the six of them
+stood 47 blocks apart when the slot began and 15 when it was measured, which is scale-free, needs no
+radius, and cannot be satisfied by a village standing where it started. *Do not assert a coin* has
+been in this ledger since session 08; this is the first time it was found by running something six
+times rather than by a runner.
 
 #### The schema did not move
 
@@ -6921,3 +6946,20 @@ whether that reads as *earned* or as *grindy*** — and if it is grindy, 24 is t
   unchanged and for the unchanged reasons.
 
 #### The commit range
+
+`363192f..33745fe` plus this ledger commit, on `origin/main`. Six commits:
+
+| commit | what |
+|---|---|
+| `066bed3` | the exit criterion, rewritten before a line was written, into five jobs and five instruments |
+| `7e1ea56` | `TRUST_THRESHOLD` 28, the band ladder measured, and `LADDER` ruled not to move with it |
+| `fa65e0a` | the first config, the never-cut walls held as compile-time constants, and a village that stands its own board up |
+| `e847ee6` | the renderer swap, twenty-five textures, and the colormap bug the colormap's own test found |
+| `43f9d6a` | the breakage pass, and the four guards that were not real |
+| `33745fe` | the four defects the leg found by being run, three of them in the instrument |
+
+**One push went out red and is recorded rather than tidied away.** `43f9d6a` turned both harness
+jobs red on CI — the board-probe race above — and `33745fe` is the repair. The build-and-test job
+was green on both. That is the second time this project has learned something from a runner it could
+not learn from this machine, and the first time the **cause** was on this machine all along: the race
+was lost locally too, on the very first run of the new leg.
