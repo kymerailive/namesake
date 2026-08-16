@@ -783,7 +783,7 @@ the entity) · **one 2D colormap PNG replaces every skin tone** (sample `melanin
 | Hair shapes, greyscale | 6 |
 | Clothing shapes, greyscale | 8 |
 | Face variants · eyes/blink | 7 |
-| **Total** | **~25** *(MCA ships 1,312)* |
+| **Total** | **25 exactly** *(MCA ships 1,312)* — shipped at session 15, and it is a budget rather than an estimate: `AppearanceTest.everyAppearanceResolves` counts the PNGs in the jar and turns the build red at 26 |
 
 Everything else is zero art: a Charter is a `written_book` with a data component; the Notice Board is
 a **vanilla `lectern` with no block entity at all** — session 11, and the reasoning is in §2's Notice
@@ -793,6 +793,14 @@ a sprite name that is wrong is a failure nothing catches until the screen is on 
 Author in **Blockbench**
 skin-edit mode. Make skins datapack-loadable from v1 so community contributions cost only a merge.
 **Do not use MCA's PNGs** — GPL-3.0 and individually contributed.
+
+**What session 15 actually shipped is twenty-five *generated* PNGs, and that is recorded rather than
+glossed.** Every one is a 64×64 player-skin layout drawn by arithmetic over the skin's own UV
+rectangles — which is why a face is one pixel off rather than one file wrong, and why the shading on
+a body is a rule instead of a brush stroke. They are not good art and they are not claimed to be.
+What they are is **the right shape**: each is a file a contributor can open in Blockbench's skin-edit
+mode and replace outright, with no code change and no other file touched. The set being data is what
+makes that a merge; the textures being a placeholder is what makes it worth doing.
 
 ### The seven rulings session 15 owed before the first PNG
 

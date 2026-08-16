@@ -21,7 +21,9 @@ public final class NamesakeFabricClient implements ClientModInitializer {
         // net.minecraft.client type. See ClientScreenSink.
         ClientScreenSink.installNoticeBoard(NoticeBoardScreen::open);
         // Session 15's appearance packet, through the same kind of seam and for the same reason.
-        net.namesake.verb.ClientAppearanceSink.install(net.namesake.client.Appearances::accept);
+        net.namesake.verb.ClientAppearanceSink.install(
+                net.namesake.client.Appearances::accept,
+                net.namesake.client.Appearances::forgetEverything);
 
         // Session 15: DESIGN.md §9's renderer swap. Two layer definitions rather than one, because
         // only PlayerModel.createMesh takes a slim flag — see VillagerLookModel.

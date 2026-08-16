@@ -485,7 +485,7 @@ public final class AttachBetHarness {
             case 30, 31, 32 -> runStandingBandCheck(server, level);
             case 33, 34, 35, 36, 37, 38 -> runDayPlanCheck(server, level);
             case 39, 40, 41, 42, 43, 44, 45, 46, 47 -> runErrandCheck(server, level);
-            case 48, 49, 50 -> runAppearanceCheck(server, level);
+            case 48, 49, 50, 51, 52, 53 -> runAppearanceCheck(server, level);
             default -> finish(server, true);
         }
     }
@@ -497,6 +497,61 @@ public final class AttachBetHarness {
 
     /** A lectern half a membership radius from the bell — far outside where one would be placed. */
     private static BlockPos farLectern;
+
+    /**
+     * Takes every lectern out of a village, so what follows is a village with no board.
+     *
+     * <p>Every one, rather than the one this file placed: by the time this runs, {@code BoardSiting}
+     * has already stood one up of its own accord — which the first version of this leg discovered by
+     * asserting against a village that had a board because the mechanism under test had worked.
+     */
+    /**
+     * Stands the player three blocks from an entity, facing it, so a screenshot has it in frame.
+     *
+     * <p>Trivial, and it is here because the alternative is not trivial at all: the first run of the
+     * villager screenshot photographed the night sky above an empty village, because a scripted
+     * client points wherever the last step left it. <i>The rows are not the screen</i> is only worth
+     * anything if the screen has the thing on it.
+     */
+    private static void lookAt(MinecraftServer server, ServerLevel level, Entity target) {
+        ServerPlayer player = player(server);
+        if (player == null) {
+            return;
+        }
+        double back = 3.0;
+        double angle = Math.toRadians(target.getYRot());
+        double x = target.getX() + Math.sin(angle) * back;
+        double z = target.getZ() - Math.cos(angle) * back;
+        double dx = target.getX() - x;
+        double dz = target.getZ() - z;
+        float yaw = (float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0);
+        // Standing on the ground beside them rather than floating at their feet plus a bit: a
+        // player's eyes are 1.62 above their feet, so `target.y + 0.6` put the camera above a
+        // villager's head and pitched it into the sky. Level with the chest, looking level.
+        player.teleportTo(level, x, target.getY(), z, yaw, 5.0F);
+    }
+
+    private static void clearEveryLectern(ServerLevel level, BlockPos bell) {
+        // Asked of the point-of-interest manager rather than by walking block states, because that
+        // is precisely the question BoardSiting.hasABoard asks — so this takes away exactly what
+        // that would have found, and a 96-block disc of block states at full height is fourteen
+        // million positions in one server tick.
+        List<BlockPos> lecterns = level.getPoiManager()
+                .getInSquare(holder -> holder.is(net.minecraft.world.entity.ai.village.poi.PoiTypes
+                                .LIBRARIAN),
+                        bell, net.namesake.settlement.Settlements.MEMBERSHIP_RADIUS,
+                        net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.ANY)
+                .map(record -> record.getPos().immutable())
+                .toList();
+        int cleared = 0;
+        for (BlockPos pos : lecterns) {
+            if (level.getBlockState(pos).is(Blocks.LECTERN)) {
+                level.setBlockAndUpdate(pos, Blocks.AIR.defaultBlockState());
+                cleared++;
+            }
+        }
+        Namesake.LOGGER.info("[harness] took {} lectern(s) out of the village at {}", cleared, bell);
+    }
 
     /**
      * <b>Two claims a unit test cannot have an opinion about, and one picture.</b>
@@ -522,49 +577,67 @@ public final class AttachBetHarness {
     private static void runAppearanceCheck(MinecraftServer server, ServerLevel level) {
         switch (step) {
             case 48 -> {
-                // The far village already has a lectern, because step 28 of the board check put one
-                // there. Take it away, so what is being tested is a village with NO board rather
-                // than a village that happens to have one.
+                // Every lectern within the far village's membership radius, gone — the one step 28
+                // stood up AND the one BoardSiting stood up for itself on the tick the player first
+                // walked in. What is being tested is a village with NO board, and the first version
+                // of this leg tested a village that had one because the mechanism it was testing had
+                // already worked. Then a restart's worth of forgetting, so the ordinary path runs.
                 if (awayBoard == null || farBell == null) {
                     record(false, "SITE the notice board check left no far village to work with");
                     advance(server, 5);
                     return;
                 }
-                level.setBlockAndUpdate(awayBoard, Blocks.AIR.defaultBlockState());
-                teleport(player(server), level, farBell.getX(), farBell.getY() + 1, farBell.getZ());
-                beginAwait(200);
-            }
-            case 49 -> {
-                // Poll for the condition the assertion actually needs — session 13's lesson and
-                // session 14's, in the same words. Breaking a block deregisters its point of
-                // interest through onBlockStateChange, and the POI manager is what BoardSiting asks.
-                if (stillWaiting(server, () -> !net.namesake.board.BoardSiting.hasABoard(level, farBell), false,
-                        "the far village's lectern to stop being a point of interest")) {
-                    return;
-                }
-                Settlement here = NpcRegistry.get(server).settlements()
+                Settlement far = NpcRegistry.get(server).settlements()
                         .containing(level.dimension().location(), farBell).orElse(null);
-                if (here == null) {
+                if (far == null) {
                     record(false, "SITE the far bell at " + farBell + " is not in a settlement");
                     advance(server, 5);
                     return;
                 }
-                record(!net.namesake.board.BoardSiting.hasABoard(level, farBell),
-                        "SITE the far village has no Notice Board within "
-                                + net.namesake.settlement.Settlements.MEMBERSHIP_RADIUS + " blocks of its bell");
-
-                boolean stood = net.namesake.board.BoardSiting.stand(level, here, farBell);
-                record(stood, "SITE the village stood a Notice Board up for itself");
-                sitedBoard = net.namesake.board.BoardSiting.site(level, farBell);
+                teleport(player(server), level, farBell.getX(), farBell.getY() + 1, farBell.getZ());
+                clearEveryLectern(level, farBell);
+                net.namesake.board.BoardSiting.reconsider(far.id());
+                beginAwait(400);
+            }
+            case 49 -> {
+                // And then WATCH, rather than calling stand() and asserting about the call. The
+                // claim worth making is not "this method places a lectern" — a unit test could very
+                // nearly make that — it is "a village a player walks into, that has no board,
+                // ends up with one, through the tick hook, with nobody asking it to".
+                if (stillWaiting(server,
+                        () -> net.namesake.board.BoardSiting.hasABoard(level, farBell), false,
+                        "the village to stand its own Notice Board up")) {
+                    return;
+                }
+                sitedBoard = null;
+                for (BlockPos pos : BlockPos.betweenClosed(
+                        farBell.offset(-net.namesake.board.BoardSiting.MAX_OFFSET, -4,
+                                -net.namesake.board.BoardSiting.MAX_OFFSET),
+                        farBell.offset(net.namesake.board.BoardSiting.MAX_OFFSET, 6,
+                                net.namesake.board.BoardSiting.MAX_OFFSET))) {
+                    if (level.getBlockState(pos).is(Blocks.LECTERN)) {
+                        sitedBoard = pos.immutable();
+                        break;
+                    }
+                }
+                record(sitedBoard != null, "SITE the village stood its own Notice Board up, on the "
+                        + "server tick, with nothing in this harness asking it to"
+                        + (sitedBoard == null ? "" : " — a lectern at " + sitedBoard + ", "
+                                + (int) Math.sqrt(sitedBoard.distSqr(farBell))
+                                + " block(s) from the bell"));
                 record(net.namesake.board.BoardSiting.hasABoard(level, farBell),
                         "SITE and it is a lectern the mod can find again, which is what makes "
                                 + "'has this village got a board' a question the world answers "
                                 + "rather than a flag");
 
-                // Idempotence, which is the whole of why nothing is persisted. Running again must
-                // be a no-op, because the lectern it would place is the lectern it looks for.
-                boolean again = net.namesake.board.BoardSiting.stand(level, here, farBell);
-                record(!again, "SITE running it a second time places nothing — a village gets one "
+                // Idempotence, which is the whole of why nothing is persisted. Asked again, from
+                // scratch, it must place nothing: the lectern it would stand up is the lectern it
+                // looks for.
+                Settlement far = NpcRegistry.get(server).settlements()
+                        .containing(level.dimension().location(), farBell).orElse(null);
+                boolean again = far != null
+                        && net.namesake.board.BoardSiting.stand(level, far, farBell);
+                record(!again, "SITE asked again it places nothing — a village gets one "
                         + "board, and re-running is a no-op rather than a second block");
 
                 // The radius that decides "has this village got one" is the radius that MAKES a
@@ -581,8 +654,14 @@ public final class AttachBetHarness {
                 if (sitedBoard != null) {
                     level.setBlockAndUpdate(sitedBoard, Blocks.AIR.defaultBlockState());
                 }
-                farLectern = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
-                        farBell.offset(net.namesake.settlement.Settlements.MEMBERSHIP_RADIUS / 2, 0, 0));
+                // At the bell's own height rather than the heightmap's, deliberately. A heightmap
+                // read forty-eight blocks out answers with the world floor for a chunk that is not
+                // loaded — RoadTrail's javadoc records a village built at y = −64 for exactly that —
+                // and the first run of this leg reported "153 blocks from the bell" because it had
+                // put its fixture a hundred and forty-five blocks down. A lectern in the air is a
+                // point of interest like any other, and this is a fixture rather than scenery.
+                farLectern = farBell.offset(
+                        net.namesake.settlement.Settlements.MEMBERSHIP_RADIUS / 2, 0, 0);
                 level.setBlockAndUpdate(farLectern, Blocks.LECTERN.defaultBlockState());
                 beginAwait(100);
             }
@@ -592,9 +671,15 @@ public final class AttachBetHarness {
                         "the distant lectern to register as a point of interest")) {
                     return;
                 }
-                int away = farLectern == null ? -1 : (int) Math.sqrt(farLectern.distSqr(farBell));
+                // Horizontal, because horizontal is what the radius means: Settlements.containing
+                // ignores y entirely and PoiManager.getInSquare is a square in x and z. The first
+                // run of this leg printed a 3D distance and reported 153 for a lectern 48 blocks
+                // out, which is a message that would have been read as a defect for ever.
+                int east = farLectern == null ? -1
+                        : (int) Math.sqrt(farLectern.distToLowCornerSqr(
+                                farBell.getX(), farLectern.getY(), farBell.getZ()));
                 record(net.namesake.board.BoardSiting.hasABoard(level, farBell),
-                        "SITE a lectern " + away + " blocks from the bell — far outside the "
+                        "SITE a lectern " + east + " blocks from the bell — far outside the "
                                 + net.namesake.board.BoardSiting.MAX_OFFSET + " a board is placed "
                                 + "within — still counts as this village's board, because "
                                 + net.namesake.settlement.Settlements.MEMBERSHIP_RADIUS
@@ -604,7 +689,14 @@ public final class AttachBetHarness {
                 record(far != null
                                 && !net.namesake.board.BoardSiting.stand(level, far, farBell),
                         "SITE and nothing is stood up beside a village that already has one");
-
+                beginAwait(200);
+            }
+            case 51 -> {
+                // Its own step, and that is a defect fix. The first run recorded every SITE line
+                // above TWICE, because they sat in front of a stillWaiting that returned early on
+                // its first pass — so the whole step re-ran and re-recorded. An assertion before a
+                // poll is an assertion made once per poll.
+                //
                 // The wire. A villager the player is standing next to is a villager the player is
                 // tracking, so the client has been told what it looks like — or the swap draws
                 // every villager in the world identically and nothing else in this session can say
@@ -639,7 +731,31 @@ public final class AttachBetHarness {
                                 + " face(s) out of the resource manager — DESIGN.md §9's "
                                 + "datapack-loadable set, from a real reload rather than a constant");
 
-                // Asserts nothing. See this method's own note: the rows are not the screen.
+                // Daylight, three blocks away, facing them — and then a step of its own to take the
+                // picture in, which is the part two runs were spent learning. A shot is grabbed on
+                // the client's NEXT tick, and a teleport and a day-time change are packets: asking
+                // for both and then photographing immediately photographs the frame before either
+                // arrived. Both earlier runs produced the night sky above an empty village.
+                level.setDayTime(1000);
+                lookAt(server, level, watched);
+                advance(server, 60);
+            }
+            case 52 -> {
+                // Aimed AGAIN, because sixty ticks of daylight is sixty ticks in which a villager
+                // walks off. The first aim is what makes the light and the ground right; this one
+                // is what puts the subject in the middle of the frame.
+                Villager near = level.getEntitiesOfClass(Villager.class,
+                                player(server).getBoundingBox().inflate(24))
+                        .stream().findFirst().orElse(null);
+                if (near != null) {
+                    lookAt(server, level, near);
+                }
+                advance(server, 3);
+            }
+            case 53 -> {
+                // Asserts nothing. WORKPLAN.md's sixth instrument: the rows are not the screen —
+                // a villager drawn as a magenta checkerboard, a culture tint that vanishes into the
+                // grass and a model at the wrong scale all look perfectly fine as strings.
                 BoardProbe.requestShot("namesake-villagers-" + phase());
                 advance(server, 40);
             }

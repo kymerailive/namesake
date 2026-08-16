@@ -4,14 +4,12 @@ import net.namesake.Namesake;
 import net.namesake.platform.Platform;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 
@@ -45,7 +43,7 @@ import java.util.Properties;
  * <p><b>And the one clause that would turn this back into a save is guarded rather than trusted:</b>
  * a config value must never decide how a persisted byte is <i>interpreted</i>. The moment it does,
  * a save written under one config becomes unreadable under another and hard rule 1 applies in full.
- * {@code ConfigTest.theSchemaLayerCannotSeeTheConfig} reads the bytecode of every class in
+ * {@code NeverCutTest.theSchemaLayerCannotSeeTheConfig} reads the bytecode of every class in
  * {@code net.namesake.npc} and fails if one of them mentions this package.
  *
  * <h2>Can a config value be rule 5's named non-display consumer? No, and the instrument is the
@@ -467,17 +465,4 @@ public final class Config {
                 "");
     }
 
-    /** Only for a test that wants a real file. Package-visible on purpose. */
-    static void writeTemplateTo(Path file) {
-        try {
-            writeTemplate(file);
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
-
-    /** Lower-cased key list, for a message. */
-    static String keysAsText() {
-        return String.join(", ", KEYS).toLowerCase(Locale.ROOT);
-    }
 }

@@ -139,10 +139,31 @@ public final class HarnessClient {
      * disagreement is reported with both numbers — because a run that says "the table is wrong"
      * without saying where costs a second six-minute launch to act on.
      */
+    private static NoticeBoardScreen answeredAbout;
+
     private static void answerTheBoardProbe(Minecraft minecraft) {
-        if (!(minecraft.screen instanceof NoticeBoardScreen board)) {
+        if (!(minecraft.screen instanceof NoticeBoardScreen board) || board == answeredAbout) {
+            // Session 15: it will not answer twice about the same screen, and that is a defect fix
+            // rather than a tidy-up.
+            //
+            // Opening a board is a server-side interaction that SENDS a packet; the screen changes
+            // whenever that packet arrives. So between `BoardProbe.request()` and the new screen
+            // there is a window in which the PREVIOUS board is still up — and this method used to
+            // answer with it. The far village's check then read the home village's rows: the same
+            // six residents, the same twenty-two deeds, and a name that was right for a village
+            // ninety-two blocks away.
+            //
+            // It had been a latent race since session 11 and session 15 is what lost it, by giving
+            // the client four render passes per villager to do between ticks. That is the ledger's
+            // own repeated lesson arriving a third time — POLL FOR THE CONDITION THE ASSERTION
+            // ACTUALLY NEEDS — and it is fixed here rather than at each of the three call sites,
+            // because "an answer is present" is the wrong question at every one of them.
+            //
+            // Identity is the right test: NoticeBoardScreen.open builds a new instance per payload,
+            // so a second board is never the same object as the first.
             return;
         }
+        answeredAbout = board;
         List<String> rows = new ArrayList<>();
         List<String> disagreements = new ArrayList<>();
         int widest = 0;

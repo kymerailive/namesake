@@ -1,6 +1,5 @@
 package net.namesake.client;
 
-import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.namesake.Namesake;
@@ -49,11 +48,14 @@ public final class Appearances {
     }
 
     /**
-     * How this villager is drawn, or {@code null} if the server has not said yet.
+     * How this villager is drawn. <b>Never null</b>, which is a decision rather than a convenience.
      *
-     * <p>A null is a real answer rather than an error: a villager whose tracking packet has not
-     * arrived, or one on a server that does not have this mod, has no appearance and the renderer
-     * says so by drawing the neutral. It is what makes the swap safe on a mismatched connection.
+     * <p>A villager whose tracking packet has not arrived yet, and a villager on a server that does
+     * not run this mod's server half, are both real states — and the honest answer to both is a whole
+     * appearance derived from seed zero and the ungenerated culture. Returning null would put a
+     * branch in the renderer for a case that happens on <i>every</i> connection to a vanilla server,
+     * and a renderer with a null check is a renderer that draws a missing texture the first time
+     * somebody forgets one.
      */
     public static Appearance.Look lookOf(int entityId, String professionKey) {
         AppearancePayload known = KNOWN.get(entityId);
@@ -92,11 +94,6 @@ public final class Appearances {
                 catalogue.bodies().size(), catalogue.bodies().size() == 1 ? "y" : "ies",
                 catalogue.hair().size(), catalogue.faces().size(),
                 skin == null || hair == null ? " — a colormap is missing, so tints are off" : "");
-    }
-
-    /** Installs the reload into whichever client is running. Both loaders call it. */
-    public static void reloadFrom(Minecraft minecraft) {
-        reload(minecraft.getResourceManager());
     }
 
     /** {@code namesake:textures/entity/villager/<path>.png}, the one place a path is built. */

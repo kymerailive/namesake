@@ -293,4 +293,23 @@ public final class BoardSiting {
     public static int pending() {
         return PENDING.size();
     }
+
+    /**
+     * Puts one settlement back in the queue. <b>For the harness, and it is here because the first
+     * version of that leg failed by fighting this class rather than watching it.</b>
+     *
+     * <p>A settlement is considered once per server run, so a leg that breaks a village's lectern to
+     * see one replaced gets nothing — correctly, and that is the shipped behaviour: <i>a player who
+     * breaks the board gets another one the next time the server restarts.</i> Without this the leg
+     * has to call {@link #stand} directly, which tests the placement and <b>not the thing that
+     * decides when to place</b>; and it raced the tick hook, because teleporting a player to the
+     * bell is exactly what loads the chunk this class is waiting for.
+     *
+     * <p>So the harness asks for a restart's worth of forgetting rather than reaching past the
+     * mechanism, and the leg then watches the ordinary path do the ordinary thing.
+     */
+    public static void reconsider(int settlementId) {
+        CONSIDERED.remove(settlementId);
+        knownRevision = -1;
+    }
 }

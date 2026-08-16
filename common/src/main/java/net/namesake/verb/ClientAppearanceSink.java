@@ -17,13 +17,32 @@ import java.util.function.Consumer;
 public final class ClientAppearanceSink {
 
     private static volatile Consumer<AppearancePayload> receiver;
+    private static volatile Runnable forget;
 
     private ClientAppearanceSink() {
     }
 
     /** Installed by each loader's client bootstrap. */
-    public static void install(Consumer<AppearancePayload> clientReceiver) {
+    public static void install(Consumer<AppearancePayload> clientReceiver, Runnable clientForget) {
         receiver = clientReceiver;
+        forget = clientForget;
+    }
+
+    /**
+     * Drops whatever the client is holding, when a server stops.
+     *
+     * <p>Through the sink rather than by naming the store directly, and it is not tidiness: the
+     * appearance store reaches {@code NativeImage} to read a colormap, and a dedicated server
+     * calling it by name would resolve a client-only class on a machine that has none. That is the
+     * failure {@code ClientScreenSink} exists for, arriving at a second surface.
+     *
+     * <p>A no-op on a dedicated server, because nothing installed one.
+     */
+    public static void forget() {
+        Runnable installed = forget;
+        if (installed != null) {
+            installed.run();
+        }
     }
 
     /** Called on the client's network thread by the transport. */

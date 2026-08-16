@@ -34,7 +34,9 @@ public final class NamesakeNeoForgeClient {
         // none. See ClientScreenSink.
         ClientScreenSink.installNoticeBoard(NoticeBoardScreen::open);
         // Session 15's appearance packet, through the same kind of seam and for the same reason.
-        net.namesake.verb.ClientAppearanceSink.install(net.namesake.client.Appearances::accept);
+        net.namesake.verb.ClientAppearanceSink.install(
+                net.namesake.client.Appearances::accept,
+                net.namesake.client.Appearances::forgetEverything);
 
         // Session 15: DESIGN.md §9's renderer swap. On the MOD bus, deliberately — see this
         // method's own parameter note.

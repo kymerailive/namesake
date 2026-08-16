@@ -6776,6 +6776,54 @@ and re-run; the fourth is honest.
    that route genuinely cannot follow a config. The version that *can* — making `priceMultiplier()`
    read it — was written as a row of its own and goes red on two tests.
 
+#### What the harness leg found that nobody asked it — and one had been latent since session 11
+
+Four defects, all found by running the leg rather than by reviewing it, and **only one of them is in
+this session's own code.**
+
+**1. A race in the board probe that has been latent since session 11, and this session is what lost
+it.** The far village's check read **the home village's rendered rows** — the same six residents, the
+same twenty-two deeds, and a place name right for a village a hundred and ninety-two blocks away. The
+server side was correct throughout: `0 thing(s) seen, 4 heard about` passed in the same run.
+
+Opening a board is a server-side interaction that **sends a packet**, so between
+`BoardProbe.request()` and the new screen there is a window in which the previous board is still up —
+and `HarnessClient` answered with it. `stillWaiting(() -> BoardProbe.answer().isPresent())` is the
+wrong question, at all three of its call sites: *an answer is present* is not *this board's answer is
+present*. **That is this ledger's own lesson arriving for the third time** — sessions 13 and 14 both
+wrote down *poll for the condition the assertion actually needs* — so it is fixed in the instrument
+rather than in the legs: the probe **will not answer twice about the same screen**, and
+`NoticeBoardScreen.open` builds a new instance per payload, so identity is the right test.
+
+Why now: this session gave the client four render passes per villager to do between ticks. **A race
+that had been won for four sessions was lost the first time the client got slower**, which is session
+13's *"the runner is a better place to find a race"* arriving from inside rather than from CI.
+
+**2. `BoardSiting` beat its own test.** The leg broke the far village's lectern to watch one be
+replaced — and teleporting the player to the bell is precisely what loads the chunk the tick hook is
+waiting for, so a board was standing again before the assertion ran. **The mechanism worked; the leg
+was driving it instead of watching it.** It now takes every lectern out through the point-of-interest
+manager — the same question `hasABoard` asks — asks `BoardSiting.reconsider` for a restart's worth of
+forgetting, and then waits for **the village to stand its own board up on the server tick with nothing
+in the harness asking it to.** That is a strictly stronger claim than the one that failed.
+
+**3. Two lines that passed while saying something false.** The run reported *"a lectern 153 blocks
+from the bell"* for a fixture placed 48 blocks east: a 3D distance where every radius in this
+mechanism is horizontal, and a fixture that had landed 145 blocks **down** because
+`getHeightmapPos` answers with the world floor for a chunk that is not loaded — the exact defect
+`RoadTrail`'s javadoc records a village being built at −64 for. And **every `SITE` line was recorded
+twice**, because they sat in front of a `stillWaiting` that returns early on its first pass:
+*an assertion before a poll is an assertion made once per poll.* The step is split so each has one
+poll at its top.
+
+**4. And the screenshot was theatre — twice.** `namesake-villagers-setup.png` was **the night sky
+above an empty village**, because a scripted client points wherever the last step left it, which was
+the far bell at midnight. The first repair — daylight, three blocks back, facing the villager — was
+still not enough: **a shot is grabbed on the client's next tick, and a teleport and a day-time change
+are packets**, so it photographed the frame before either arrived. It takes its own step now. This
+session put `run/screenshots/` on CI's upload path in the same commit; an empty picture that CI can
+hand you is worse than one it cannot.
+
 #### The schema did not move
 
 **Schema 8, unchanged since session 12**, for the fourth session running. Nothing this session builds
@@ -6863,6 +6911,12 @@ whether that reads as *earned* or as *grindy*** — and if it is grindy, 24 is t
   45 and nothing in a sixteen-session slice reaches hour 45.
 - **The exit criterion is outstanding.** The machine-checked half passed; arranging a stranger is the
   owner's, and neither the author of this session nor the owner may stand in for one.
+- **The board probe will not answer twice about the same screen, and the reason is worth carrying
+  rather than the fix.** A race that had been won since session 11 was lost the first time the client
+  got slower — four render passes per villager was enough. Session 13 ruled that a slow machine is a
+  better place to find a race than to measure one; this is the same effect arriving from *inside* the
+  mod. **Anything a future session adds to the client tick can lose another one**, and the two other
+  `BoardProbe.answer().isPresent()` call sites were repaired by that one change rather than by three.
 - `DeedBus.witnessScan`, `DeedBus.emit` and `Gossip.drain` **still have meters pointed at nothing**,
   unchanged and for the unchanged reasons.
 

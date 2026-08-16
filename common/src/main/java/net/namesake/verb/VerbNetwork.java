@@ -52,6 +52,11 @@ public final class VerbNetwork {
     public static void onServerStopping() {
         runtime.clear();
         ClientInteractionState.clear();
+        // Session 15's appearance map, for this method's own reason: in single player, leaving one
+        // world and opening another reuses the same process, so entries keyed on a network id from
+        // the old world would sit there being wrong about the new one. Through the sink, because a
+        // dedicated server runs this method too and must not resolve a client-only class.
+        ClientAppearanceSink.forget();
         Namesake.LOGGER.debug("Cleared open interactions and rate buckets for server shutdown");
     }
 }
