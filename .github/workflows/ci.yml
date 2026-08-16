@@ -122,7 +122,16 @@ jobs:
             exit 1
           }
 
-      - name: Upload harness logs
+      # Session 06's ruling, added to at 11 and paid for at 15: THE ROWS ARE NOT THE SCREEN.
+      # A right-aligned column that collides, a panel sliced in half, a villager rendering as a
+      # magenta checkerboard and a culture palette that vanishes into the grass all look perfectly
+      # fine as strings. Session 11 found three of its five defects by looking at a picture.
+      #
+      # run/screenshots/ was NOT on this path until session 15, which means every screenshot the
+      # harness has taken on a runner since session 11 was written to a disk that is deleted when
+      # the job ends. A screenshot leg whose output nobody can retrieve is theatre, and session 15
+      # adds one for the renderer swap — so the path moves with it.
+      - name: Upload harness logs and screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -130,5 +139,6 @@ jobs:
           path: |
             ${{ matrix.loader }}/run/logs/
             ${{ matrix.loader }}/run/namesake-harness-*.txt
+            ${{ matrix.loader }}/run/screenshots/
           if-no-files-found: warn
           retention-days: 7

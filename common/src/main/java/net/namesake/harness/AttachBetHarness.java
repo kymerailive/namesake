@@ -147,7 +147,7 @@ public final class AttachBetHarness {
     /**
      * How far the second village sits from the first. <b>Session 10's fixture.</b>
      *
-     * <p>Past {@code Settlements.MEMBERSHIP_RADIUS} twice over, so neither village's residents can be
+     * <p>Past {@code net.namesake.settlement.Settlements.MEMBERSHIP_RADIUS} twice over, so neither village's residents can be
      * mistaken for the other's — and close enough that a player standing between them holds both in
      * the loaded area, which is what the road needs to be laid at all and what makes it possible to
      * feed somebody in one village and then look at the other.
@@ -485,6 +485,164 @@ public final class AttachBetHarness {
             case 30, 31, 32 -> runStandingBandCheck(server, level);
             case 33, 34, 35, 36, 37, 38 -> runDayPlanCheck(server, level);
             case 39, 40, 41, 42, 43, 44, 45, 46, 47 -> runErrandCheck(server, level);
+            case 48, 49, 50 -> runAppearanceCheck(server, level);
+            default -> finish(server, true);
+        }
+    }
+
+    // --- session 15: the renderer swap, and the board a village stands up for itself -------------
+
+    /** The lectern {@code BoardSiting} stood up on its own, as opposed to the ones this file placed. */
+    private static BlockPos sitedBoard;
+
+    /** A lectern half a membership radius from the bell — far outside where one would be placed. */
+    private static BlockPos farLectern;
+
+    /**
+     * <b>Two claims a unit test cannot have an opinion about, and one picture.</b>
+     *
+     * <p>Session 15 is a client session, and almost all of it is arithmetic that
+     * {@code AppearanceTest} holds without a game. Two things are not:
+     *
+     * <ol>
+     *   <li><b>The appearance packet reaches a real client through a real socket.</b> Everything
+     *       else in this session is derivation, and a derivation nobody is told about draws a
+     *       default villager. This is the WIRE check's shape, at session 15's own payload.</li>
+     *   <li><b>A village stands its own Notice Board up.</b> {@code BoardSiting} needs a heightmap,
+     *       a point-of-interest manager and a loaded chunk, so it cannot be a unit test at all — and
+     *       it is the ruling session 15's exit criterion turned out to rest on.</li>
+     * </ol>
+     *
+     * <p>And a screenshot, which asserts nothing. {@code WORKPLAN.md}'s sixth instrument: <b>the
+     * rows are not the screen.</b> A villager rendering as a magenta checkerboard, a clothing tint
+     * that vanishes into the grass and a model at the wrong scale all look perfectly fine as
+     * strings. It is evidence for a person, and from this session CI can actually hand it back —
+     * {@code run/screenshots/} was not on the upload path until now.
+     */
+    private static void runAppearanceCheck(MinecraftServer server, ServerLevel level) {
+        switch (step) {
+            case 48 -> {
+                // The far village already has a lectern, because step 28 of the board check put one
+                // there. Take it away, so what is being tested is a village with NO board rather
+                // than a village that happens to have one.
+                if (awayBoard == null || farBell == null) {
+                    record(false, "SITE the notice board check left no far village to work with");
+                    advance(server, 5);
+                    return;
+                }
+                level.setBlockAndUpdate(awayBoard, Blocks.AIR.defaultBlockState());
+                teleport(player(server), level, farBell.getX(), farBell.getY() + 1, farBell.getZ());
+                beginAwait(200);
+            }
+            case 49 -> {
+                // Poll for the condition the assertion actually needs — session 13's lesson and
+                // session 14's, in the same words. Breaking a block deregisters its point of
+                // interest through onBlockStateChange, and the POI manager is what BoardSiting asks.
+                if (stillWaiting(server, () -> !net.namesake.board.BoardSiting.hasABoard(level, farBell), false,
+                        "the far village's lectern to stop being a point of interest")) {
+                    return;
+                }
+                Settlement here = NpcRegistry.get(server).settlements()
+                        .containing(level.dimension().location(), farBell).orElse(null);
+                if (here == null) {
+                    record(false, "SITE the far bell at " + farBell + " is not in a settlement");
+                    advance(server, 5);
+                    return;
+                }
+                record(!net.namesake.board.BoardSiting.hasABoard(level, farBell),
+                        "SITE the far village has no Notice Board within "
+                                + net.namesake.settlement.Settlements.MEMBERSHIP_RADIUS + " blocks of its bell");
+
+                boolean stood = net.namesake.board.BoardSiting.stand(level, here, farBell);
+                record(stood, "SITE the village stood a Notice Board up for itself");
+                sitedBoard = net.namesake.board.BoardSiting.site(level, farBell);
+                record(net.namesake.board.BoardSiting.hasABoard(level, farBell),
+                        "SITE and it is a lectern the mod can find again, which is what makes "
+                                + "'has this village got a board' a question the world answers "
+                                + "rather than a flag");
+
+                // Idempotence, which is the whole of why nothing is persisted. Running again must
+                // be a no-op, because the lectern it would place is the lectern it looks for.
+                boolean again = net.namesake.board.BoardSiting.stand(level, here, farBell);
+                record(!again, "SITE running it a second time places nothing — a village gets one "
+                        + "board, and re-running is a no-op rather than a second block");
+
+                // The radius that decides "has this village got one" is the radius that MAKES a
+                // lectern a board — Settlements.MEMBERSHIP_RADIUS, which NoticeBoard.boardAt asks
+                // through Settlements.containing. Nothing in a unit test can see that: both numbers
+                // are compile-time constants, so a test comparing them folds to `true` in its own
+                // bytecode and proves nothing about the call site.
+                //
+                // Added after session 15's breakage pass read NOTHING FAILED on "a board is looked
+                // for only where one would be placed". A village whose library is at its far edge
+                // already has a working board, and narrowing the search would put a second lectern
+                // by the bell for nothing — one more block in somebody's world, which is the one
+                // thing this whole mechanism is careful about.
+                if (sitedBoard != null) {
+                    level.setBlockAndUpdate(sitedBoard, Blocks.AIR.defaultBlockState());
+                }
+                farLectern = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                        farBell.offset(net.namesake.settlement.Settlements.MEMBERSHIP_RADIUS / 2, 0, 0));
+                level.setBlockAndUpdate(farLectern, Blocks.LECTERN.defaultBlockState());
+                beginAwait(100);
+            }
+            case 50 -> {
+                if (stillWaiting(server,
+                        () -> net.namesake.board.BoardSiting.hasABoard(level, farBell), false,
+                        "the distant lectern to register as a point of interest")) {
+                    return;
+                }
+                int away = farLectern == null ? -1 : (int) Math.sqrt(farLectern.distSqr(farBell));
+                record(net.namesake.board.BoardSiting.hasABoard(level, farBell),
+                        "SITE a lectern " + away + " blocks from the bell — far outside the "
+                                + net.namesake.board.BoardSiting.MAX_OFFSET + " a board is placed "
+                                + "within — still counts as this village's board, because "
+                                + net.namesake.settlement.Settlements.MEMBERSHIP_RADIUS
+                                + " is the radius that makes a lectern a board");
+                Settlement far = NpcRegistry.get(server).settlements()
+                        .containing(level.dimension().location(), farBell).orElse(null);
+                record(far != null
+                                && !net.namesake.board.BoardSiting.stand(level, far, farBell),
+                        "SITE and nothing is stood up beside a village that already has one");
+
+                // The wire. A villager the player is standing next to is a villager the player is
+                // tracking, so the client has been told what it looks like — or the swap draws
+                // every villager in the world identically and nothing else in this session can say
+                // so.
+                Villager watched = level.getEntitiesOfClass(Villager.class,
+                                player(server).getBoundingBox().inflate(48))
+                        .stream().findFirst().orElse(null);
+                if (watched == null) {
+                    record(false, "LOOK no villager near the player to be told about");
+                    advance(server, 5);
+                    return;
+                }
+                int id = watched.getId();
+                if (stillWaiting(server, () -> net.namesake.client.Appearances.knows(id), false,
+                        "the appearance packet to reach the client")) {
+                    return;
+                }
+                record(net.namesake.client.Appearances.knows(id),
+                        "LOOK S2C the client was told what villager " + id + " looks like");
+
+                var look = net.namesake.client.Appearances.lookOf(id, "farmer");
+                record(look != null && !look.body().isEmpty() && !look.hair().isEmpty(),
+                        "LOOK it resolves to a whole appearance: body=" + look.body()
+                                + " hair=" + look.hair() + " face=" + look.face()
+                                + " clothing=" + look.clothing().id()
+                                + " cloth=" + String.format("#%06X", look.clothTint() & 0xFFFFFF));
+
+                var catalogue = net.namesake.client.Appearances.catalogue();
+                record(catalogue.isUsable(),
+                        "LOOK the client read " + catalogue.bodies().size() + " bod(ies), "
+                                + catalogue.hair().size() + " hair and " + catalogue.faces().size()
+                                + " face(s) out of the resource manager — DESIGN.md §9's "
+                                + "datapack-loadable set, from a real reload rather than a constant");
+
+                // Asserts nothing. See this method's own note: the rows are not the screen.
+                BoardProbe.requestShot("namesake-villagers-" + phase());
+                advance(server, 40);
+            }
             default -> finish(server, true);
         }
     }

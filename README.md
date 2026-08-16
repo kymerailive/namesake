@@ -24,7 +24,9 @@ what is built and what is next.
 
 ## Design
 
-- [`DESIGN.md`](DESIGN.md) — what we are building and why. 45 ruled decisions.
+- [`DESIGN.md`](DESIGN.md) — what we are building and why. It states its own count of ruled
+  decisions; this file does not repeat it, because three documents holding three different numbers
+  for one thing is the problem rather than the format.
 - [`WORKPLAN.md`](WORKPLAN.md) — the ledger. What happens next, with exit criteria.
 - [`CLAUDE.md`](CLAUDE.md) — orientation and hard rules for anyone working on this.
 

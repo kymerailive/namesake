@@ -353,6 +353,42 @@ class StandingTest {
     }
 
     /**
+     * <b>{@code Standing.TRUSTED_TRUST} and {@code Residency.TRUST_THRESHOLD} are one number, tested
+     * at the boundary rather than by comparing two constants.</b>
+     *
+     * <p>Session 13's breakage pass recorded that giving {@code TRUSTED_TRUST} its own literal
+     * turned {@link #residencyGrantsTheTrustedBand} red. <b>Session 15's found that it no longer
+     * does</b>, and the reason is this session's own change: that test seats three residents at
+     * {@code Residency.TRUST_THRESHOLD} and asks whether each is {@code TRUSTED}. While both
+     * constants were 20 any de-aliasing moved the band away from the seat. Now the threshold is 28,
+     * and a de-aliased {@code TRUSTED_TRUST = 20} leaves 28 comfortably inside the band — <b>the
+     * guard passes while the property it guards is gone.</b>
+     *
+     * <p>That is the exact failure this project exists to refuse, arriving in a guard rather than in
+     * a mechanic, and it is why this asks a different question. A comparison of the two constants
+     * would be worse than useless: both are compile-time constants, so javac folds
+     * {@code assertEquals(A, B)} into {@code assertEquals(28, 28)} in the <i>test's</i> bytecode and
+     * it proves nothing about the class under test — which is the same trap
+     * {@code DayPlanTest}'s {@code SPREAD >= SPREAD_FLOOR} line sits in.
+     *
+     * <p>So it goes through {@link Standing#of} at runtime, at the boundary, in both directions.
+     * Either constant moving away from the other puts one of these two on the wrong side.
+     */
+    @Test
+    @DisplayName("the band begins exactly at the residency threshold, from below and from on it")
+    void theBandBeginsAtTheResidencyThreshold() {
+        assertNotEquals(Standing.TRUSTED, Standing.of(bond(Residency.TRUST_THRESHOLD - 1, 0)),
+                "one point below the residency threshold must NOT be the trusted price band. If it "
+                        + "is, Standing.TRUSTED_TRUST has drifted below Residency.TRUST_THRESHOLD "
+                        + "and DESIGN.md §5's 'residency also grants the trusted price band' is a "
+                        + "coincidence rather than a property.");
+        assertEquals(Standing.TRUSTED, Standing.of(bond(Residency.TRUST_THRESHOLD, 0)),
+                "the residency threshold itself must be the trusted price band. If it is not, "
+                        + "TRUSTED_TRUST has drifted above it and a village can take you in while "
+                        + "still charging you the stranger's price.");
+    }
+
+    /**
      * <b>Which bands a real player actually walks through, in order, day by day.</b>
      *
      * <p>Added at session 15, and it exists because {@link #theBandsArePopulated} above cannot see

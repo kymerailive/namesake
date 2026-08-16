@@ -373,6 +373,47 @@ class AppearanceTest {
         }
     }
 
+    // --- §9's ruling 5: three hooks, not one ----------------------------------------------------
+
+    /**
+     * <b>The renderer keeps vanilla's proportions, and all three hooks are still there.</b>
+     *
+     * <p>Added after session 15's breakage pass found that <b>nothing at all</b> held them: the row
+     * <i>"the renderer forgets vanilla's 0.9375 scale"</i> read {@code NOTHING FAILED}, which means
+     * a swap that renders every villager in every existing save visibly larger than they were would
+     * have shipped green. It is the most visible single thing this session could get wrong and the
+     * least likely to be reported, because a world where everyone is slightly too big looks
+     * deliberate.
+     *
+     * <p>Two claims, checked two ways, because neither is enough alone. The value is read here — so
+     * on its own this would be the tautology session 13's patience test was criticised for — and
+     * <b>the bytecode says the hook that applies it still exists</b>, which is the half a value
+     * check cannot make. Deleting the {@code scale} override, or the baby handling inside
+     * {@code render}, turns this red without touching the constant.
+     */
+    @Test
+    @DisplayName("the renderer keeps vanilla's scale, the baby proportions and the baby shadow")
+    void theThreeHooksAreAllThere() {
+        assertEquals(0.9375F, VillagerLookModel.VANILLA_SCALE,
+                "VillagerRenderer applies 15/16 before it draws anything. A humanoid model at 1.0 "
+                        + "renders every villager in the world larger than vanilla, in every "
+                        + "existing save. DESIGN.md §9's ruling 5.");
+
+        var scale = net.namesake.testing.MethodBody.of(VillagerLookRenderer.class, "scale");
+        assertTrue(scale.invokes(com.mojang.blaze3d.vertex.PoseStack.class, "scale"),
+                "VillagerLookRenderer.scale no longer scales anything, so vanilla's 0.9375 is a "
+                        + "constant nothing applies — hook one of three.");
+
+        var render = net.namesake.testing.MethodBody.of(VillagerLookRenderer.class, "render");
+        assertTrue(render.invokes(VillagerLookModel.class, "setBaby"),
+                "the model's own baby proportions are hook two of three. VillagerRenderer folds "
+                        + "the baby into its scale hook; HumanoidModel has `young` instead, and it "
+                        + "moves the head rather than only halving the size.");
+        assertTrue(render.invokes(net.minecraft.world.entity.npc.Villager.class, "isBaby"),
+                "the shadow radius is hook three of three, and a full-size shadow under a half-size "
+                        + "villager is the giveaway that somebody counted the hooks wrong.");
+    }
+
     private static long countPngs(Path assets) throws IOException {
         try (var walk = Files.walk(assets)) {
             return walk.filter(Files::isRegularFile)

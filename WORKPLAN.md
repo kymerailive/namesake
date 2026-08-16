@@ -3,7 +3,36 @@
 **The ledger.** What happens next, in order, with exit criteria. Read first, update last.
 Where any other document disagrees on sequence, this wins.
 
-- **Status:** session 14 complete, **and a village now has a day rather than a morning.** At eleven
+- **Status:** session 15 complete, **and villagers are people.** Walk into a village and every
+  villager is a person on the vanilla humanoid model — a face, hair, a build, and clothes whose
+  colour says which culture they belong to and whose *shape* says what they do, which is what
+  replaces the profession badge the renderer swap deletes. Twenty-five greyscale textures exactly,
+  against `DESIGN.md` §9's own table, and **the set is data**: adding a hair is one PNG and one line
+  of JSON, and because selection is rendezvous hashing rather than a modulus it moves about one
+  villager in seven onto the new hair and **leaves every other villager in the world exactly as they
+  were**. **The test written to check §9's colormap claim went red on the code meant to satisfy it** —
+  `mix` returns 63 bits and `unitOf` took the top 24 of them, so half of every colormap was
+  unreachable and not one villager would have looked wrong. **A village also stands its own Notice
+  Board up now**, and that stopped being an adjacent question the moment the exit criterion was
+  rewritten: 45 minutes is 2.25 in-game days against a median of four to residency, so the name swap
+  cannot carry the criterion and the board has to. **The first config this project has had**, one
+  loader-neutral file, with the documented `gentle` preset — and three rulings written down rather
+  than assumed: a config file is **not** a save (a missing key defaults, an unknown key is ignored, so
+  there is no reading of an old one that is *wrong*), a config value can **never** be rule 5's
+  consumer (it is the *operand* of the comparison, which is a different objection from a display's and
+  gets its own set), and **the never-cut walls are now held as compile-time constants** — proved, not
+  claimed: with `SPREAD_FLOOR` still `static final` and reading the config, session 13's guard stayed
+  **green** and only the new one went red. **`Residency.TRUST_THRESHOLD` is 28**, and 523 tests had
+  nothing to say about it, which is the risk rather than the reassurance — so the missing instrument
+  was built first, and it corrected the arithmetic: one kindness a day still walks
+  `NEUTRAL → TRUSTED` nine times in nine, and only the twelve-gifts-a-day grinder skips the rung.
+  The third resident crosses on **day 41**, re-measured, where this ledger said 28. **The 80/20
+  standing split is struck rather than shipped** — nobody could say what the shared term is computed
+  from, and mean, median, count and maximum are four different mods rather than four settings of one.
+  **Twenty-five deliberate breakages, twenty-one red, and four found a guard that was not real** —
+  including session 13's own guard on the residency alias, which this session's threshold move had
+  quietly stopped making true. **Schema 8, unchanged for the fourth session running.**
+  Before that: session 14, **and a village now has a day rather than a morning.** At eleven
   o'clock six villagers who were ten blocks apart at six workstations are standing together at the
   bell — **47 blocks apart when the hour began and 15 when it was measured**; at noon each of them is
   at their own hearth and none is asleep in it; at one o'clock they are all back in vanilla's `WORK`;
@@ -230,7 +259,8 @@ Where any other document disagrees on sequence, this wins.
 | 12 | Standing bands | **done** — 2026-08-15 |
 | 13 | Day plan I — free slots | **done** — 2026-08-15 |
 | 14 | Day plan II — ERRAND activity | **done** — 2026-08-16 |
-| 15 | Art, config, playtest | **NEXT** |
+| 15 | Art, config, playtest | **done** — 2026-08-16 |
+| 16 | Grievance engine — wants, scarcity, the 5-stage ladder | **NEXT** |
 
 ---
 
@@ -6496,3 +6526,344 @@ the client, which is why these are screenshots rather than a description: `names
 `namesake-errand-noon` and `namesake-errand-watch` in `fabric/run/screenshots/`. The noon picture is
 the one worth looking at first — six villagers, one at each bed, evenly spread across a platform they
 were bunched at the middle of ninety seconds earlier.
+
+### Session 15 — 2026-08-16 — art, config, playtest
+
+**Shipped.** `363192f..HEAD` plus this ledger commit, pushed to `origin/main`. **523 unit tests, up
+from 478**, and the attach-bet harness grew a leg on both loaders. **Schema 8, unchanged since
+session 12** — the fourth session running, and nothing this session builds is state.
+
+#### The session opened by rewriting its own exit criterion, and the arithmetic decided the order
+
+The criterion said *"a stranger plays 45 minutes and can describe, unprompted, something a villager
+remembered about them"*, in four places, elaborated in none of them. **It is five jobs folded onto
+one sitting** — the criterion proper, standing risk 2's untold stranger, standing risk 3's cultures
+re-test, this session's art and this session's config — and one sitting can carry one.
+
+The rewrite is above, with a table naming an instrument or an absence for each. What it changed about
+the *work* is one line of arithmetic: **45 minutes is 2.25 in-game days, against a median of four to
+residency at a threshold of 28.** A stranger does not reach residency inside the sitting, so §5's
+name swap — the pitch — cannot be what carries the criterion. The Notice Board can, because it reads
+a bond of zero. **That is what turned "does a village come with a board standing" from an adjacent
+question into a load-bearing one**, and it is why that ruling was taken first rather than last.
+
+#### `Residency.TRUST_THRESHOLD` is 28, and the instrument corrected the arithmetic
+
+One constant, four mechanics: `Standing.TRUSTED_TRUST` **is** that constant, so 20 → 28 moves when a
+village takes you in, what every villager in the world charges, whether a recipe is taught and which
+dialogue pool is selected, in one edit. **523 tests, zero red** — which is the risk rather than the
+reassurance, and is exactly what the brief predicted.
+
+So the missing instrument was built before the change. `StandingTest.theBandsArePopulated` joins its
+two halves with an `||`, so **a run in which no villager is ever `TRUSTED` passes it comfortably** —
+and the arithmetic said that is precisely what 28 would produce, because `Standing.of` tests warmth
+first and `WARM_WARMTH` did not move with it. `theBandLadderIsWalked` asks the ladder's own question
+instead: **a villager's band over a hundred days is a sequence, not a value.**
+
+**The prediction was wrong, and being wrong is the finding.** Measured over all five player models,
+before and after:
+
+| model | at 20 | at 28 |
+|---|---|---|
+| `ATTENTIVE` — one kindness a day | 9 of 9 walk `NEUTRAL → TRUSTED`, 2 reach `WARM` | **identical** |
+| `SATURATING` — twelve gifts a day | 4 of 9 pass through `TRUSTED` | **1 of 9**; the rest go straight to `WARM` |
+| `INTERMITTENT` | 9 of 9 reach `TRUSTED` | 8 of 9; one never leaves `NEUTRAL` |
+| `PASSING_THROUGH` — weekly | 1 of 9 reaches `TRUSTED` | **0 of 9** |
+| `CARELESS` | 9 of 9 | 9 of 9 |
+
+Ordinary play is untouched. **It is only the grinder who skips the middle rung**, which reads as the
+design rather than against it: somebody dumping a dozen gifts in an afternoon is buying warmth, and
+warmth is the discount that lapses. The one place it genuinely costs is the far end, and that is the
+thing the owner asked for — *turning up once a week now earns nothing at all.*
+
+**The re-measurement `DESIGN.md` was owed**, out of `Reports` rather than out of the arithmetic
+table: **the first resident of nine crosses 28 on day 15, the third on day 41 — where this document
+said day 28 at trust 20 — and all nine never do** inside a hundred days.
+
+**`DialogueStats.LADDER` does not move with it, ruled.** It is `{20, 40, 60, 80, 100}` and 28 is not
+on it. The ladder is the *instrument's* scale, and a ruler that follows the thing it measures makes
+every table sessions 07–14 produced describe a different world from the next one. Its own javadoc had
+already ruled the way out — *"a threshold set anywhere can be read off the table by
+interpolation"* — but **nothing public could ask**. `Reports.dayTheThirdResidentCrossed` can now, at
+any mark, and `residencyThreshold` prints the live threshold's own row beside the fixed ladder so it
+stays right the next time this moves.
+
+Nine javadocs and seven `DESIGN.md` passages re-written, each of which was a claim about a
+measurement taken at 20 that nothing in the build could see go stale.
+
+#### The first config, and three rulings written down rather than assumed
+
+**Is a config file a save?** No, and not because it is small. Hard rule 1 exists because a schema-7
+ring slot read as a schema-8 one is *silently wrong bytes*, which no default can rescue. A config key
+is a name: a missing key takes its default, an unknown key is ignored, a malformed value warns and
+defaults. That makes the file **version-free by construction** — no `configVersion`, no fixer ladder,
+no `NpcSchema` involvement — and `ConfigTest` holds all three rules rather than the paragraph doing
+it. The one clause the argument rests on is a build failure rather than a promise:
+`NeverCutTest.theSchemaLayerCannotSeeTheConfig` fails if any class in `net.namesake.npc` mentions the
+config, because **a config value that decides how a persisted byte is interpreted is hard rule 1 with
+the datafixer removed.**
+
+**Can a config value be rule 5's named non-display consumer?** No — and the instrument was the wrong
+shape for saying so. `net.namesake.config` is deliberately **not** added to `DISPLAY_PACKAGES`: that
+set's own javadoc says *"shows them to a person"*, and a config file shows nothing to anybody. The
+real objection is one level down. **A config value is never the subject of the comparison, it is the
+operand.** In `if (bond.trust() >= TRUST_THRESHOLD)` the consumer is the method holding the `if`; the
+threshold is the constant on the right of it, and swapping a literal for a config lookup changes
+which number is compared and nothing about what is doing the comparing. So `OPERAND_PACKAGES` is a
+second set with its own reason, and `NeverCutTest.theConfigReadsNoRecord` closes it from the other
+direction: nothing in the config package may read a record either.
+
+**The seven never-cut walls, every one of which looks like a tuning knob.**
+`DayPlanTest.theSpreadFloorIsNotConfigurable` reads one class's `<clinit>` for four JDK property
+doors, and **a config file is none of them**. Proved rather than asserted, in the breakage pass: with
+`SPREAD_FLOOR` still `static final` and initialised from `Config.get()`, that test **stayed green**
+and only the new one went red. `NeverCutTest.everyWallIsACompileTimeConstant` asks the question where
+the claim holds — every wall carries a `ConstantValue` attribute, so javac folded it and **there is
+no runtime read to redirect at all**, by any door including ones nobody has thought of.
+
+**And two of the seven walls guard nothing, which is recorded rather than left to look like a guard.**
+There is no particle code in this mod — `ParticleTypes`, `sendParticles` and `addParticle` return no
+hits in main source — so *the player-relative particle emission gate* protects code that does not
+exist. *The sleep-skip cold-start mode* is the same: the phrase appears in one comment in `Deed` and
+nowhere else. They are notes to a future session, and **neither has a scheduled home**: §7's
+legibility laws belong to sessions 13–14, which are done.
+
+**What `gentle` gates**, and it is deliberately not a difficulty slider:
+
+| key | default | what `gentle` does |
+|---|---|---|
+| `social.priceMarkup` | on | **off** — standing can lower a price and never raise one. A **clamp, not a scale**, so the five ruled multipliers stay the five ruled multipliers and every table in this ledger still describes this server |
+| `social.harmTravels` | on | **off** — a harmful deed stays in the village it happened in. **Kindness crosses either way**, so §10's acceptance script, which is one gift, runs unchanged |
+| `world.roads` · `world.noticeBoard` · `village.nightWatch` | on | **untouched.** A different axis — how much of itself the mod puts into somebody's world — and folding them in would mean a player who asked for a softer village silently losing the onboarding surface |
+
+`-Dnamesake.roads=off` survives as an **override rather than the answer**, and can only ever say
+*off*: it is what somebody types when a road has appeared through their base and they want it stopped
+now, and a stale `=on` in a launcher must not overrule a config that says no. Session 14's *"there is
+no way to turn the watch off"* is `village.nightWatch`.
+
+#### A village stands its own Notice Board up
+
+Ruled **yes**, and the exit criterion is why. A criterion that rests on whether vanilla happened to
+generate a library is a criterion resting on a coin.
+
+Driven by the settlement table's **revision**, like `RoadNetwork`, rather than hooked into
+`SettlementRegistrar.commit` — and the deciding reason is the third of three: it keeps the settlement
+package from having to know what a board is; a commit happens on a tick when the bell's chunk may not
+be loaded, because a point of interest is read off disk; and **a settlement loaded from a save is
+never committed at all**, so a commit hook would have given boards only to villages found after this
+build was installed.
+
+One settlement a tick, loaded chunks only, and **nothing persisted**: *"has this village got a
+board"* is a question the world answers, which is §2's Notice Board argument one layer out. Every
+guard is `RoadNetwork.pave`'s — a heightmap-derived height rather than the bell's own y, an eight-name
+allowlist of what may be underneath rather than a block tag, no block entity touched, nothing under
+water, and air above, because a lectern with a block on its head is a lectern nobody can click.
+
+**Three consequences, named in the config file's own comments rather than only here**, and the
+largest is that **a lectern is a librarian's workstation, so a village may gain a librarian it would
+not have had.** It is not reversed if the setting is turned off later. And a player who breaks it
+gets another one next restart — correct for an onboarding surface, wrong for scenery, and the price
+of storing nothing.
+
+#### The standing split is struck rather than shipped, and the config is what let the question be asked
+
+`DESIGN.md` §2's *80% personal / 20% shared, server-configurable* has been ruled since session 02 and
+parked at 15 since session 12. **It is struck, and the row is rewritten in the same shape as *why not
+respect* and *why not fear*** rather than deleted — a refusal is a ruling.
+
+Four reasons, and the first two were already written in that row before the session that had to
+decide it. **(1)** It is a second route to a place gossip already reaches, measured at 78% of a
+village within two in-game days, arriving *inside* the personal bond. **(2)** **Nobody can say what
+the shared term is computed from.** No settlement-scoped bond statistic exists anywhere; for a village
+of nine where one resident holds 40 and eight hold 0, the mean is 4.4, the median 0, the count 1 and
+the maximum 40 — **four different mods, not four settings of one.** *"Server-configurable"* was hiding
+that: a number nobody has to choose is a decision nobody has to make. **(3)** It would break session
+12's hard-won property **silently**: `StandingTest.residencyGrantsTheTrustedBand` seats its three
+residents at exactly the threshold, so the settlement mean is the threshold and **the test would pass
+while the property was gone.** **(4)** And the config existing is what finally let the operator's
+question be asked: above 20 double-counts a signal already in the bond, and 0 restores today. **A knob
+whose only honest setting is zero is not a knob.**
+
+What the split wanted already exists at one place as a boolean rather than a percentage: **residency**.
+If a settlement-level term ever earns a second form, session 16's NPC-to-NPC bonds are where it would
+come from — with something to compute it from.
+
+#### The art, and the test written to check a claim found a bug in the claim
+
+**Twenty-five textures exactly**, against §9's own table: 2 bodies, 2 colormaps, 6 hair, 8 clothing,
+7 faces. `common/src/main/resources` did not exist; `prepareCommonResources` has been wired to both
+loaders since session 00 and had **never been exercised**. It works: 25 PNGs and a manifest are in
+both jars with no build-script change.
+
+**The swap was budgeted correctly and that mattered.** `VillagerModel` is a `HierarchicalModel`,
+`HumanoidModel` is an `AgeableListModel`, they meet at `EntityModel` and share nothing below it — so
+*"swap the renderer"* is a new renderer, a new model, **two** `ModelLayerLocation`s and **two**
+`LayerDefinition`s, because only `PlayerModel.createMesh` takes a slim flag.
+
+**`AppearanceTest.theColormapIsActuallySampled` was written to check §9's claim and went red on the
+code that was supposed to satisfy it.** `mix` returns `value >>> 1`, so its top bit is always zero,
+and `unitOf` took `hash >>> 40` — twenty-three bits and a guaranteed zero. Every coordinate landed in
+`[0, 0.5)`, so **half of every colormap was unreachable**. An artist repainting the darker half of the
+skin table would have been painting a region no villager is ever drawn from, and not one villager
+would have looked broken.
+
+The seven rulings are in `DESIGN.md` §9, written **before the first PNG** rather than after
+twenty-five. In short:
+
+- **Datapack-loadable from v1 means the variant set is data** — a JSON manifest read through the
+  resource manager on every reload, so adding a hair is one PNG and one line and no Java. And
+  **selection is rendezvous hashing rather than a modulus**, which is what makes that true for the
+  *player* as well as the contributor: appending a hair moves about one villager in seven onto it and
+  leaves every other one exactly as they were. A modulus repaints the neighbour somebody knew by her
+  hair because a pull request was merged.
+- **Profession legibility is re-earned in the eight clothing shapes.** Implementing
+  `VillagerHeadModel` to keep vanilla's overlay is **refused on correctness, not effort**: those
+  textures are authored against the villager mesh's UVs and a humanoid mesh samples different ones, so
+  it would compile, run, and draw nonsense. **Two things are lost and both are named: the trade-level
+  badge, which has no scheduled home** and is still drawn in the trade window; and the biome overlay,
+  which the culture palette replaces in kind.
+- **The colormap is a CPU sample and a multiply tint, ruled out loud** rather than by writing the
+  code. A per-fragment lookup needs a shader this mod does not have. What survives is every reason §9
+  chose a PNG — artist-editable, pack-overridable, one source of every tone. **What is lost is stated:
+  shadowed skin darkens without shifting hue.**
+- **Not `HumanoidMobRenderer`**, whose constructor adds `ElytraLayer` — the naive swap ships elytra on
+  villagers. Its `ItemInHandLayer` is a dividend: the errand sack goes **in the hand**, and
+  `WORKPLAN.md`'s *"invisible until session 15 swaps the renderer"* was wrong — `CrossedArmsItemLayer`
+  was always drawing it, and the real gate is `ShowTradesToPlayer`'s own preconditions.
+- **Three hooks, not one**: `0.9375` scale, `AgeableListModel.young`, halved baby shadow.
+- **Four layer passes, not a composited `DynamicTexture`** — MCA's answer costs 6.5 MB at §8's four
+  hundred plus a cache to invalidate, and this document has deleted a cache in four sessions.
+- **The wire was priced before it was committed to.** The client knew *nothing*: the attachment is
+  unsynced on both loaders, `personaOf` refuses a `ClientLevel`, and `cultureId` cannot be derived at
+  all because `Cultures.at` needs the world seed. **Nine bytes, on start-tracking, nothing per tick** —
+  and the re-send for a villager whose persona generates while somebody is watching rides a branch the
+  day plan **already** runs, and that already stops running once a persona exists.
+
+**`Culture.palette()` has carried four colours per culture since session 03 with zero readers.** This
+is its first, and standing risk 3 gains a distinguisher it did not have when its first read passed:
+two cultures now differ in **what a player sees from thirty blocks away**, machine-checked.
+
+#### Rule 3: twenty-five deliberate breakages, and four found a guard that was not real
+
+Sessions 09–14's discipline kept — the failing test's **name** captured rather than the exit status, a
+row whose edit matched nothing **refused**, and only the one file each row broke restored, never
+`git checkout -- .`. Committed first, for session 14's reason.
+
+**Twenty-one red, four `NOTHING FAILED`, no refusals, tree clean.** Three of the four were repaired
+and re-run; the fourth is honest.
+
+1. **Nothing at all held vanilla's `0.9375` scale.** It is the most visible single thing this session
+   could get wrong and the least likely to be reported, because a world where everyone is slightly too
+   big looks deliberate. `AppearanceTest.theThreeHooksAreAllThere` holds all three hooks now, and it
+   is deliberately two claims checked two ways: the value on its own would be the tautology session
+   13's patience test was criticised for, so the bytecode says the hook that applies it still exists.
+   Re-run against three separate breakages: all three red.
+2. **Session 13's own guard on the residency alias had stopped being real, and this session broke it.**
+   The ledger records that giving `TRUSTED_TRUST` its own literal turned
+   `residencyGrantsTheTrustedBand` red. It no longer does — that test seats three residents at
+   `TRUST_THRESHOLD`, and while both constants were 20 any de-aliasing moved the band away from the
+   seat. At 28 a de-aliased `TRUSTED_TRUST = 20` leaves 28 comfortably inside the band: **the guard
+   passes while the property is gone.** `theBandBeginsAtTheResidencyThreshold` asks at the boundary
+   instead, from below and from on it, and goes red in both directions. A comparison of the two
+   constants would have been worse than useless — both are compile-time constants, so javac folds
+   `assertEquals(A, B)` in the *test's* bytecode, which is the trap `DayPlanTest`'s
+   `SPREAD >= SPREAD_FLOOR` line already sits in.
+3. **The board search radius had no guard a unit test could give it**, for the same folding reason.
+   The harness leg holds it instead: a lectern half a membership radius from the bell — far outside
+   where one would ever be placed — must still count as that village's board.
+4. **And one `NOTHING FAILED` that should stay one.** Making a `Standing` enum constructor argument
+   read the config changed nothing, correctly: an enum constant is initialised once at class load, so
+   that route genuinely cannot follow a config. The version that *can* — making `priceMultiplier()`
+   read it — was written as a row of its own and goes red on two tests.
+
+#### The schema did not move
+
+**Schema 8, unchanged since session 12**, for the fourth session running. Nothing this session builds
+is state: a config file is an operator's, not the mod's, and it declares no codec; an appearance is
+derived from a seed that has been persisted since schema 1; and *has this village got a board* is a
+question the world answers. `DayPlanTest.theDayPlanIsDerived` and
+`SocialValueLedgerTest.everyPersistedRecordIsLedgered` both still pass without a new entry. The
+schema-8 archives at `C:\MCA Reborn Rework\.archives\schema8-session12` were not needed and are
+untouched. **Two exemptions remain — `fear` and `debt`, both at 16 — and no new one was opened.**
+
+#### What the exit criterion actually showed — and which clause is whose
+
+The criterion as **rewritten at the open of this session**. Five jobs, five instruments.
+
+| clause | machine-checked? | whose |
+|---|---|---|
+| **1. A stranger says it, unprompted, in one 45-minute sitting** | **the availability half, yes; the reaction half, never.** `SittingBudgetTest` measures the chain through the shipped record layer in **in-game days rather than wall clock**: a deed done at the start of a sitting reaches the next village on day 1, against a sitting of 2.25 days. And `theBoardNeedsNoThreshold` pins the property the re-routing rests on — a bond of zero is still a bond a board draws | **the owner's, and arranging a genuine stranger is theirs.** Not the author of this session, not the owner. **Outstanding.** |
+| **2. Standing risk 3 — cultures at hour 45** | **no, and it is not measured this session.** The risk names **hour 45**; the criterion offers **minute 45**. They share a numeral and nothing else. **It has no scheduled home** — the slice ends here. What *is* newly machine-checked is a distinguisher it did not have: `everyCultureLooksDifferent` holds that no two cultures render the same clothing tint | **the owner's, unscheduled** |
+| **3. The art** | **that it is there and correct, yes; that it is good, no.** 4,096 personas × 7 cultures resolve to textures that exist; the manifest and the jar agree in both directions; every variant is reachable and none takes the village; the three proportion hooks are held; a village is photographed under the harness | **the owner's, on whether it looks right** |
+| **4. The config** | **yes, in full.** Missing key defaults, unknown key ignored, malformed value warns and defaults, `gentle` gates exactly what it documents and nothing else, every gate defaults on, no config key can reach a never-cut wall, and the schema layer cannot see the config at all | — |
+| **5. The five feel questions from 13 and 14** | **no, and not the stranger's:** every one needs `/time set` and `/namesake debug dayplan` | **the owner's, unchanged.** Both scripts are in the logs |
+
+**And two clauses that are not in the criterion but would have made it meaningless if false**, both
+machine-checked and both new: **the appearance packet reaches a real client through a real socket** —
+without which the swap draws every villager identically and nothing else this session could say so —
+and **a village with no lectern stands one up, and a second run places nothing.**
+
+#### The playtest scripts, checked against the source before they were written down
+
+**Launch:** `.\gradlew.bat :fabric:runClient` from `C:\MCA Reborn Rework`, no `-Pharness`. A plain
+`runClient` is **not muted**. Creative, and find a village with a bell and villagers who have jobs.
+
+**The art.** Just look. Every villager should be a person on the vanilla humanoid model, at vanilla's
+own size — **if they read as slightly too large, the `0.9375` hook is the thing to tell me about.**
+Walk between two villages of different cultures: **the question is whether the clothing colour makes
+the second one read as somewhere else.** Look at a librarian and a farmer side by side: **the question
+is whether you can tell who works at what without opening a trade window**, because the swap deleted
+vanilla's profession badge and eight clothing shapes are what replace it.
+
+**The board.** Walk into a village that has no library. A lectern should be standing within five
+blocks of the bell. Right-click it empty-handed. **The question is whether a person who had never been
+told would find it** — that is the whole of §5's *no tutorial*. If you would rather it did not appear,
+`world.noticeBoard = false` in `fabric/run/config/namesake.properties`.
+
+**The config.** The file is written on first launch with every setting on. Set `preset = gentle`,
+restart, and hit a villager: **the price should not move against you**, where it would have gone to
+×1.15. Everything else is unchanged.
+
+**The threshold.** This is the change most likely to feel wrong. A discount now costs a median of four
+in-game days rather than three, and turning up once a week earns nothing at all. **The question is
+whether that reads as *earned* or as *grindy*** — and if it is grindy, 24 is the row above it in
+`PersonalityDistributionTest.whatEachTrustThresholdCosts` and 32 the row below.
+
+**Three things that will look like bugs and are not.**
+
+- **A villager with no clothing colour.** A persona is generated once its settlement is surveyed; until
+  then they wear a neutral. It arrives on its own.
+- **Two villagers who look the same.** Six hair, seven faces and two builds is 84 combinations, so a
+  village of nine has collisions. That is the twenty-five-texture budget, not a defect.
+- **A lectern beside a bell in a village that already had a library at its far edge.** It should not
+  happen — the search is the full membership radius — but if it does, that is worth telling me about.
+
+#### Carried into session 16
+
+- `$env:JAVA_HOME` still must be pinned to JDK 21. Kill the dev client between runs, delete
+  `<loader>/run/saves/namesake_attachbet` before a `setup` and `namesake_profiler` before a profiler
+  run, and read the verdict file rather than Gradle's exit status.
+- **The absolute budget number has not been taken on a quiet machine since session 13**, and this
+  session did not take one either. It adds **client** render cost — four layer passes per villager —
+  and **no** server tick cost that a profiler cell would see: the appearance packet is per tracking
+  start and the board siting reads an int and returns. `PersonaService.personaOf` behind the path gate
+  is still session 14's open question and is still worth a counter before a fix; this session hung one
+  more thing off that branch, which makes the counter more interesting rather than less.
+- **`Bond.fear` and `Bond.debt` fall due at the close of session 16.** They are the two this ledger
+  has always said were furthest out, and 16 is the session that reads them or deletes them. `debt` has
+  nothing behind it at all.
+- **Two never-cut walls guard code that does not exist** — the particle gate and the sleep-skip
+  cold-start mode. Building legibility particles means building the gate too, at
+  1/NPC/40 ticks within 32 blocks. **Neither has a scheduled home.**
+- **The trade-level badge is gone from a villager's belt** and is still in the trade window.
+  **No scheduled home.**
+- **`DESIGN.md` §5's second route being much the cheaper of the two is still open, and the raise made
+  it worse**: three feedings against forty-one in-game days, where it was three against twenty-eight.
+- **Standing risk 3 is not measured this session and has no scheduled home.** Its failure is at hour
+  45 and nothing in a sixteen-session slice reaches hour 45.
+- **The exit criterion is outstanding.** The machine-checked half passed; arranging a stranger is the
+  owner's, and neither the author of this session nor the owner may stand in for one.
+- `DeedBus.witnessScan`, `DeedBus.emit` and `Gossip.drain` **still have meters pointed at nothing**,
+  unchanged and for the unchanged reasons.
+
+#### The commit range

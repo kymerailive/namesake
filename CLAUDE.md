@@ -15,7 +15,10 @@ in a different settlement, says to you later.
 
 - **`WORKPLAN.md`** — the ledger. What happens next, session by session, with exit criteria.
   Read it first, update it last. **Where any other document disagrees on sequence, it wins.**
-- **`DESIGN.md`** — what we are building and why. 41 ruled decisions.
+- **`DESIGN.md`** — what we are building and why. It carries its own count of ruled decisions and
+  **this file deliberately does not repeat it**: three documents each held a different number until
+  session 15 — 41 here, 45 in `README.md`, 85 there — which is this project's most-repeated ruling
+  arriving at its own paperwork. `DESIGN.md`'s is now counted by a test rather than maintained.
 
 **Do not write a new plan or handoff document.** Change the ledger. Documents contradicting each
 other is the problem, not the format.

@@ -3,6 +3,13 @@
 What we are building and why. `WORKPLAN.md` owns *what happens next*; this owns *what it is*.
 85 decisions ruled, 0 open.
 
+**That number is counted rather than maintained, from session 15 on**, and the reason is that three
+documents held three different ones: this file said 85, `CLAUDE.md` said 41 and `README.md` said 45.
+*One file, one number that cannot disagree with itself* is this project's most-repeated ruling, and
+it had never been applied to its own paperwork. A ruled decision is **a row of §2's tables or a row
+of §9's rulings table**; `DesignCountTest` counts them and turns the build red if the line above is
+wrong. The other two documents now point here instead of carrying a number.
+
 **The thesis:** a deed witnessed by one villager changes what a different villager, in a different
 settlement, says to you later.
 
