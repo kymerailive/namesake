@@ -9,6 +9,18 @@ import net.minecraft.nbt.NbtOps;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.entity.ai.Brain;
 import net.minecraft.world.entity.ai.behavior.BehaviorControl;
+import net.minecraft.world.entity.ai.behavior.GoToPotentialJobSite;
+import net.minecraft.world.entity.ai.behavior.HarvestFarmland;
+import net.minecraft.world.entity.ai.behavior.SetEntityLookTarget;
+import net.minecraft.world.entity.ai.behavior.SetLookAndInteract;
+import net.minecraft.world.entity.ai.behavior.SetWalkTargetFromBlockMemory;
+import net.minecraft.world.entity.ai.behavior.ShowTradesToPlayer;
+import net.minecraft.world.entity.ai.behavior.StrollAroundPoi;
+import net.minecraft.world.entity.ai.behavior.StrollToPoi;
+import net.minecraft.world.entity.ai.behavior.StrollToPoiList;
+import net.minecraft.world.entity.ai.behavior.UpdateActivityFromSchedule;
+import net.minecraft.world.entity.ai.behavior.WorkAtComposter;
+import net.minecraft.world.entity.ai.behavior.WorkAtPoi;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.entity.schedule.Activity;
@@ -130,30 +142,50 @@ class ErrandTest {
     void thePackageIsWorkWithTheWorkTakenOut() {
         List<String> names = new ArrayList<>();
         for (Pair<Integer, ? extends BehaviorControl<? super Villager>> entry : Errand.behaviours()) {
-            names.add(entry.getSecond().getClass().getSimpleName());
+            names.add(entry.getFirst() + ":" + entry.getSecond().getClass().getSimpleName());
         }
         assertFalse(names.isEmpty(),
                 "an empty package would leave a villager on an errand with no look behaviour at "
                         + "all, walking across the square with a fixed stare — DESIGN.md §7's "
                         + "fourth legibility law is 'facing beats posing'");
 
-        assertFalse(names.contains("UpdateActivityFromSchedule"), () -> """
+        // READ OFF THE BYTECODE, NOT OFF THE RUNTIME CLASS NAMES, and the first version of this test
+        // did the latter and was worth nothing. Most of vanilla's behaviours are built by
+        // `BehaviorBuilder.create(...)`, which returns an anonymous `OneShot` — so
+        // `UpdateActivityFromSchedule.create()` and `StrollToPoi.create()` produce objects whose
+        // class is neither of those names, and are indistinguishable from each other. A breakage
+        // pass put both of them into the package and this test stayed green twice. What the list is
+        // made of is a property of the source, so it is checked where the source is: in the method's
+        // own compiled body.
+        MethodBody body = MethodBody.of(Errand.class, "behaviours");
+
+        assertFalse(body.mentions(UpdateActivityFromSchedule.class), () -> """
                 The ERRAND package contains UpdateActivityFromSchedule, and it must not. \
                 Schedule.VILLAGER_DEFAULT says WORK from 2000 to 8999, so within twenty ticks of \
                 an errand beginning that behaviour would read the schedule and switch the activity \
                 back — every errand would last a fifth of a second. Its absence is what makes \
                 Steering's deactivation watchdog necessary and is why that was built first. \
-                Found: %s""".formatted(names));
+                Built: %s""".formatted(names));
 
-        for (String forbidden : List.of("WorkAtPoi", "WorkAtComposter", "StrollToPoi",
-                "StrollAroundPoi", "SetWalkTargetFromBlockMemory", "HarvestFarmland", "GoToPotentialJobSite")) {
-            assertFalse(names.contains(forbidden), () -> """
+        for (Class<?> forbidden : List.of(WorkAtPoi.class, WorkAtComposter.class, StrollToPoi.class,
+                StrollAroundPoi.class, SetWalkTargetFromBlockMemory.class, HarvestFarmland.class,
+                GoToPotentialJobSite.class, StrollToPoiList.class)) {
+            assertFalse(body.mentions(forbidden), () -> """
                     The ERRAND package contains %s, which measures something from the workstation. \
                     The entire reason an errand switches activity rather than vetoing walk targets \
                     is that beyond Manhattan nine from the job site vanilla writes one back EVERY \
                     TICK, and declining that is a write and an erase per villager per tick — the \
                     tug-of-war DESIGN.md §7 rules the day plan out of, arriving as a bill. \
-                    Found: %s""".formatted(forbidden, names));
+                    Built: %s""".formatted(forbidden.getSimpleName(), names));
+        }
+
+        // And the three it must keep, so the negatives above cannot pass over an empty method.
+        for (Class<?> kept : List.of(SetEntityLookTarget.class, ShowTradesToPlayer.class,
+                SetLookAndInteract.class)) {
+            assertTrue(body.mentions(kept),
+                    () -> "the ERRAND package no longer builds " + kept.getSimpleName()
+                            + ", so a villager on an errand is worse than a vanilla one. Built: "
+                            + names);
         }
     }
 

@@ -771,7 +771,7 @@ public final class Steering {
         }
 
         if (errand != null) {
-            if (++tracked.attempts > ERRAND_ATTEMPTS) {
+            if (!keepAsking(tracked.attempts++)) {
                 // ASKED EIGHT TIMES OVER THREE SECONDS AND THERE IS STILL NOWHERE TO SEND THEM.
                 // The window is marked served and the villager is left to vanilla for the rest of
                 // it. Without this bound the retry below is not a retry, it is a treadmill: the
@@ -868,7 +868,22 @@ public final class Steering {
      * seconds of grace, which is far longer than a point of interest takes to come back, and after
      * it the window is served and the villager is left to vanilla.
      */
-    private static final int ERRAND_ATTEMPTS = 8;
+    static final int ERRAND_ATTEMPTS = 8;
+
+    /**
+     * Whether the plan should ask again, or accept that this window has nowhere to send them.
+     *
+     * <p>A one-line method rather than an inline comparison, and the reason is the breakage pass:
+     * <b>a bound whose only guard is a profiler run has no guard at all</b>, because the profiler is
+     * deliberately not in CI. Removing the bound entirely turned nothing red, which is exactly the
+     * shape of "a fix is not done until it has been reverted and the test watched to fail".
+     * {@code SteeringTest.theRetryIsBounded} holds it against a literal rather than against
+     * {@link #ERRAND_ATTEMPTS}, so raising the constant is what turns it red — session 13's patience
+     * test read the constant it was testing and a patience of zero passed.
+     */
+    static boolean keepAsking(int attemptsSoFar) {
+        return attemptsSoFar < ERRAND_ATTEMPTS;
+    }
 
     /**
      * <b>Whether it is safe to put this villager on an errand right now — six clauses, as one pure

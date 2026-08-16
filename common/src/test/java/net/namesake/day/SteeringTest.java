@@ -241,6 +241,41 @@ class SteeringTest {
     }
 
     /**
+     * <b>The retry is bounded, and this test exists because a breakage pass proved nothing held
+     * it.</b>
+     *
+     * <p>An errand can be refused for a few ticks after a chunk load, because the point of interest
+     * it walks to is a brain memory that {@code ValidateNearbyPoi} erases and {@code AcquirePoi}
+     * puts back. So a refusal leaves the window unserved and the villager is asked again — and the
+     * <b>first version of that had no bound</b>, which the profiler priced at <b>16,665 offset
+     * hashes and 2,382 governor calls</b> in a twelve-hundred-tick window, taking
+     * {@code Steering.onServerTick} from 14.89 µs to 32.16 µs against a ~5.95 µs budget. That is
+     * session 13's own 2.4 µs regression, re-introduced by a fix for something else.
+     *
+     * <p>Removing the bound again turned <b>nothing</b> red, because the only instrument that could
+     * see it is deliberately not in CI. So the bound is a method and this is its guard, and the
+     * upper limit is a <b>literal</b> rather than {@code ERRAND_ATTEMPTS} — session 13's patience
+     * test read the constant it was testing and a patience of zero passed it.
+     */
+    @Test
+    @DisplayName("the errand retry is bounded, so a villager with nowhere to go is asked and dropped")
+    void theRetryIsBounded() {
+        assertTrue(Steering.keepAsking(0),
+                "the first refusal must be retried at all, or a point of interest that arrives one "
+                        + "tick late costs a villager the whole window — which is the defect this "
+                        + "bound was added on top of the fix for");
+        assertFalse(Steering.keepAsking(20), """
+                The errand retry is not bounded below twenty attempts. Every attempt is a registry \
+                lookup behind the governor, and every unserved villager also pays DayPlan.offsetOf \
+                — a 64-bit hash — on EVERY tick until the window is served. The profiler measured \
+                the unbounded version at 32.16 us against a ~5.95 us budget, and the whole of the \
+                difference was villagers being asked a question that was never going to have a \
+                different answer.""");
+        assertFalse(Steering.keepAsking(Steering.ERRAND_ATTEMPTS),
+                "and the constant is its own ceiling");
+    }
+
+    /**
      * <b>The narrowing is what makes it safe, so removing any one clause has to be visible.</b>
      *
      * <p>This is the shape hard rule 3 asks for, written as a test rather than as a breakage pass:
