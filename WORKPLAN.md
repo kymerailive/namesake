@@ -6434,3 +6434,15 @@ turns it off by lowering nothing — there is no config yet, and session 15 owns
 | `b413703` | the profiler priced an unbounded retry at 32 µs, which is session 13's own bug |
 | `e6a3316` | the breakage pass found two guards that were not real, and both were mine |
 | `e305caf` | `DESIGN.md` §7 and §8, and the tavern struck |
+
+**CI is green on `d727be0`, all three jobs** — build and test, and the attach-bet harness on each
+loader. **The NeoForge harness is CI's**: Fabric was run locally for `setup` and `verify` and both
+pass, and NeoForge was left to the runner deliberately, because session 13's closing lesson is that
+the runner is not only a worse place to measure but a **better place to find a race** — the errand
+day's polls are the kind of thing a slow machine tells you the truth about.
+
+**And the mod was watched running rather than only asserted about.** Every armed harness run mutes
+the client, which is why these are screenshots rather than a description: `namesake-errand-haul`,
+`namesake-errand-noon` and `namesake-errand-watch` in `fabric/run/screenshots/`. The noon picture is
+the one worth looking at first — six villagers, one at each bed, evenly spread across a platform they
+were bunched at the middle of ninety seconds earlier.
