@@ -271,17 +271,58 @@ class ConfigTest {
     /** Every key the template documents is a key this build reads, and the reverse. */
     @Test
     @DisplayName("the template documents exactly the keys that exist")
-    void theTemplateAndTheKeysAgree() throws IOException {
-        Properties written = new Properties();
-        written.load(new java.io.StringReader(Config.template()));
-
-        assertEquals(Config.KEYS.size(), written.size(), () ->
-                "the shipped template sets " + written.stringPropertyNames() + " and this build "
-                        + "reads " + Config.KEYS + ". A key documented but not read is a promise; a "
-                        + "key read but not documented is the one nobody finds.");
+    void theTemplateAndTheKeysAgree() {
+        String template = Config.template();
         for (String key : Config.KEYS) {
-            assertTrue(written.containsKey(key), () -> "the template does not set " + key);
+            assertTrue(template.contains(key), () -> "the template does not mention " + key
+                    + ". A key read but not documented is the one nobody finds.");
         }
+        // And nothing it documents is a key this build cannot read.
+        for (String line : template.split("\n")) {
+            String bare = line.startsWith("# ") ? line.substring(2).trim() : line.trim();
+            int equals = bare.indexOf('=');
+            if (equals <= 0 || bare.startsWith("#") || !bare.substring(0, equals).trim()
+                    .matches("[a-zA-Z.]+")) {
+                continue;
+            }
+            String key = bare.substring(0, equals).trim();
+            assertTrue(Config.KEYS.contains(key), () ->
+                    "the template documents '" + key + "', which this build does not read. A key "
+                            + "documented but not read is a promise nothing keeps.");
+        }
+    }
+
+    /**
+     * <b>The shipped template must not override the preset it documents.</b>
+     *
+     * <p>Found at session 15's close by editing the real file the way a server owner would: the
+     * template's first version wrote all six keys <i>live</i> at their defaults, and an explicit key
+     * beats a preset — which is a rule this file's own {@link #anExplicitKeyBeatsThePreset} exists to
+     * hold. So setting {@code preset = gentle} was read, applied, and then overridden line by line by
+     * the very file documenting it. **It did nothing at all, and it did it silently.**
+     *
+     * <p>The two behaviours are both correct and they compose into a defect, which is the only kind
+     * of bug a unit test suite of this shape cannot see: every test here passed. What was never
+     * asked was what the <i>shipped artefact</i> does, and this asks exactly that.
+     */
+    @Test
+    @DisplayName("setting the preset in the shipped template actually changes something")
+    void theShippedTemplateDoesNotDefeatItsOwnPreset() throws IOException {
+        String asShipped = Config.template();
+        String edited = asShipped.replace(
+                Config.KEY_PRESET + " = " + Config.Preset.DEFAULT.key(),
+                Config.KEY_PRESET + " = " + Config.Preset.GENTLE.key());
+        assertNotEquals(asShipped, edited, "the template must contain the preset line to edit");
+
+        Properties properties = new Properties();
+        properties.load(new java.io.StringReader(edited));
+        Config.Values values = Config.parse(properties);
+
+        assertEquals(Config.Values.of(Config.Preset.GENTLE), values, () ->
+                "editing one line of the shipped file to 'preset = gentle' produced " + values
+                        + " rather than " + Config.Values.of(Config.Preset.GENTLE) + ". Every other "
+                        + "key in the template must stay commented out, or the file overrides the "
+                        + "preset it is documenting and the easiest setting in the mod does nothing.");
     }
 
     /** A file this mod never rewrites is a file whose comments stay the operator's. */

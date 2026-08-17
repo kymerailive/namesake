@@ -108,6 +108,18 @@ public final class Config {
      * <p>A preset supplies <i>defaults</i>; any key written explicitly beside it still wins. That
      * ordering is the whole reason a preset is worth having — an operator can say "gentle, except
      * leave the roads on" in two lines rather than by knowing every key.
+     *
+     * <p><b>Which is exactly why the shipped template writes every other key COMMENTED OUT, and that
+     * is a bug fix rather than a style choice.</b> The template's first version wrote all six live at
+     * their defaults — so {@code preset = gentle} was read, applied, and then overridden key by key
+     * by the very file that was documenting it. <b>Setting the preset did nothing at all, and it did
+     * it silently</b>, which is the worst available outcome for the one setting whose whole job is to
+     * be the easy one.
+     *
+     * <p>Both behaviours are correct on their own and every unit test passed; what nobody had asked
+     * was what the <i>shipped artefact</i> does when a person edits one line of it. Found at session
+     * 15's close by editing the real file the way a server owner would, and held now by
+     * {@code ConfigTest.theShippedTemplateDoesNotDefeatItsOwnPreset}.
      */
     public static final String KEY_PRESET = "preset";
 
@@ -394,6 +406,11 @@ public final class Config {
         return String.join("\n",
                 "# Namesake — server configuration.",
                 "#",
+                "# Every setting below is COMMENTED OUT and shown at its default. Uncomment a line to",
+                "# change it. They are commented rather than live for a reason worth knowing: a key",
+                "# written explicitly OVERRIDES the preset, so a file that listed all six would make",
+                "# 'preset = gentle' do nothing at all.",
+                "#",
                 "# Every setting here is a BOOLEAN: true or false. Nothing else is accepted, and a",
                 "# value that is neither logs a warning and uses the default rather than failing to",
                 "# start. A key you delete takes its default; a key this build does not recognise is",
@@ -427,7 +444,7 @@ public final class Config {
                 "# them. Never above ground level, never over anything you built, loaded chunks only.",
                 "# The road NETWORK is arithmetic and is unaffected — gossip crosses the graph, not",
                 "# the blocks — so turning this off changes what you see and not what villagers know.",
-                KEY_ROADS + " = true",
+                "# " + KEY_ROADS + " = true",
                 "",
                 "# Stand a lectern beside a village's bell if there is not one within the village",
                 "# already. That lectern is the Notice Board: right-click an empty one with an empty",
@@ -435,7 +452,7 @@ public final class Config {
                 "# mod explains itself, so switching this off means a new player has to know to",
                 "# place their own. One consequence worth knowing: a lectern is a librarian's",
                 "# workstation, so a village that had no library may gain a librarian.",
-                KEY_NOTICE_BOARD + " = true",
+                "# " + KEY_NOTICE_BOARD + " = true",
                 "",
                 "# ---------------------------------------------------------------------------------",
                 "# village — how villagers spend their day.",
@@ -445,7 +462,7 @@ public final class Config {
                 "# of going to bed. Set this to false and everybody sleeps. Two things follow if you",
                 "# leave it on: those villagers do not contribute to iron golem spawning while they",
                 "# are awake, and your village looks occupied at midnight.",
-                KEY_NIGHT_WATCH + " = true",
+                "# " + KEY_NIGHT_WATCH + " = true",
                 "",
                 "# ---------------------------------------------------------------------------------",
                 "# social — how sharply villagers react to you. This is the group the 'gentle' preset",
@@ -455,13 +472,13 @@ public final class Config {
                 "# Let standing raise a price as well as lower one. With this on, a villager who has",
                 "# watched you hurt someone charges you more; with it off, standing can only ever",
                 "# give a discount. Vanilla's own reputation pricing is untouched either way.",
-                KEY_PRICE_MARKUP + " = true",
+                "# " + KEY_PRICE_MARKUP + " = true",
                 "",
                 "# Let a harmful deed cross a village border. With this off, what you did is",
                 "# remembered where you did it and the next village down the road never hears about",
                 "# it. Kindness travels regardless, so villages still recognise your name for the",
                 "# right reasons.",
-                KEY_HARM_TRAVELS + " = true",
+                "# " + KEY_HARM_TRAVELS + " = true",
                 "");
     }
 

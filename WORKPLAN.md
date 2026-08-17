@@ -584,6 +584,18 @@ also not met by a stranger who is handed a script. If no stranger is available, 
 that the machine-checked half passed and the criterion is **outstanding**, which is what session 08
 did when it shipped without a playtest.
 
+**It closed outstanding, and it now has a date: the close of session 20.** Ruled by the owner at the
+close of 15. The machine-checked half passed and the owner ruled all nine feel questions good — but
+the owner is not the reader this names, so it stays open rather than being folded away.
+
+**Session 20 rather than "someday", and the reason is what a stranger would be reacting to.** 16–20
+is the grievance engine, and 20 is the first point at which this mod has *drama* as well as *memory*
+— a villager who is angry with another villager, which is the thing a person notices without being
+told to look. Asking a stranger now tests propagation; asking at 20 tests propagation plus the
+consequence it was built to carry. **And a criterion with no date is a criterion that drifts**, which
+is what happened to standing risk 3: its first read was at session 03 and its second at 15, twelve
+sessions later, because nothing ever named the session that owed it.
+
 ---
 
 ## After the slice — sequence only, not scheduled
@@ -593,7 +605,7 @@ that turns out not to land is sixteen sessions wasted. Prove the thesis first.
 
 | Sessions | Block |
 |---|---|
-| 16–20 | Grievance engine — wants, scarcity, 5-stage ladder, arbitration, character drift |
+| 16–20 | Grievance engine — wants, scarcity, 5-stage ladder, arbitration, character drift. **And at 20's close, session 15's exit criterion: a stranger, unprompted, 45 minutes** — scheduled here by the owner at the close of 15 because 20 is the first point the mod has drama as well as memory, and because a criterion with no date drifts the way standing risk 3 did for twelve sessions |
 | 21–23 | Mortality, funerals, grief, inheritance, ruins |
 | 24–27 | Era ladder 0–3, offices, charters, treasury, prosperity display — **and `DESIGN.md` §7's *17:00, the tavern lights up*, struck from the at-a-glance test at session 14 and parked here because a tavern is a building type and buildings arrive with the era ladder** |
 | 28–30 | Secrets, named factions, migration, rival settlements |
@@ -820,8 +832,21 @@ optional.
 ## Never cut — load-bearing walls, not tuning knobs
 
 The `spread ≥ 64` boundary-jitter floor · the 8/tick transition governor · the `id % 7` path gate ·
-the player-relative particle emission gate · the `dayDelta ≤ 64` clamp · the `addActivitySafely`
-helper · the sleep-skip cold-start mode.
+~~the player-relative particle emission gate~~ · the `dayDelta ≤ 64` clamp · the `addActivitySafely`
+helper · ~~the sleep-skip cold-start mode~~.
+
+**Two of the seven are struck through because they guard code that does not exist, found at session
+15 and marked rather than removed.** There is no particle emission anywhere in this mod —
+`ParticleTypes`, `sendParticles` and `addParticle` return no hits in main source — and *sleep-skip
+cold-start* appears in exactly one comment, in `Deed`. **A list that presents a note to a future
+session as an existing guard is a list that overstates itself**, and this one had done so since
+session 00. They stay on the list because the numbers behind them are ruled — `DESIGN.md` §7's
+*particles are punctuation: max 1/NPC/40 ticks, within 32 blocks of a player* — so **whoever builds
+the emission builds the gate with it, rather than adding the gate afterwards.** Neither has a
+scheduled home: §7's legibility laws belong to sessions 13–14, which are done.
+
+Everything not struck through is held by `NeverCutTest`: five of them as compile-time constants, so
+there is no runtime read to redirect at all, and `addActivitySafely` by the day plan still calling it.
 
 **Added at session 10: a story crosses a border only from the place it happened, and it crosses
 carrying the deque's own entry rather than the telling.** Both are one comparison over
@@ -7013,6 +7038,65 @@ is the second, and it passed with a distinguisher the first did not have, becaus
 now differs in what a player sees from thirty blocks away rather than only in what its villagers are
 called. **The failure it names still happens at hour 45**, and nothing in a sixteen-session slice
 reaches hour 45.
+
+#### Four things the close-out found, and the first one made a shipped feature inert
+
+The owner ruled four close-out questions at the end of the session. Answering them found more than
+they asked.
+
+**1. `preset = gentle` did nothing at all, silently — and every unit test passed.** The shipped
+template wrote all six keys **live** at their defaults, and an explicit key beats a preset, which is
+a rule `ConfigTest.anExplicitKeyBeatsThePreset` exists to hold. So the file documenting the preset
+overrode it, line by line, the moment anybody set it. **The easiest setting in the mod was a no-op.**
+
+The two behaviours are each correct and they compose into a defect, which is the only kind this
+suite's shape could not see: every test calls `Config.parse` on a `Properties` it built itself, so
+**nothing had ever asked what the shipped artefact does when a person edits one line of it**.
+`theTemplateAndTheKeysAgree` was worse than silent — it *loaded* the template and asserted it set all
+six keys, which is asserting the bug. The keys are commented out now, the template says why, and
+`theShippedTemplateDoesNotDefeatItsOwnPreset` goes red if it regresses. **The transferable lesson is
+that a test which reads an artefact's contents is not a test of what the artefact does.**
+
+Then verified end to end in a running game, which is the half no unit test can reach — nothing had
+ever exercised `Platform.configDir()` → find the file → `load()` → apply. One edited line produced:
+
+```
+Config: 3 setting(s) away from the defaults
+  preset = gentle
+  social.priceMarkup = false
+  social.harmTravels = false
+```
+
+**2. Two of the seven never-cut walls guard code that does not exist**, and the list is marked rather
+than trimmed. See that section: the numbers are ruled, so whoever builds particle emission builds the
+gate with it.
+
+**3. The exit criterion has a date: the close of session 20.** It stays outstanding — the owner is
+not the reader it names — but it is scheduled rather than drifting, because standing risk 3 went
+twelve sessions between reads for exactly the want of one.
+
+**4. Hard rule 1, on real saves rather than archives, and the schema-2 ladder had never been run end
+to end before.** Both of the owner's un-migrated worlds were copied to scratch and put through the
+shipped load path:
+
+| save | ladder | rewritten | survived | second pass |
+|---|---|---|---|---|
+| schema 2 | 2 → 8, **six fixes** | 2 records | 1 persona, 0 unreadable | 0 rewritten |
+| schema 7 | 7 → 8 | 132 records | **30 personas, 3 settlements, 18 bonds, 76 deeds across 18 rings, 8 rumours** | 0 rewritten |
+
+Neither went read-only, both marked dirty, and **the second pass rewrote nothing** — the check that
+says a rewrite is *stable* rather than merely performed, which is session 01's defect.
+
+**And the probe was wrong first, in the way that matters.** `SavedData` nests the payload under
+`data`, so the first version migrated the empty wrapper and reported a clean `1 → 8` of nothing at
+all. **A probe reading the wrong tag reports success exactly as loudly as one reading the right
+one** — the same shape as the board probe reading a stale screen, twice in one session.
+
+**And one process failure, recorded because it is the fourth time.** The breakage run that confirmed
+the new config guard used `git checkout --` on an uncommitted file and ate the fix it had just
+proved. *Commit before you break things* has been in this ledger since session 09 and has now bitten
+at 06, 10, 14 and 15. It is not a note any more; **the breakage step should refuse to run against a
+dirty tree.**
 
 #### The commit range
 
