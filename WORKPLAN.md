@@ -606,10 +606,11 @@ that turns out not to land is sixteen sessions wasted. Prove the thesis first.
 | Sessions | Block |
 |---|---|
 | 16–20 | Grievance engine — wants, scarcity, 5-stage ladder, arbitration, character drift. **And at 20's close, session 15's exit criterion: a stranger, unprompted, 45 minutes** — scheduled here by the owner at the close of 15 because 20 is the first point the mod has drama as well as memory, and because a criterion with no date drifts the way standing risk 3 did for twelve sessions |
-| 21–23 | Mortality, funerals, grief, inheritance, ruins |
+| 21–23 | Mortality, funerals, grief, inheritance, ruins — **and the tombstone**: a dead persona keeps its bonds and ring rather than being deleted (ruled 2026-10-22, `DESIGN.md` *Bonds on death*). That needs a lifecycle state on `Persona` and a liveness filter at the five `registry.all()` sweeps in `Residency`, `Gossip` and `Board`, none of which can tell a dead persona from a living one today, plus the schema 9 bump |
 | 24–27 | Era ladder 0–3, offices, charters, treasury, prosperity display — **and `DESIGN.md` §7's *17:00, the tavern lights up*, struck from the at-a-glance test at session 14 and parked here because a tavern is a building type and buildings arrive with the era ladder** |
 | 28–30 | Secrets, named factions, migration, rival settlements |
 | 31+ | Era 4–5, addon API hardening, animals in the social graph |
+| Unscheduled | **Rulings of 2026-10-22 that schedule nothing:** technology and machines (`DESIGN.md` *Era scope* lifted), mastery for NPCs and players, *History* (accounts that may be wrong, true events kept apart — the log's capacity is a number to measure at the chronicle session, not to choose now), and a second currency medium alongside emeralds (the *Treasury* row stays emerald-denominated until one exists). Each needs its own ruling on mechanism before any code, and anything of them that persists state shares the one schema 9 with the tombstone. Code-level integration with Create, KubeJS, Immersive Engineering and Mekanism is NeoForge-only on 1.21.1; reading `c:` tags and recipe ids as data is loader-neutral |
 
 **One open question parked here deliberately: how optional LLM enrichment is delivered** — players
 routing their own API key, or a hosted service. `DESIGN.md` already rules the half that matters
@@ -6954,6 +6955,7 @@ whether that reads as *earned* or as *grindy*** — and if it is grindy, 24 is t
 
 #### Carried into session 16
 
+- **Finite-partner scarcity is per-person (ruled 2026-10-22).** `DESIGN.md` §6 now says scarcity, jealousy and an exclusive partner's trust broken apply only to people whose own preference is exclusive. Derive that preference from the persona id and store nothing — this project's ruling for the settlement name and the road graph — so it adds no stored field. Do not build a one-partner-per-person slot: the first NPC-to-NPC schema would lock the monogamy assumption in.
 - `$env:JAVA_HOME` still must be pinned to JDK 21. Kill the dev client between runs, delete
   `<loader>/run/saves/namesake_attachbet` before a `setup` and `namesake_profiler` before a profiler
   run, and read the verdict file rather than Gradle's exit status.

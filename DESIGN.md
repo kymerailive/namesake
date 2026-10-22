@@ -1,7 +1,7 @@
 # DESIGN — Namesake
 
 What we are building and why. `WORKPLAN.md` owns *what happens next*; this owns *what it is*.
-85 decisions ruled, 0 open.
+87 decisions ruled, 0 open.
 
 **That number is counted rather than maintained, from session 15 on**, and the reason is that three
 documents held three different ones: this file said 85, `CLAUDE.md` said 41 and `README.md` said 45.
@@ -48,15 +48,15 @@ Enforce with a failing test, not intention.
 | | |
 |---|---|
 | Player role | Outsider who **earns residency** |
-| Player progression | External only — no XP, no skills |
+| Player progression | **Mastery is a record of what a character can do, held for NPCs and players alike, and separate from knowing a method exists.** Knowing a recipe grants no skill. Every mastery value names the `if` it feeds (hard rule 5). Ruled 2026-10-22. |
 | Office | Player-eligible at era 4+, with obligations NPCs notice you failing |
 | Fail state | Always recoverable, slowly. Never permanent lockout. |
 | Onboarding | The Notice Board teaches everything. No tutorial. |
 | Settlements | Detected from vanilla POI clusters (bell + workstations). No player founding in v1. |
 | Settlement name | **Derived from the bell and the culture at it, never stored.** A place name and a family name are the same shape in every one of the six grammars — Vale's family suffixes are literally *wood*, *field*, *ford*, *combe*; Karsk's are *grad*, *vor*, *din* — so `Names.family` already **was** the place grammar and needed no second one. Seeded from the bell rather than from the settlement id, because an id comes from a counter that increments in the order a player happens to visit, and would name one world's villages differently on a second playthrough. Derived for §1's reason and for session 03's: a stored name is a cache that can drift from the bell it describes, and a persisted field whose only reader is a display is the shape this document forbids — where a derived one has nothing to classify, which is the standing `Names` has held since session 03. It costs zero bytes and zero schema, which is what made it available at all in a session that must not bump one. |
 | Player base | Registers only if villagers actually live there — same rule as everywhere |
-| Era scope | **Social institutions only.** No tech tree, no machines. |
-| Currency | Emeralds only |
+| Era scope | **Social institutions first; technology and machines are in scope.** The earlier "no tech tree, no machines" is lifted (ruled 2026-10-22). When and how are `WORKPLAN.md`'s to sequence, not this row's. |
+| Currency | **Emeralds are the default, not the only medium.** Vanilla trades stay priced in emeralds and standing keeps adding to vanilla's accumulator (the *Trade price* row); a settlement's economy may define another medium for exchanges Namesake itself creates. Ruled 2026-10-22. |
 | Treasury | Accrues a share of trades made in the settlement; spends on public works |
 
 ### Social
@@ -101,13 +101,15 @@ Enforce with a failing test, not intention.
 | Factions | Named, generated from the shared cause |
 | Theft | Real items, from unlocked containers only |
 | Content gating | All on, with a documented "gentle" preset |
+| History | **An account of an event is a record of its own and may be wrong; the event itself is kept separately and never rewritten.** Gossip is unchanged — it distorts and never invents (the *Gossip* row). A correction needs evidence and credibility; being a player is not proof. Ruled 2026-10-22. |
+| Relationship choice | **Exclusivity, romance and parenthood are each a per-person preference; none is required for a meaningful life or a successful settlement.** Scarcity, jealousy and affairs apply only where the people involved hold an exclusive preference. Participation is voluntary: no command or title overrides consent. No romantic bond forms where either person is below the adult stage. Ruled 2026-10-22. |
 
 ### Life and death
 | | |
 |---|---|
 | Generation length | ~40–60 hours of play |
 | Funerals | Real gatherings residents path to and attend |
-| Bonds on death | Convert to a ~10-day grief modifier on survivors, then a chronicle row |
+| Bonds on death | **A dead persona is tombstoned, not deleted: its bonds and memory ring are kept within the ceiling the *Deed storage* row holds.** Survivors still take a ~10-day grief modifier and a chronicle row is written. Nothing is revived by this row; it means resurrection, if built, has a person to return. Ruled 2026-10-22. |
 | Inheritance | Kin first, then highest trust. **Debts die with the NPC** in v1. |
 | Settlement death | Becomes a discoverable ruin. Neighbours hear about it. |
 | Migration | Driven by unrest and prosperity, along known road edges |
@@ -316,7 +318,7 @@ you a valid *subject* of gossip rather than only an actor. Other settlements sta
 
 ## 6. The grievance ladder
 
-Every conflict traces to scarcity: capped job slots, quality-ranked housing, finite partners, and
+Every conflict traces to scarcity: capped job slots, quality-ranked housing, finite partners (for those whose own preference is exclusive), and
 **your finite attention**.
 
 | Stage | What you'd notice | Cost to resolve |
@@ -324,7 +326,7 @@ Every conflict traces to scarcity: capped job slots, quality-ranked housing, fin
 | 1 · Friction | Cold greeting, won't sit near them, small talk stops | One conversation |
 | 2 · Grievance | They tell third parties; it enters the gossip queue | A favour or gift |
 | 3 · Dispute | Public. Refuse to share a work site. Output drops. | Arbitration — someone loses |
-| 4 · Rupture | Theft, sabotage, a fight, an affair surfacing, departure | Damage control only |
+| 4 · Rupture | Theft, sabotage, a fight, an exclusive partner's trust broken, departure | Damage control only |
 | 5 · Consequence | Permanent. Written to the chronicle. | None — it's history |
 
 Intervening early is cheap; late is impossible. Most resolve at stage 1–2 without you. Active dramas
