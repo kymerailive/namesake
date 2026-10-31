@@ -23,22 +23,38 @@ import java.util.UUID;
  * subject is a persona this world knows about, and says so loudly.
  *
  * <p>That split is the point, and it is what the two obvious answers each get wrong. Keying strictly
- * on (npc → player) makes session 16's grievance engine a schema migration, because grievances are
- * between villagers and every bond ever written would need re-keying. Letting NPC-to-NPC bonds
- * "fall out for free" is worse: witnesses are capped at twelve per deed, so a village going about
- * its business would accumulate bonds toward n² of itself, and not one of them would be read by an
- * {@code if} statement before session 16. A persisted social value with no consumer is precisely
- * what {@code DESIGN.md} §1 forbids, and four hundred personas is 160,000 of them.
+ * on (npc → player) would have made the grievance engine a schema migration, because every bond
+ * ever written would need re-keying. Letting NPC-to-NPC bonds "fall out for free" is worse:
+ * witnesses are capped at twelve per deed, so a village going about its business would accumulate
+ * bonds toward n² of itself, and not one of them would be read by an {@code if} statement. A
+ * persisted social value with no consumer is precisely what {@code DESIGN.md} §1 forbids, and four
+ * hundred personas is 160,000 of them against a 2,000,000 B tag-tree ceiling that the deed rings
+ * already use 1,303,029 B of.
+ *
+ * <h2>And the generality was never spent — ruled 2026-11-01</h2>
+ *
+ * <p>This javadoc said until session 16 that the guard was temporary and that 16 would delete it.
+ * <b>Session 16 declined.</b> A grievance is carried by {@code DESIGN.md} §3's {@code Grievance}
+ * record, which has a {@code stage}, a {@code kind} and a {@code severity} that three signed axes
+ * express none of — so the ladder needed that record whatever this table did, and opening this one
+ * beside it would have been a second store for one fact. The population guard in
+ * {@code NpcRegistry.putBond} is therefore <b>permanent</b>, and the general key costs nothing: it
+ * stays in the format, unspent, and no migration was ever needed.
+ *
+ * <p>See {@code DESIGN.md}'s <i>NPC-to-NPC bonds</i> row for the ruling and {@code WORKPLAN.md}'s
+ * session 16 block for the three rejected alternatives, which are kept because a later session will
+ * reach for one of them first.
  *
  * <p><b>What it costs, plainly.</b> Three things.
  * <ol>
- *   <li>A bare UUID cannot say whether it is a player or a persona by looking at it. Today that is
- *       free because everything stored is a player; at session 16 something will have to
- *       disambiguate, and the cheapest honest answer will be to ask the registry — which is exactly
- *       what the guard already does, in the other direction.</li>
+ *   <li>A bare UUID cannot say whether it is a player or a persona by looking at it. That stays
+ *       free, because the 2026-11-01 ruling means everything stored here is a player for good —
+ *       the disambiguation this once owed a future session is never called for.</li>
  *   <li>Because the format allows what the guard forbids, the guard is the only thing standing
  *       between here and the n² table. It is one method, it logs rather than throwing, and it has
- *       been reverted and watched to fail.</li>
+ *       been reverted and watched to fail. <b>It is not on {@code WORKPLAN.md}'s never-cut list and
+ *       the ruling is an argument that it belongs there</b>, since it now looks exactly like a
+ *       tidiness rule and is a wall; adding an eighth wall is the owner's.</li>
  *   <li>The saved shape is a flat list of triples rather than a nested map. It costs 32 bytes of
  *       key per bond and buys a load path with no partially-built intermediate state.</li>
  * </ol>

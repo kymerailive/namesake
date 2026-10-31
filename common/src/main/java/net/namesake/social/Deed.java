@@ -42,9 +42,10 @@ import java.util.UUID;
  *
  * <p><b>{@code actor} and {@code subject} are bare UUIDs, so a deed is already general.</b> Nothing
  * here says the actor is a player. That is what makes the NPC-to-NPC deeds of session 16's
- * grievance engine a matter of emitting one, rather than of a schema change — see {@link Bonds}
- * for the other half of that decision, and for the guard that keeps the population restricted
- * until something reads it.
+ * grievance engine a matter of emitting one, rather than of a schema change — and that half of
+ * session 05's decision <b>was</b> spent: a grievance enters the gossip queue at §6 stage 2, and
+ * the queue is made of these. The other half was not. See {@link Bonds} for the guard on the bond
+ * table, which the 2026-11-01 ruling made permanent rather than temporary.
  */
 public record Deed(
         short typeId,

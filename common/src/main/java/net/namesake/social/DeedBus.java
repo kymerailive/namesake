@@ -181,14 +181,22 @@ public final class DeedBus {
      */
     public static Result record(NpcRegistry registry, Deed deed, List<Persona> reached, int witnesses) {
         // The population guard for session 05's decision 1, checked once here rather than thirteen
-        // times inside putBond. An NPC-to-NPC bond has no consumer until session 16's grievance
-        // engine, and a persisted social value with no consumer is what DESIGN.md §1 forbids. The
-        // deed itself is perfectly general and is built anyway — it is the storing that is withheld,
-        // the ring along with the bond, because a ring of deeds nothing reads is the same forbidden
-        // shape as a bond nothing reads. Session 16 deletes this branch and changes no schema.
+        // times inside putBond. An NPC-to-NPC bond has no consumer, and a persisted social value
+        // with no consumer is what DESIGN.md §1 forbids. The deed itself is perfectly general and is
+        // built anyway — it is the storing that is withheld, the ring along with the bond, because a
+        // ring of deeds nothing reads is the same forbidden shape as a bond nothing reads.
+        //
+        // THIS BRANCH OPENS AT SESSION 16 AND putBond's DOES NOT. The two were one decision until
+        // the n² bound was ruled on 2026-11-01, and they are now opposites: the bond table stays
+        // shut for good, while the ring has to start accepting an NPC actor, because DESIGN.md §6
+        // stage 2 is "they tell third parties; it enters the gossip queue" and the gossip pipeline
+        // is made of Deeds — a grievance nobody can retell cannot reach stage 2 at all. A ring is
+        // capped per holder however the actor is keyed (NpcRegistryTest.theRingHasNoPopulationGuard
+        // asserts exactly that), so the restriction buys nothing here and everything there.
         if (registry.persona(deed.actor()).isPresent()) {
             Namesake.LOGGER.debug("Deed {} has an NPC actor; nothing was recorded and no bond was "
-                    + "written. NPC-to-NPC deeds arrive with session 16's grievance engine.", deed);
+                    + "written. NPC-actor deeds start being remembered at session 16's grievance "
+                    + "engine; NPC-to-NPC bonds never do.", deed);
             return new Result(deed, 0, 0, 0);
         }
 

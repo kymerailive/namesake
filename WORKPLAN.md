@@ -265,7 +265,7 @@ Where any other document disagrees on sequence, this wins.
 | 13 | Day plan I — free slots | **done** — 2026-08-15 |
 | 14 | Day plan II — ERRAND activity | **done** — 2026-08-16 |
 | 15 | Art, config, playtest | **done** — 2026-08-16 |
-| 16 | Grievance engine — wants, scarcity, the 5-stage ladder | **NEXT** |
+| 16 | Grievance foundation — wants, scarcity, the ladder's lower rungs | **NEXT** |
 
 ---
 
@@ -598,6 +598,186 @@ sessions later, because nothing ever named the session that owed it.
 
 ---
 
+## Phase 6 · The drama engine
+
+**Sessions 16–20, and the band's shape belongs to the "after the slice" table below rather than to
+this section.** Session 16 has a block because it is next; 17–20 stay sequence-only until one of them
+is. The drama engine was deliberately outside the slice, and the reason it is now in front of us is
+that the thing it rests on landed: propagation shipped at session 10 and the owner played it.
+
+### Session 16 — Grievance foundation: wants, scarcity, and the ladder's lower rungs
+
+**Ruled before anything was built — the n² bound, 2026-11-01.** `NpcRegistry.putBond` refuses a
+bond whose subject is a persona this world knows, and session 05 wrote that session 16 *"deletes the
+`if` below and changes no schema"*. **It does not. The guard stays shut, permanently, and a grievance
+is its own record** — option D of the four below, ruled by the owner. The full reasoning and the
+three rejected options are kept rather than tidied away, because the rejected ones are what a later
+session will reach for first. See *The n² bound* below.
+
+**Verify first, and it is the respect failure about to repeat.** `Bond.respect` died at session 12
+because — measured over a hundred in-game days and five player models — **no deed in the table
+honestly earned deference except the raid defence that already did**, and the observed maximum was
+zero, zero, zero, zero and four against a lowest ladder mark of twenty. §6's force-resolution wants
+*deference up*, so session 16 adds the axis back and pays hard rule 1 for it. **Before the schema
+bump, run session 07's instrument against the force-resolution that would write it** and show the
+axis reaches a mark something reads. A field that cannot be earned is a field session 20 deletes —
+and this time it would be deleted *after* a datafixer had shipped for it.
+
+**Build.**
+
+- **`Want` — what one persona is short of**, against §6's four scarcities: capped job slots,
+  quality-ranked housing, finite partners (for those whose own preference is exclusive) and the
+  player's finite attention. Settlement-level scarcity already exists as `Need` and is **not** this:
+  `Need` is four wide, ordinal-indexed and append-only, and widening it is a schema change in its
+  own right. A want is per-person and derived wherever it can be.
+- **The exclusive preference is derived from the persona id and stored nowhere** (ruled 2026-10-22),
+  as the settlement name and the road graph are. **Do not build a one-partner-per-person slot** — the
+  first NPC-to-NPC schema would lock the monogamy assumption in.
+- **`Grievance`, and its shape is already ruled — `DESIGN.md` §3 has carried the record since before
+  this block existed.** Nine fields: `int id`, `UUID instigator`, `UUID target`, `byte kind`,
+  `byte stage`, `byte severity`, `int openedDay`, `int lastEscalatedDay`, `IntList sourceDeeds`.
+  **Do not invent a field list for it** — §3 owns the data model and this block owns the sequence.
+  A table beside the bonds and the rings, inside `namesake_npcs.dat` under the one `NpcSchema`
+  version, for the reason settlements gave and gossip gave after them: one file, one version number
+  that cannot disagree with itself. **`NpcRegistry.putBond`'s guard stays shut and there are no
+  NPC-to-NPC bonds** — see *The n² bound* below for what that is instead of, and for the one branch
+  it does open: `DeedBus.record` must start storing deeds with an NPC actor, because a grievance
+  that cannot be retold cannot reach stage 2.
+- **`sourceDeeds` is the field to read twice before building.** It is an `IntList` on a persisted
+  record, so it is the only variable-width thing in this schema, and §3's own sizing comments give
+  every other record a fixed byte count. Session 09 packed the deed ring to a fixed 25 B a slot
+  rather than ship a readable encoding at 6.26 MB; an unbounded id list per grievance is the same
+  question arriving again, and the drama cap bounds the *number* of grievances without bounding this.
+- **Stages 1 and 2, which are the rungs that resolve without the player.** §6 says *most resolve at
+  stage 1–2 without you*. Stages 3–5 are 17–20's, except the two consumers below.
+- **Active dramas capped at `2 + population/10`**, §6's own number. At the populations this mod
+  actually has — seven real villages gave 52 personas, never more than 11 loaded at once — that is
+  two a village, which makes it a wall rather than a knob.
+- **`Bond.deference`, the axis back**, with schema 9, a datafixer, and a load test against a
+  pre-change save.
+- **Grievance rows on the Notice Board.** §2 rules the notification: *None — you must notice. Board
+  is the backstop.* The board stores nothing and computes on open, and `BoardText` was left with a
+  compile-error seam at session 11 for exactly this arrival.
+
+**What §6 asks for that has no mechanism at all, audited rather than assumed.** All four of its
+scarcities and two of force-resolution's three effects are unbuilt, and the gap matters because
+force-resolution is what `fear` names as a consumer. Only *trust down* has a mechanism today:
+
+- **Capped job slots: nothing models capacity or competition.** `Steering.jobSiteOf` is a bare read
+  of vanilla's `JOB_SITE` memory; `SettlementCensus.tally` counts workstations **once**, at survey
+  time, and `SettlementSurvey.needs` scores them into the needs vector and never looks again.
+- **Quality-ranked housing: no housing record, no dwelling, no rank.** The nearest thing is
+  `Need.SHELTER`, which is *beds measured against job sites* on the 0..100 settlement scale — a
+  property of the place, read by `TraitRoll` to shift the population's temper. Not anyone's house.
+- **Finite partners: nothing, and the shape is pre-ruled** — see the Build list above.
+- **Your finite attention: there is no budget.** §6 rests *no dominant strategy* on *a daily
+  attention budget*, and the two things that look like one are not: `RateLimiter` is a
+  per-(sender, verb) token bucket for hard rule 6, swept in memory and persisted nowhere, and
+  `Conversations` is a volatile map of at most 128 players whose counter only ever selects `PARTING`.
+  **So the claim that holds §6's whole no-dominant-strategy argument is the one with least behind
+  it.**
+- **And *guards multiply* has no mechanism either.** §6's force-resolution wants three things —
+  *deference up, trust down, guards multiply* — and the third has nowhere to land: the night watch is
+  a **per-persona** day-plan slot (`BOLDNESS_TO_WATCH = 20`, about one villager in four, gated by
+  `village.nightWatch`), not a settlement-level count anything can raise. **Two of
+  force-resolution's three effects are therefore unbuilt**, which is worth knowing before `fear`'s
+  exemption is declared paid by it.
+
+**And the axis count is hard-coded in seven places, not one.** Adding `deference` touches
+`Bond.AXIS_COUNT`, `Bond.AXIS_NAMES`, `Bond.FLOOR`, the `axis()` switch, the `Codec` group,
+`apply`'s `int[] axes`, and `DeedType`'s `new int[]{trust, warmth, fear}`. `Bond.apply` already
+**refuses** a delta of the wrong width rather than truncating it, with a test naming both widths —
+so the build will find the ones that are missed, which is the one mercy here.
+
+**The two exemptions that fall due, and what may not pay them.** `Bond.fear` and `Bond.debt` are the
+last two of session 05's five, and `SocialValueLedgerTest` compares them against this ledger's own
+status board — **the build goes red the moment the board says 16 is done.** `fear` is read today only
+by `/namesake debug bond` and the harness; `debt` is read by **nothing in main source at all**, and
+`Bond.apply` passes it straight through. Neither may be paid by a line of dialogue
+(`net.namesake.dialogue` is in the ledger's display packages and the build says so) nor by a board
+row, because a board row is a display. So:
+
+- **`fear` names force-resolution** — §6's *force it: both gain fear, settlement hardens.*
+- **`debt` names the favour that settles a stage-2 grievance** — §6's *cost to resolve: a favour or a
+  gift.* It has to be **spent**, not merely recorded: a debt that only ever increments is a counter,
+  and a counter's only consumer is a display.
+
+**Exit.**
+
+> **Two villagers in one village come to want the same thing, one of them gets it, and the other
+> treats them differently with the player nowhere involved** — a cold greeting, and they will not
+> stand at the bell beside them. **The player can then settle it or force it, and the two routes are
+> distinguishable by effect a hundred in-game days later:** the favour **spends** `debt` and the
+> grievance is gone, where forcing it writes `fear` to both parties and raises the settlement's
+> deference, and that one is still on the chronicle. **It survives a save, a quit and a reload at
+> schema 9, with a pre-change save migrated through** — hard rule 1, on a real save rather than an
+> archive. And **the table the n² guard was holding is held by a test that counts bytes.**
+
+**That last clause is new rather than inherited, and it is the gap the ruling below exposes.** No
+test in this repo has ever held the bonds table's size: `MemoriesTest` is the only byte-counting test
+there is, and it measures the rings in isolation.
+
+**And the budget clause, which is session 14's shape rather than session 13's.** The ladder runs per
+settlement and per loaded entity, not in the record sweep — so the profiler at `DESIGN.md` §8's
+ninety-six loaded villagers must show the mod inside the ~5.95 µs budget **at every hour the ladder
+does work in**, with the 400-record sweep still inside its 1.2 µs warm. **The absolute number has not
+been taken on a quiet machine since session 13**, so take one before trusting a delta.
+
+#### The n² bound — ruled 2026-11-01: a grievance is its own record and the guard stays shut
+
+**The problem, with the arithmetic rather than the adjective.** A grievance is one villager's
+standing toward another, and `NpcRegistry.putBond` refuses exactly that. The guard is *"the only
+thing standing between here and the n² table"* in `Bonds`'s own words. Remove it and the witness
+sweep does the rest: `DeedBus.MAX_WITNESSES` is **12** inside a 24-block radius, so a village going
+about its business accumulates bonds toward n² of itself. At §8's four hundred records that is
+**160,000 rows of about fifty bytes — roughly 8 MB** — on top of the deed rings' measured
+**1,303,029 B**, against a tag-tree ceiling of **2,000,000 B**. That is not a tight fit to be
+measured. It is **four and a half times over a wall.**
+
+**Four ways out were put up, and each is a different mod rather than a different setting** — which is
+why it was the owner's and not this block's. **D is ruled**; the other three are kept below because a
+rejected option with its cost written down is cheaper than the same option re-argued at session 19.
+
+| Option | What it costs |
+|---|---|
+| **A · Only parties to an active drama hold a bond.** §6's `2 + population/10` becomes the storage bound: two dramas a village, four parties, a few hundred rows at four hundred personas. | Bounded by construction and nearly free. But §6 says stage 5 is **permanent, written to the chronicle** — so either the bond outlives the drama, and the bound is gone again over time, or "permanent" means a chronicle row and not a feeling. **That is the ruling underneath this option.** |
+| **B · A fixed-width neighbour ring per persona, evicted weakest-out.** Exactly `Memories`'s machinery, which is already built, packed behind palettes and tested. At eight slots: 3,200 rows, about 160 KB — under a tenth of the ceiling. | A villager forgets a neighbour they have had nothing to do with, which bond decay already does for warmth. The existing eviction ranks harmful above benign **absolutely**, so a rupture survives where a slight does not. Costs a second ring format and a second palette. |
+| **C · Derive it and store nothing.** The rings already hold who did what to whom, so a grievance stage is computable on read — the way the road graph, the settlement name and the trade price all are. | Zero new persisted state, zero migration, no n² at all. And it cannot carry `trust`, `peakWarmth` or `lastSeenDay`, which are path-dependent: **it works for a stage and not for a bond.** NPC-to-NPC relations would be shallower than NPC-to-player ones by construction. |
+| **D · Keep the guard shut; a grievance is its own record.** Bonds stay (npc → player). `Grievance` carries holder, subject, cause, stage and day, bounded by the drama cap. | Throws away a decision session 05 made and has paid for since — the key was left general *so that session 16 needed no migration*. Against that: §6's ladder needs a **stage** and a **cause**, and `Bond`'s three axes express neither, so a grievance record is probably needed whatever is ruled. **The honest question is whether a grievance *also* writes a bond between the two NPCs.** |
+
+**Ruled: D, with B available behind it.** A grievance gets its own bounded record because it needs
+fields a bond does not have, and the `putBond` guard stays shut until something other than a
+grievance wants an NPC-to-NPC bond. That keeps the n² table closed, keeps schema 9 to the one axis
+the ladder actually needs, and leaves A and B open later without undoing anything. **The argument
+against it is the strongest one here and is kept rather than buried:** session 05 chose the general
+key *specifically* so this session would need no migration, and **D is the session that declines the
+gift.** What decided it is that §6's ladder needs a **stage** and a **cause**, which `Bond`'s three
+axes express neither of — so a grievance record is needed whatever was ruled here, and opening the
+bond table as well would have bought a second store for the same fact. It is now a `DESIGN.md` §2
+row, and that file's count moved with it.
+
+**And the ruling splits a decision that was one thing, which is the consequence worth carrying.**
+Two guards currently implement session 05's single population rule, one level apart:
+
+- **`NpcRegistry.putBond` refuses an NPC-to-NPC bond.** Under D this is **permanent** rather than
+  temporary, and its javadoc no longer says session 16 deletes it. It is not on the never-cut list
+  and probably belongs there — raised at the close of this block rather than added here, because the
+  list is a ruled artefact and an eighth wall is the owner's to add.
+- **`DeedBus.record` declines to store *anything* for a deed with an NPC actor** — the ring along
+  with the bond. **This one has to open at 16**, and D is what makes that visible: §6 stage 2 is
+  *they tell third parties; it enters the gossip queue*, the gossip pipeline is made of `Deed`s, and
+  a grievance nobody can retell is a grievance that cannot reach stage 2 at all. So the ring stores
+  NPC-actor deeds and the bond table still does not. `NpcRegistryTest.theRingHasNoPopulationGuard`
+  already asserts the ring itself has no population guard, so the change is one branch in `DeedBus`
+  and not a storage question — the ring is capped per holder however the actor is keyed.
+
+**That asymmetry is the whole of what D costs at the code level**, and it reads as an inconsistency
+unless the reason is written down: a ring is bounded per holder and a bond table is bounded by the
+product of two populations, so the same restriction buys nothing in one place and everything in the
+other.
+
+---
+
 ## After the slice — sequence only, not scheduled
 
 The drama engine is **deliberately outside the slice**. A drama engine built on a propagation system
@@ -606,11 +786,11 @@ that turns out not to land is sixteen sessions wasted. Prove the thesis first.
 | Sessions | Block |
 |---|---|
 | 16–20 | Grievance engine — wants, scarcity, 5-stage ladder, arbitration, character drift. **And at 20's close, session 15's exit criterion: a stranger, unprompted, 45 minutes** — scheduled here by the owner at the close of 15 because 20 is the first point the mod has drama as well as memory, and because a criterion with no date drifts the way standing risk 3 did for twelve sessions |
-| 21–23 | Mortality, funerals, grief, inheritance, ruins — **and the tombstone**: a dead persona keeps its bonds and ring rather than being deleted (ruled 2026-10-22, `DESIGN.md` *Bonds on death*). That needs a lifecycle state on `Persona` and a liveness filter at the five `registry.all()` sweeps in `Residency`, `Gossip` and `Board`, none of which can tell a dead persona from a living one today, plus the schema 9 bump |
+| 21–23 | Mortality, funerals, grief, inheritance, ruins — **and the tombstone**: a dead persona keeps its bonds and ring rather than being deleted (ruled 2026-10-22, `DESIGN.md` *Bonds on death*). That needs a lifecycle state on `Persona` and a liveness filter at the five `registry.all()` sweeps in `Residency`, `Gossip` and `Board`, none of which can tell a dead persona from a living one today, plus a schema bump of its own — **10, not 9, because session 16 takes 9 for `Bond.deference`**; this row said 9 until the session 16 block above was written and two rows promised one number to two different sessions |
 | 24–27 | Era ladder 0–3, offices, charters, treasury, prosperity display — **and `DESIGN.md` §7's *17:00, the tavern lights up*, struck from the at-a-glance test at session 14 and parked here because a tavern is a building type and buildings arrive with the era ladder** |
 | 28–30 | Secrets, named factions, migration, rival settlements |
 | 31+ | Era 4–5, addon API hardening, animals in the social graph |
-| Unscheduled | **Rulings of 2026-10-22 that schedule nothing:** technology and machines (`DESIGN.md` *Era scope* lifted), mastery for NPCs and players, *History* (accounts that may be wrong, true events kept apart — the log's capacity is a number to measure at the chronicle session, not to choose now), and a second currency medium alongside emeralds (the *Treasury* row stays emerald-denominated until one exists). Each needs its own ruling on mechanism before any code, and anything of them that persists state shares the one schema 9 with the tombstone. Code-level integration with Create, KubeJS, Immersive Engineering and Mekanism is NeoForge-only on 1.21.1; reading `c:` tags and recipe ids as data is loader-neutral |
+| Unscheduled | **Rulings of 2026-10-22 that schedule nothing:** technology and machines (`DESIGN.md` *Era scope* lifted), mastery for NPCs and players, *History* (accounts that may be wrong, true events kept apart — the log's capacity is a number to measure at the chronicle session, not to choose now), and a second currency medium alongside emeralds (the *Treasury* row stays emerald-denominated until one exists). Each needs its own ruling on mechanism before any code, and anything of them that persists state shares the one schema bump with the tombstone — whichever number that turns out to be, which is why this row no longer names one. Code-level integration with Create, KubeJS, Immersive Engineering and Mekanism is NeoForge-only on 1.21.1; reading `c:` tags and recipe ids as data is loader-neutral |
 
 **One open question parked here deliberately: how optional LLM enrichment is delivered** — players
 routing their own API key, or a hosted service. `DESIGN.md` already rules the half that matters

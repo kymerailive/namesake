@@ -354,10 +354,12 @@ class NpcRegistryTest {
 
         registry.putBond(anna, bram, Bond.fresh(1).apply(new int[]{5, 0, 0}, 1, Bond.DAILY_CAP));
 
-        // Session 05 decision 1: the key is general so session 16 needs no migration, and the
-        // population is restricted because an NPC-to-NPC bond has no consumer until then. Twelve
-        // witnesses per deed across four hundred personas is 160,000 rows of DESIGN.md §1's
-        // forbidden shape, so the guard is not tidiness.
+        // Session 05 decision 1: the key is general so no migration could ever be needed, and the
+        // population is restricted because an NPC-to-NPC bond has no consumer. Twelve witnesses per
+        // deed across four hundred personas is 160,000 rows of DESIGN.md §1's forbidden shape, so
+        // the guard is not tidiness. Ruled permanent on 2026-11-01 — a grievance is §3's Grievance
+        // record, which carries a stage and a kind that three signed axes cannot, so this table was
+        // never what the ladder needed. The generality stays in the format, unspent.
         assertEquals(0, registry.bonds().size(), "nothing may be written");
         assertFalse(registry.isDirty(), "and a refusal must not dirty the file either");
 
@@ -476,6 +478,12 @@ class NpcRegistryTest {
      * per holder whoever the actor was, so the same restriction would buy nothing and would have to
      * be undone at session 16. {@code DeedBus} is where an NPC-actor deed is currently declined, one
      * level up and for the bond's reason.
+     *
+     * <p><b>The 2026-11-01 ruling split those two, and this test is what makes the split cheap.</b>
+     * {@code DeedBus}'s branch opens at session 16 — a grievance enters the gossip queue at §6 stage
+     * 2 and the queue is made of deeds — while {@code putBond}'s guard is now permanent. Because the
+     * ring has no population guard of its own, opening the one upstairs is a single branch rather
+     * than a storage question.
      */
     @Test
     @DisplayName("a deed by another NPC is stored if it reaches this door, unlike a bond")

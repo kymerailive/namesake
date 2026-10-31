@@ -212,13 +212,27 @@ public final class NpcRegistry extends SavedData {
      *
      * <p><b>This is the guard that makes decision 1 of session 05 hold.</b> {@link Bonds} is keyed
      * on two bare UUIDs and can therefore represent an NPC's feelings about another NPC; nothing
-     * reads such a bond until session 16's grievance engine, and a persisted social value with no
-     * consumer is exactly what {@code DESIGN.md} §1 forbids. Twelve witnesses per deed across four
-     * hundred personas is a table that grows toward n², so this is not a tidiness rule.
+     * reads such a bond, and a persisted social value with no consumer is exactly what
+     * {@code DESIGN.md} §1 forbids. Twelve witnesses per deed across four hundred personas is a
+     * table that grows toward n², so this is not a tidiness rule.
      *
-     * <p>Session 16 deletes the {@code if} below and changes no schema, which is the whole reason
-     * the key was left general. Until then the refusal is loud rather than silent — a bond quietly
-     * not written is indistinguishable from a bond written and lost.
+     * <p><b>It is permanent, ruled 2026-11-01, and that is a reversal of what this javadoc used to
+     * say.</b> Session 05 wrote that session 16 would delete the {@code if} below and change no
+     * schema, which was the whole reason the key was left general. Session 16 declined: a grievance
+     * needs a <i>stage</i> and a <i>cause</i>, and a {@link Bond}'s three signed axes express
+     * neither, so the ladder gets a record of its own and this table would have been a second store
+     * for one fact — at 160,000 rows against a 2,000,000 B tag-tree ceiling the rings already use
+     * 1,303,029 B of. See {@code DESIGN.md}'s <i>Grievance record</i> row and
+     * {@code WORKPLAN.md}'s session 16 block, which keeps the three rejected alternatives.
+     *
+     * <p>The generality of the key stays in the format and costs nothing; what is bounded is the
+     * population. The refusal is loud rather than silent, because a bond quietly not written is
+     * indistinguishable from a bond written and lost.
+     *
+     * <p><b>Do not confuse this with the branch in {@code DeedBus.record}</b>, which declines to
+     * store a deed whose <i>actor</i> is an NPC. That one opens at session 16 — §6 stage 2 puts a
+     * grievance into the gossip queue and gossip is made of deeds. A ring is capped per holder
+     * however the actor is keyed, so the same restriction buys nothing there and everything here.
      */
     public void putBond(UUID holder, UUID about, Bond bond) {
         if (Deed.UNKNOWN_ACTOR.equals(about)) {
@@ -235,8 +249,9 @@ public final class NpcRegistry extends SavedData {
         if (personas.containsKey(about)) {
             Namesake.LOGGER.error(
                     "Refused a bond from persona {} about persona {}: NPC-to-NPC bonds have no "
-                            + "consumer until session 16's grievance engine, and DESIGN.md §1 "
-                            + "forbids persisting a social value nothing reads. Nothing was written.",
+                            + "consumer and are not going to get one — ruled 2026-11-01, a "
+                            + "grievance is its own record — and DESIGN.md §1 forbids persisting a "
+                            + "social value nothing reads. Nothing was written.",
                     holder, about);
             return;
         }
