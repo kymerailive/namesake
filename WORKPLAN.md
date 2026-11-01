@@ -623,6 +623,24 @@ bump, run session 07's instrument against the force-resolution that would write 
 axis reaches a mark something reads. A field that cannot be earned is a field session 20 deletes —
 and this time it would be deleted *after* a datafixer had shipped for it.
 
+**It was run, and the axis is struck — ruled by the owner 2026-11-01.** The instrument is
+`DeferenceFeasibilityTest` and the finding is in two halves — *earnable, yes; readable, no* — set out
+in *The deference measurement* below. The short of it: **`DESIGN.md` §3 already says fear is what
+makes force-resolution representable**, so deference was a second field for a job one field has,
+which is the exact test `respect` failed. **Force-resolution reads `fear` instead**, and the ruling
+is now `DESIGN.md` §2's *Why not deference* row with the count at 89.
+
+**What the ruling buys, and it is the largest thing this block has changed:** schema 9 is the
+grievance table **and nothing else** — a migration that *adds a table*, which is the gossip
+precedent, rather than one that rewrites every bond on disk, which is session 09's. `Bond` stays
+three axes and a debt scalar, `Bond.AXIS_COUNT` stays 3, and **no field has been added to the record
+since schema 8.** It also avoids eight `Personality.SHAPE` weights that would have been chosen and
+then measured, which is the wrong order and the one this project exists to refuse.
+
+**And it is the first axis refused before being paid for rather than after.** `respect` cost a
+schema 8 deletion and a datafixer; `Deed.item` cost three readers built and rejected at 09 and a
+board row that now says *gave them something*. This one cost one test file and an afternoon.
+
 **Build.**
 
 - **`Want` — what one persona is short of**, against §6's four scarcities: capped job slots,
@@ -653,8 +671,15 @@ and this time it would be deleted *after* a datafixer had shipped for it.
 - **Active dramas capped at `2 + population/10`**, §6's own number. At the populations this mod
   actually has — seven real villages gave 52 personas, never more than 11 loaded at once — that is
   two a village, which makes it a wall rather than a knob.
-- **`Bond.deference`, the axis back**, with schema 9, a datafixer, and a load test against a
-  pre-change save.
+- **No new `Bond` axis — `deference` is struck, ruled 2026-11-01.** The axis `DESIGN.md` §2 and §6
+  promised from session 12 to 16 was measured and refused; **force-resolution reads `fear`**, which
+  §3 has always named as the field that makes it representable. `Bond` stays three axes and a debt
+  scalar. See *The deference measurement* below, and `DESIGN.md` §2's *Why not deference*.
+- **So what this session actually has to build for `fear` is the reader, not the field.** The
+  exemption is paid by an `if` that changes state when a forced resolution has left fear behind —
+  and the honest candidate is §6's own *guards multiply*, which has no mechanism today. **That is
+  the one piece of force-resolution this session cannot buy cheaply**, and it is what the exit
+  criterion's "something reads that axis back" clause is pointing at.
 - **Grievance rows on the Notice Board.** §2 rules the notification: *None — you must notice. Board
   is the backstop.* The board stores nothing and computes on open, and `BoardText` was left with a
   compile-error seam at session 11 for exactly this arrival.
@@ -683,11 +708,14 @@ force-resolution is what `fear` names as a consumer. Only *trust down* has a mec
   force-resolution's three effects are therefore unbuilt**, which is worth knowing before `fear`'s
   exemption is declared paid by it.
 
-**And the axis count is hard-coded in seven places, not one.** Adding `deference` touches
-`Bond.AXIS_COUNT`, `Bond.AXIS_NAMES`, `Bond.FLOOR`, the `axis()` switch, the `Codec` group,
-`apply`'s `int[] axes`, and `DeedType`'s `new int[]{trust, warmth, fear}`. `Bond.apply` already
-**refuses** a delta of the wrong width rather than truncating it, with a test naming both widths —
-so the build will find the ones that are missed, which is the one mercy here.
+**And the axis count is hard-coded in seven places, which is now a cost avoided rather than paid.**
+Adding an axis touches `Bond.AXIS_COUNT`, `Bond.AXIS_NAMES`, `Bond.FLOOR`, the `axis()` switch, the
+`Codec` group, `apply`'s `int[] axes`, and `DeedType`'s `new int[]{trust, warmth, fear}` — plus an
+eighth place no document mentioned: **`Personality.SHAPE` is `float[8][6]`, indexed by deed type, so
+a `FORCED_RESOLUTION` deed needs a seventh column of eight weights nobody has measured.** That is
+the strongest single argument the measurement turned up for not doing it at 16, because those eight
+numbers would be chosen rather than measured, which is how LNK set gates at 35–205 against an
+observed maximum of 32.
 
 **The two exemptions that fall due, and what may not pay them.** `Bond.fear` and `Bond.debt` are the
 last two of session 05's five, and `SocialValueLedgerTest` compares them against this ledger's own
@@ -708,8 +736,10 @@ row, because a board row is a display. So:
 > treats them differently with the player nowhere involved** — a cold greeting, and they will not
 > stand at the bell beside them. **The player can then settle it or force it, and the two routes are
 > distinguishable by effect a hundred in-game days later:** the favour **spends** `debt` and the
-> grievance is gone, where forcing it writes `fear` to both parties and raises the settlement's
-> deference, and that one is still on the chronicle. **It survives a save, a quit and a reload at
+> grievance is gone, where forcing it writes `fear` to both parties and **something reads that axis
+> back** — the axis is `fear`, ruled 2026-11-01, and the clause the measurement below makes
+> load-bearing is the reading rather than the writing — and that one is still on the
+> chronicle. **It survives a save, a quit and a reload at
 > schema 9, with a pre-change save migrated through** — hard rule 1, on a real save rather than an
 > archive. And **the table the n² guard was holding is held by a test that counts bytes.**
 
@@ -776,6 +806,163 @@ unless the reason is written down: a ring is bounded per holder and a bond table
 product of two populations, so the same restriction buys nothing in one place and everything in the
 other.
 
+#### The deference measurement — run 2026-11-01, and the axis it priced is struck
+
+**The instrument is `DeferenceFeasibilityTest`, and the question was asked in the order that would
+have saved `respect`.** A datafixer is cheap to write and impossible to unwrite: once schema 9 ships
+a `deference` column, every save in the world has the field, and deleting it at session 20 costs
+schema 10 and a second migration. So the arithmetic came before the bump.
+
+**The control, and it is the half nobody predicted.** Fear is the one axis already written only by a
+hostile and occasional act — `STRUCK_RESIDENT` at `+6` and half a witness share — which is the shape
+force-resolution has. Session 07's instrument, unmodified, over a hundred in-game days:
+
+| player model | fear max | p50 | p90 | deeds |
+|---|---|---|---|---|
+| `ATTENTIVE` | 0 | 0 | 0 | 100 |
+| `SATURATING` | 0 | 0 | 0 | 1,200 |
+| `INTERMITTENT` | 0 | 0 | 0 | 68 |
+| `PASSING_THROUGH` | 0 | 0 | 0 | 15 |
+| `CARELESS` | **24** | 13 | 24 | 200 |
+
+**Zero, zero, zero, zero and twenty-four**, against a lowest ladder mark of twenty. Respect's own
+row, at the same hundred days and the same five models, was **zero, zero, zero, zero and four**. So
+the pipeline is *not* what killed respect: an axis written at `+6` by an occasional act clears the
+mark comfortably, and one written at `+1` never could. The four zeroes are correct rather than
+broken — no model but `CARELESS` strikes anybody — and the test asserts the run produced data at
+all, because a table of zeroes from a dead instrument is the most confident wrong number available.
+
+**And the span was halved to ten days to prove the instrument measures rather than reports.** Fear's
+maximum fell 24 → 4 and the printed verdict flipped to *BELOW the lowest mark*. **Respect over a
+hundred days was worth what fear is worth in ten**, which is the clearest statement of that deletion
+anybody has managed.
+
+**What deference itself would reach**, over 1,260 personas across six cultures and seven specialties,
+real traits through `TraitRoll` and real allowances through `Personality.allowance`. The cell is the
+median persona's deference after N forced resolutions; the right-hand column is the N needed to clear
+twenty:
+
+| per-event delta | N=1 | N=2 | N=4 | N=8 | N=16 | N=32 | N to clear 20 |
+|---|---|---|---|---|---|---|---|
+| +1 | 1 | 2 | 4 | 8 | 16 | 32 | 20 |
+| +2 | 2 | 4 | 8 | 16 | 32 | 64 | 10 |
+| +4 | 4 | 8 | 16 | 32 | 64 | 100 | 5 |
+| +6 | 6 | 12 | 24 | 48 | 96 | 100 | 4 |
+| +8 | 7 | 14 | 28 | 56 | 100 | 100 | 3 |
+| +12 | 7 | 14 | 28 | 56 | 100 | 100 | 3 |
+
+At the *weakest* of each persona's six realised weights — the pessimistic read, and the one the
+respect deletion argues for — the N to clear twenty is 20, 20, 7, 5, 4 and 3 for the same deltas.
+
+**Three things fall out of that table.** First, **the daily cap truncates above about `+8`**: delta 8
+and delta 12 are the same row, because `Personality.allowance` is the ceiling and it does not care
+what the deed was. Second, **`+6` to `+8` is the only sensible event size** — below it the axis needs
+ten to twenty forced resolutions per hundred days, above it the cap eats the difference. Third, at
+that size the axis needs **three to five forced resolutions per hundred days**, which is one every
+twenty to thirty days against a cap of two *active* dramas in a nine-resident village. **That is a
+low bar, and deference is therefore earnable.** The instrument says yes.
+
+**And it is struck anyway, because earnable was never the question that mattered.**
+
+**`DESIGN.md` §3 has said since it was written that fear is what makes force-resolution
+representable** — *"Fear earns its slot because it makes force-resolutions representable:
+intimidation works, and the settlement remembers that it worked."* §2's `Bonds` row and §6 say
+force-resolution needs deference added back. **Those are the same job, assigned to two different
+fields, in two sections of one document** — and the test `respect` failed was precisely this: *there
+was no state of the world in which a threshold on respect said something a threshold on trust did
+not.* A threshold on deference says nothing a threshold on fear does not, because both are what
+coercion leaves behind.
+
+**The reader the axis would naturally have is already forbidden, and for a reason that transfers
+exactly.** `Standing` refuses to read fear in as many words: *it is written only by violence, so
+reading it would mean a player who hits people gets cheaper goods*, against §10 step 6's ruling that
+prices **rise**. Deference is earned by coercion, so a band reading it carries the identical perverse
+incentive. The three consumers of the bands are the trade price, the taught recipe and pool
+selection, and none of them can take a coercion axis without making force the cheap route.
+
+**Ruled: no axis at 16, and the exemption paid the cheap way.** Force-resolution's reader reads
+`fear`, which is already persisted, already earnable at 24 against a mark of 20, and already named by
+§3 as the field for this job. **That pays `Bond.fear`'s rule 5 exemption with no schema change at
+all**, and leaves schema 9 as the grievance table alone — a migration that *adds a table*, which is
+the gossip precedent, rather than one that rewrites every bond on disk, which is session 09's.
+
+**If a later session finds an `if` that genuinely needs what fear cannot say, the axis is still
+available** — and it will then be added in the order rule 5 asks for, with the reader written first.
+That is the whole of what was done backwards at session 09, when `Deed.item` was added and three
+readers were built for it afterwards and all three rejected.
+
+**One cost of the axis that neither document had priced, and it is the strongest argument here.**
+`Personality.SHAPE` is `float[8][6]`, indexed by **deed type** — so a `FORCED_RESOLUTION` deed needs
+a seventh column: **eight personality weights, chosen by hand, that nobody has measured.** Session
+16 would have had to invent them and then measure them afterwards, which is the shape of LNK's
+failure rather than of this project's method.
+
+**And a consumer hunt across both documents and the whole of `net.namesake` found no unrefuted
+reader on `Bond` — but it did find one, and it is the wrong shape for the field §2 promised.**
+Fifteen candidates were put up. The band-shaped ones (`Standing.of`, `Trading.applyTo`,
+`Teaching.offer`, a deference clause in `GiftPolicy.verdict`) all carry the perverse incentive in a
+different coat: every one of them makes coercion the cheap route to something a player wants.
+`Residency.verdict` as a third route in §5 — *a village that defers to you takes you in* — collides
+with the ruling that residency is earned by consistency rather than intensity. Two more are internal
+to a ladder that does not exist yet and belong to 17–20: **deference suppressing a grievance's climb
+to stage 3**, and **weighting who loses an arbitration.** Those two are the honest ones, and neither
+can be built or measured at 16.
+
+**The one that survives reads a settlement, not a bond.** *Guards multiply* would be
+`DayPlan.standsWatch`'s `boldness >= BOLDNESS_TO_WATCH` offset by how hard the settlement has become
+— which is a **`Settlement` field**, and `Settlement` is `id`, `dimension`, `centre`, `specialty`,
+`defensibility`, `needs[4]` with nothing of the kind. **So §6's own sentence has been read correctly
+all along and the plan has not:** *"settlement hardens — deference up, trust down, guards multiply"*
+is three settlement-level consequences, and §2's `Bonds` row has been promising to pay it with a
+*per-player* axis. So `Settlement.hardness` was offered as the alternative to striking outright —
+a different field, a different consumer, a different schema change — **and it was not taken: the
+owner struck the axis outright on 2026-11-01 and force-resolution reads `fear`.**
+
+**Why that is the better answer, and the hunt is what shows it.** The shipped precedent for a
+`Settlement` field's non-display consumer is `TraitRoll.settlementMean`, and **`TraitRoll.roll` runs
+once per persona at creation** — so a hardness value would change the village's *next generation*
+rather than the villagers standing in front of you. A player who forces a drama would see nothing
+that day or that month, which fails the only test §6's resolution shapes have to pass: that taking a
+side is *legible to the person you did not take*. The field would have been earnable, readable and
+imperceptible. **Striking it leaves *guards multiply* as the thing to build, which is the same
+consequence read off a field that already exists.**
+
+**And the hunt found a hole in the rule 5 ledger itself, at the exact field that falls due at this
+session's close.** `SocialValueLedgerTest` proves a named consumer is real by reading its bytecode
+for a field access, and disqualifies the tempting fakes by package and by suffix:
+`DISPLAY_PACKAGES` is `command · harness · client · dialogue · board`, `OPERAND_PACKAGES` is
+`config`, and `DISPLAY_SUFFIXES` is `Renderer · Screen · Hud · Widget · Commands · Harness`.
+**The measurement instrument is in none of them.** `DialogueStats.observedMaximum` lives in
+`net.namesake.social` and reads `standing.bond().axis(axis)` at `DialogueStats:257`; `Bond.fear`'s
+ledger entry lists `"axis"` among its accessors. So at the close of session 16, `fear`'s exemption
+could be swapped for a consumer naming `DialogueStats.observedMaximum` and **the whole build would
+go green with nothing a player can see having changed** — which is hard rule 3's tautological test,
+inside the mechanism built to prevent exactly that. `Reports` in `net.namesake.sim` is the same hole
+by a second door.
+
+**`DESIGN.md` already rules the substance, which is what makes this an omission rather than an open
+question:** the *Measurement data* row says *"a histogram's only consumer is a display, an exemption
+is a promise a mechanic will read the field, and no mechanic reads a histogram."* **Nothing names the
+instrument today** — the only mentions of `DialogueStats` in that test are the guard that it declares
+no codec — so closing it is preventive and inert, exactly as `net.namesake.dialogue` was at 09 and
+`net.namesake.board` at 11, each listed *before* the tempting reader shipped. Here the tempting
+reader has existed since session 07 and was never listed.
+
+**It wants a third set rather than an entry in either existing one**, following session 15's own
+reasoning when it refused to fold the config into `DISPLAY_PACKAGES`: the objection is a different
+objection, and a set whose javadoc becomes false is worse than a set that costs one more name. An
+instrument reads a field *in order to report what it is* — a measurement of a mechanic rather than a
+mechanic. `net.namesake.sim` can be listed by package; `DialogueStats` cannot, because it shares
+`net.namesake.social` with `Standing`, `Trading`, `GiftPolicy` and `Residency`, which are the real
+consumers — so it needs a suffix. **Not done here:** that test is a load-bearing wall and this is the
+third thing on the owner's desk.
+
+**What this does not settle, and it is now session 17–20's rather than nobody's.** *Guards multiply*
+still has no mechanism, and it is the third of force-resolution's three effects. Reading `fear` back
+pays the exemption; it does not build the hardening. The reader has to be a real state change, and
+the honest candidates are all unbuilt — which is the §6 audit above, unchanged.
+
+---
 ---
 
 ## After the slice — sequence only, not scheduled
@@ -934,6 +1121,15 @@ generations and keeps latency out of the interaction path entirely.
    were available as arguments for keeping the fields and neither is a reason: **a field kept for a
    session that has not happened is the exact shape both reference codebases died of**, and the
    mechanism has now been tested on fields somebody wanted rather than on fields nobody missed.
+
+   **And half of that cost was never paid, which is the better ending — 2026-11-01.** Session 16 did
+   **not** add the axis back. It measured first, found that deference is earnable but that nothing
+   can read it, and that `DESIGN.md` §3 had always named `fear` as what makes force-resolution
+   representable — so one job had been promised two fields. The axis is struck, force-resolution
+   reads `fear`, and `DESIGN.md` §2 carries a *Why not deference* row. **So the deletion at 12 cost
+   a board row and nothing else**, and this is the first time an axis was refused *before* a
+   datafixer shipped for it rather than after. The rule did not just take a field this time; it
+   stopped one being added.
 
    **Two exemptions remain of the five, and they are the two this risk always said were furthest
    out:** `fear` and `debt`, both at 16, both untouched. Session 12 opened none in their place — the

@@ -89,6 +89,21 @@ loader-boundary work.
 - A long `/tick sprint` outruns the chunk loader (sprint in ~200-tick
   bursts, assert on `entity.tickCount`); a dev client left running holds
   `session.lock`.
+- **`--rerun-tasks` on the whole unit suite fails with
+  `NoClassDefFoundError` on *main* classes** (`Config$Preset`, `Bonds`,
+  `NameGrammar`, `BoardSiting`) — it re-runs `createMinecraftArtifacts`
+  underneath the test worker, so tests execute against a main output that is
+  being rewritten. No test fails and no XML records one; the task fails with
+  nothing in the report, which reads exactly like flake. **Use
+  `:common:cleanTest :common:test`** to force a real re-run. `--rerun-tasks`
+  is safe on a single `--tests` class, which is how the trap stays hidden.
+- **Gradle reports `BUILD SUCCESSFUL` for a test task it skipped as
+  up-to-date.** Re-running a suite after changing only a doc the tests
+  *read* (`WORKPLAN.md`, `DESIGN.md`) is a no-op, and the pass is the
+  previous run's. Check `tests:` counts out of
+  `common/build/test-results/test/TEST-*.xml` rather than trusting the
+  console; `Select-String 'BUILD'` is also case-insensitive in PowerShell
+  and matches test names containing "build", which hides the real summary.
 
 ## Delivery
 

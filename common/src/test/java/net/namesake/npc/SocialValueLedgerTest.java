@@ -447,10 +447,15 @@ class SocialValueLedgerTest {
             // and 09 measured, because Deeds.deltaFor computes the axes independently — but no deed
             // in the table honestly earns deference except the raid defence that already did.
             //
-            // THE COST IS REAL. DESIGN.md §6's force-resolution wants "deference up", so session 16
-            // will add an axis back and pay hard rule 1 for it. That is the price of the rule, and
-            // the rule is what both reference codebases died without. fear and debt carry the same
-            // mechanic's exemption to 16 and are untouched, because their dates have not come.
+            // THE COST WAS NOT PAID, AND THAT IS THE 2026-11-01 ENDING. This comment said from
+            // session 12 that DESIGN.md §6's force-resolution wants "deference up", so session 16
+            // would add an axis back and pay hard rule 1 for it. Session 16 measured it instead and
+            // struck it: deference is earnable, but nothing can read it, and §3 had always named
+            // fear as the field that makes force-resolution representable — one job, two fields,
+            // which is this very deletion's own argument arriving a second time. So respect's
+            // deletion cost a Notice Board row and nothing else, and no field has been added to the
+            // record since schema 8. See DeferenceFeasibilityTest and DESIGN.md §2's "Why not
+            // deference". fear and debt still carry this mechanic's exemption to 16.
 
             Entry.exemptUntilAfter(Bond.class, "fear", List.of("fear", "axis"), 16,
                     "Sessions 16-20, the grievance ladder: DESIGN.md §3 says fear earns its slot "
@@ -458,7 +463,17 @@ class SocialValueLedgerTest {
                             + "works and the settlement remembers that it worked — and §6 is where "
                             + "that is read. This and debt are the two longest exemptions here. "
                             + "Fear is at least written already: a strike and a killing both raise "
-                            + "it, so the field is live rather than dormant."),
+                            + "it, so the field is live rather than dormant. "
+                            + "RULED 2026-11-01: force-resolution reads THIS field, and the "
+                            + "deference axis DESIGN.md promised from session 12 is struck rather "
+                            + "than added — measured earnable (the control reaches 24 against a "
+                            + "lowest mark of 20, where respect reached 4) but unreadable, because "
+                            + "every band-shaped reader makes coercion the cheap route to a "
+                            + "discount. The ruling names which field pays; it is NOT the payment, "
+                            + "so this stays an exemption until the if statement exists. The "
+                            + "honest candidate is §6's own 'guards multiply' and it has no "
+                            + "mechanism yet. See DeferenceFeasibilityTest and DESIGN.md §2's "
+                            + "'Why not deference'."),
 
             Entry.exemptUntilAfter(Bond.class, "debt", List.of("debt"), 16,
                     "Sessions 16-20: a favour or a gift is what resolves a stage-2 grievance, and "

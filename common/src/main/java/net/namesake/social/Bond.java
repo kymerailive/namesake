@@ -58,12 +58,22 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
  *       bread.</li>
  * </ul>
  *
- * <p><b>The cost is real and is recorded rather than argued away.</b> {@code DESIGN.md} §6's
- * force-resolution wants <i>deference up</i>, and session 16 will have to add an axis back and pay
- * hard rule 1 for it. That is the price of the rule in {@code DESIGN.md} §1, and the rule is what
- * both reference codebases died without: <i>moving the number is the one thing the mechanism exists
- * to stop.</i> {@link #fear} and {@link #debt} carry the same mechanic's exemption to session 16 and
- * are untouched, because their dates have not come.
+ * <p><b>The cost looked real and was not paid — ruled 2026-11-01.</b> This javadoc said from session
+ * 12 that {@code DESIGN.md} §6's force-resolution wants <i>deference up</i> and that session 16
+ * would add an axis back and pay hard rule 1 for it. <b>Session 16 measured it first and struck
+ * it.</b> Deference is earnable — the control axis {@link #fear} reaches 24 over a hundred in-game
+ * days against a lowest mark of 20, where respect reached 4, so the pipeline was never the problem —
+ * but <i>nothing can read it</i>: every band-shaped reader makes coercion the cheap route to a
+ * discount, a recipe or a kinder line, which is the same objection that keeps the bands off
+ * {@link #fear}. And {@code DESIGN.md} §3 had always named fear as the field that makes
+ * force-resolution representable, so one job had been promised two fields — which is this record's
+ * own argument against respect, arriving a second time.
+ *
+ * <p>So <b>three axes and a debt scalar is the final width</b>, force-resolution reads
+ * {@link #fear}, and nothing has been added to this record since schema 8. See
+ * {@code DeferenceFeasibilityTest} for the measurement and {@code DESIGN.md} §2's <i>Why not
+ * deference</i> for the ruling. {@link #fear} and {@link #debt} still carry this mechanic's
+ * exemption to session 16: naming which field pays is not the payment.
  */
 public record Bond(
         byte trust,

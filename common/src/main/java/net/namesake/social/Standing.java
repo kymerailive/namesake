@@ -116,6 +116,14 @@ package net.namesake.social;
  * <i>prices rise for you</i>. Fear's consumer is §6's force resolution and its exemption stands at
  * session 16, untouched.
  *
+ * <p><b>That refusal did more work than it was written for, on 2026-11-01.</b> Session 16 weighed a
+ * {@code deference} axis for force-resolution and the first question asked of it was whether a band
+ * could read it. It could not, <i>for this paragraph's reason transferred intact</i>: deference
+ * would be earned by coercion, so a band gating the price, the taught recipe or the pool would make
+ * forcing a grievance the cheap route to all three. The axis was struck and force-resolution reads
+ * {@code fear} instead — see {@code DESIGN.md} §2's <i>Why not deference</i>. <b>So the list above
+ * is short for a reason that has now kept a field out of the schema as well as out of this enum.</b>
+ *
  * <p>Not the deed ring: a band is a function of a bond alone, which is what makes it cheap enough to
  * ask on every interaction. The one thing the ring decides is which <i>pool</i> {@link #NEUTRAL}
  * maps to, and that is session 06's finding — a villager whose allowance was spent when you fed them
